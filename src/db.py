@@ -41,8 +41,42 @@ class CorruptDB:
         try:
             return self._con.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         except Exception:
-            # fall back to rowid walk
-            return self.iter_rows(table, ("rowid",), limit=None, count_only=True)
+            # COUNT(*) aborts on a corrupt page; count via the resilient walk.
+            n = 0
+            for _ in self.iter_rows(table, ("rowid",), count_only=True):
+                n += 1
+            return n
+
+    def _probe_max_rowid(self, table: str, hint: int = 0) -> int:
+        """Find an upper bound on rowid by exponential probing.
+
+        Used when both MAX(rowid) and COUNT(*) abort due to corruption. We grow
+        a candidate ceiling exponentially until a large window contains no rows,
+        so the linear walk in `iter_rows` covers every readable row.
+        """
+        def has_rows_between(lo: int, hi: int) -> bool:
+            # single-rowid probes so one bad page can't abort the check
+            step = max(1, (hi - lo) // 4096)
+            r = lo
+            while r <= hi:
+                try:
+                    if self._con.execute(
+                        f"SELECT 1 FROM {table} WHERE rowid=?", (r,)
+                    ).fetchone() is not None:
+                        return True
+                except Exception:
+                    pass
+                r += step
+            return False
+
+        ceiling = max(hint, 1024)
+        # grow until a window above `ceiling` is empty
+        while ceiling < (1 << 34):  # hard cap ~17e9 rowids
+            hi = ceiling * 2
+            if not has_rows_between(ceiling, hi):
+                break
+            ceiling = hi
+        return ceiling
 
     def iter_rows(self, table: str, columns: tuple[str, ...], *,
                   where_rowid_in: bool = False, count_only: bool = False):
@@ -54,25 +88,12 @@ class CorruptDB:
         col_sql = "rowid" if count_only else ", ".join(columns)
         maxid = self.max_rowid(table)
         if maxid == 0:
-            # MAX(rowid) can abort on a corrupt tail page even when rows exist.
-            # Fall back to the row count (which scans differently) as an upper
-            # bound, then probe a margin past it to catch any high rowids.
-            approx = self.count(table)
-            if approx == 0:
+            # MAX(rowid) aborted on a corrupt page even though rows exist.
+            # Probe exponentially for an upper bound instead of COUNT(*)
+            # (which also aborts on the same corruption).
+            maxid = self._probe_max_rowid(table)
+            if maxid == 0:
                 return
-            # probe upward until we hit a long run of empty rowids
-            maxid = approx
-            probe = approx
-            while probe < approx + 100000:
-                probe += 1
-                try:
-                    hit = self._con.execute(
-                        f"SELECT rowid FROM {table} WHERE rowid=?", (probe,)
-                    ).fetchone()
-                except Exception:
-                    hit = None
-                if hit is not None:
-                    maxid = probe
         for r in range(1, maxid + 1):
             try:
                 row = self._con.execute(

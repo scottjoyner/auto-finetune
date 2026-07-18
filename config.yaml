@@ -5,18 +5,30 @@ sources:
   opencode:
     # Live/current opencode session store. Has scattered page corruption; the
     # extractor reads row-by-row and skips unreadable rows.
-    db_path: /media/scott/NAS5/fileserver/opencode/opencode.db
+    # Largest DB first (likely superset); dedupe happens by session id on write.
+    db_path: /media/scott/NAS5/opencode/opencode.db
     # Older migrated / broken snapshots (same schema). Set enabled:false to skip.
+    # All unique corrupt DBs enabled; sessions dedupe by id across DBs.
     extra_dbs:
-      - path: /media/scott/NAS5/fileserver/opencode/opencode_old_broken.db
-        enabled: false
-      - path: /media/scott/NAS5/fileserver/opencode/opencode.db.broken-20260626T132349Z
+      - path: /media/scott/NAS5/opencode/opencode_20260717.db
+        enabled: true
+      - path: /media/scott/SSD_4TB/opencode/opencode.db
+        enabled: true
+      # opencode_old_broken.db / opencode_recover_old.db are byte-identical
+      # 26.5GB copies of SSD_4TB/opencode/opencode.db -> skip duplicates.
+      - path: /media/scott/NAS5/opencode/opencode_old_broken.db
         enabled: false
   hermes:
-    # Hermes agent session exports (JSON / JSONL). Not yet harvested.
-    # Point this at a directory of exported Hermes sessions when available.
-    dir: /media/scott/NAS5/fileserver/hermes
-    enabled: false
+    # Hermes canonical session store is the SQLite state.db (system of record),
+    # optionally enriched from the live Neo4j knowledge graph. Handled by a
+    # dedicated extractor (src/extract_hermes.py), not a JSON export dir.
+    state_db: /media/scott/SSD_4TB/hermes-home/.hermes/state.db
+    # Optional Neo4j enrichment for sessions/nodes not yet in state.db.
+    neo4j:
+      enabled: false
+      uri: bolt://100.64.43.123:7687
+      user: neo4j
+    enabled: true
 
 # ── Extraction ──────────────────────────────────────────────────────────────
 extract:
@@ -42,12 +54,10 @@ clean:
 
 # ── Dataset formatting ──────────────────────────────────────────────────────
 format:
-  # chatml | alpaca | sharegpt
-  template: chatml
-  system_prompt: |
-    You are an autonomous coding agent. You help users by exploring codebases,
-    planning changes, editing files, running commands, and verifying results.
-    Respond concisely and use tools when appropriate.
+  # chatml | alpaca | sharegpt | hermes (uses tokenizer chat_template)
+  template: hermes
+  # Empty = use tokenizer's default system prompt (includes tool definitions)
+  system_prompt: ""
   # Split long multi-session histories into windows of N turns for training.
   max_turns_per_example: 0   # 0 = use whole conversation
   # Character budget per example. Sessions longer than this are split into
@@ -61,36 +71,43 @@ format:
 #               or GPTQ. This is what you want on AMD GPUs.
 #   auto     -> use unsloth if a CUDA GPU + unsloth is present, else peft.
 train:
-  backend: auto
+  # This host is AMD (Ryzen AI 9 HX 370 / Radeon 890M) -> ROCm/peft backend.
+  backend: peft
   # Base model to finetune. For AMD/ROCm + peft use a standard HF model id.
-  # NOTE: some models (e.g. Qwen3-8B-Instruct) are *gated* and require
-  # `hf auth login` before download. Qwen2.5-7B-Instruct is open and works
-  # out of the box. For CUDA+unsloth you can use unsloth/Qwen2.5-7B-Instruct.
-  #   ROCm example:  Qwen/Qwen2.5-7B-Instruct
-  #   CUDA example:  unsloth/Qwen2.5-7B-Instruct
-  model_name: Qwen/Qwen2.5-7B-Instruct
-  # LoRA / QLoRA settings
-  lora_r: 32
-  lora_alpha: 64
-  lora_dropout: 0.0
-  max_seq_length: 8192
+  # RefinedToolCallV5-3b is already finetuned on Hermes agent reasoning traces
+  # with tool calling (qwen2 architecture, 3B params, 131K context).
+  model_name: RefinedNeuro/RefinedToolCallV5-3b
+  # LoRA / QLoRA settings (adjusted for 3B continued finetune)
+  lora_r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  # Explicit target modules for Qwen2 architecture
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  max_seq_length: 16384
   # 4-bit quantization for fitting large models on modest GPUs.
   # peft backend uses bitsandbytes (CUDA) or auto-gptq (ROCm) under the hood.
   load_in_4bit: true
   # Optimizer / schedule
-  learning_rate: 2e-4
-  num_train_epochs: 3
-  per_device_train_batch_size: 2
-  gradient_accumulation_steps: 8
+  learning_rate: 1e-4
+  num_train_epochs: 2
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 4
   warmup_ratio: 0.03
   weight_decay: 0.01
-  # Output
-  output_dir: outputs/checkpoints
+  # Output (on SSD staging so checkpoints don't land on the CWD/repo)
+  output_dir: /media/scott/SSD_4TB/finetune-staging/outputs/checkpoints/toolcall-v5-3b-opencode
   hub_model_id: ""   # set to push to HF Hub
   push_to_hub: false
 
 # ── Paths ───────────────────────────────────────────────────────────────────
 paths:
-  raw_dir: data/raw
-  cleaned_dir: data/cleaned
-  dataset_dir: data/datasets
+  raw_dir: /media/scott/SSD_4TB/finetune-staging/data/raw
+  cleaned_dir: /media/scott/SSD_4TB/finetune-staging/data/cleaned
+  dataset_dir: /media/scott/SSD_4TB/finetune-staging/data/datasets

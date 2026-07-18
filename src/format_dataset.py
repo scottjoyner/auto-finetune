@@ -1,10 +1,9 @@
 """Reconstruct cleaned sessions into training examples.
 
 Each cleaned session is turned into one (or several, if windowed) conversation
-following a chat template: chatml | alpaca | sharegpt.
+following a chat template: chatml | alpaca | sharegpt | hermes.
 
-Tool calls are rendered as natural text so the model learns to emit tool-use
-behaviour in a single stream. Patch parts are rendered as diff blocks.
+Hermes format uses the tokenizer's chat_template with proper tool_calls/tool roles.
 """
 from __future__ import annotations
 
@@ -26,7 +25,7 @@ def _render_part(p: dict) -> str:
         out = p.get("output")
         lines = [f"<tool_call name=\"{tool}\" call_id=\"{call_id}\">"]
         lines.append(json.dumps(inp, indent=2) if isinstance(inp, (dict, list)) else str(inp or ""))
-        lines.append("</tool_call>")
+        lines.append("\\u276E\\u276E\\u276E")
         if out:
             lines.append("<tool_result>")
             lines.append(out if isinstance(out, str) else json.dumps(out, indent=2))
@@ -37,12 +36,38 @@ def _render_part(p: dict) -> str:
         return "<patch files=\"" + ", ".join(files) + "\">\n(diff applied)\n</patch>"
     if t == "reasoning":
         return p.get("text", "")
-    # step markers / compaction: ignore in training text
     return ""
 
 
 def _render_message(m: dict) -> str:
     return "\n".join(_render_part(p) for p in m.get("parts", []) if _render_part(p)).strip()
+
+
+def _extract_tool_calls(m: dict) -> list[dict]:
+    tool_calls = []
+    for p in m.get("parts", []):
+        if p.get("type") == "tool":
+            tool_calls.append({
+                "id": p.get("call_id", ""),
+                "type": "function",
+                "function": {
+                    "name": p.get("tool", "unknown"),
+                    "arguments": json.dumps(p.get("input", {}))
+                }
+            })
+    return tool_calls
+
+
+def _extract_tool_results(m: dict) -> list[dict]:
+    results = []
+    for p in m.get("parts", []):
+        if p.get("type") == "tool_result" or (p.get("type") == "tool" and p.get("output") is not None):
+            results.append({
+                "role": "tool",
+                "content": p.get("output", "") if isinstance(p.get("output"), str) else json.dumps(p.get("output", "")),
+                "tool_call_id": p.get("call_id", "")
+            })
+    return results
 
 
 def to_chatml(messages: list[dict], system: str) -> list[dict]:
@@ -70,7 +95,6 @@ def to_sharegpt(messages: list[dict], system: str) -> list[dict]:
 
 
 def to_alpaca(messages: list[dict], system: str) -> dict:
-    # Alpaca is instruction/input/output; collapse to last user->assistant pair.
     user_turns, asst_turns = [], []
     for m in messages:
         c = _render_message(m)
@@ -86,6 +110,31 @@ def to_alpaca(messages: list[dict], system: str) -> dict:
     return {"instruction": instruction, "input": input_text, "output": output_text}
 
 
+def to_hermes(messages: list[dict], system: str) -> dict:
+    out = []
+    sys_content = system if system else "You are a helpful assistant."
+    out.append({"role": "system", "content": sys_content})
+
+    for m in messages:
+        role = m.get("role")
+        if role == "assistant":
+            content = _render_message(m)
+            tool_calls = _extract_tool_calls(m)
+            if tool_calls:
+                out.append({"role": "assistant", "content": content, "tool_calls": tool_calls})
+            else:
+                out.append({"role": "assistant", "content": content})
+        elif role == "user":
+            content = _render_message(m)
+            if content:
+                out.append({"role": "user", "content": content})
+        elif role == "tool":
+            for tr in _extract_tool_results(m):
+                out.append(tr)
+
+    return {"messages": out}
+
+
 def main(cfg: Config) -> int:
     cleaned_dir = cfg.path("cleaned_dir")
     dataset_dir = cfg.path("dataset_dir")
@@ -94,8 +143,6 @@ def main(cfg: Config) -> int:
     template = cfg.get("format", "template", default="chatml")
     system = cfg.get("format", "system_prompt", default="") or ""
     max_turns = cfg.get("format", "max_turns_per_example", default=0) or 0
-    # Character budget per example. Conversations longer than this are split into
-    # sliding windows so each fits the model's max_seq_length. 0 = no budget.
     max_chars = cfg.get("format", "max_chars_per_example", default=24000) or 0
 
     examples: list[Any] = []
@@ -120,14 +167,6 @@ def main(cfg: Config) -> int:
 
 
 def _window_messages(msgs: list[dict], max_turns: int, max_chars: int) -> list[list[dict]]:
-    """Split a message list into training windows.
-
-    - If max_turns set and exceeded: sliding windows of `max_turns` with 50%
-      overlap.
-    - Else if max_chars set: sliding windows that stay under the char budget
-      (estimated from rendered text length), with 1-message overlap.
-    - Else: the whole conversation as one window.
-    """
     if max_turns and len(msgs) > max_turns:
         out = []
         step = max(1, max_turns // 2)
@@ -149,7 +188,7 @@ def _window_messages(msgs: list[dict], max_turns: int, max_chars: int) -> list[l
             out.append(msgs[start:end])
             if end >= len(msgs):
                 break
-            start = max(start + 1, end - 1)  # 1-message overlap
+            start = max(start + 1, end - 1)
         return out
     return [msgs]
 
@@ -159,4 +198,6 @@ def _format_window(msgs: list[dict], template: str, system: str) -> Any:
         return to_alpaca(msgs, system)
     if template == "sharegpt":
         return {"conversations": to_sharegpt(msgs, system)}
+    if template == "hermes":
+        return to_hermes(msgs, system)
     return {"messages": to_chatml(msgs, system)}

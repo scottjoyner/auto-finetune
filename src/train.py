@@ -126,9 +126,10 @@ def _train_unsloth(cfg: Config, data: list[dict]) -> int:
     ds = Dataset.from_dict({"text": texts})
 
     trainer = SFTTrainer(
-        model=model, tokenizer=tokenizer, train_dataset=ds,
-        dataset_text_field="text", max_seq_length=t.get("max_seq_length", 8192),
+        model=model,
         args=_training_args(t, model, rocm=_detect_rocm()),
+        train_dataset=ds,
+        processing_class=tokenizer,
     )
     trainer.train()
     _save(model, tokenizer, t)
@@ -139,7 +140,7 @@ def _train_unsloth(cfg: Config, data: list[dict]) -> int:
 def _train_peft(cfg: Config, data: list[dict]) -> int:
     import torch
     from transformers import (AutoModelForCausalLM, AutoTokenizer,
-                              TrainingArguments, TrainerCallback)
+                              TrainingArguments, TrainerCallback, BitsAndBytesConfig)
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from trl import SFTTrainer
     from datasets import Dataset
@@ -153,22 +154,21 @@ def _train_peft(cfg: Config, data: list[dict]) -> int:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    quant_kwargs: dict[str, Any] = {}
+    quant_config = None
     if load_4bit:
-        # bitsandbytes handles both CUDA and ROCm (llm.int8 / 4-bit).
-        quant_kwargs = {
-            "load_in_4bit": True,
-            "bnb_4bit_quant_type": "nf4",
-            "bnb_4bit_compute_dtype": torch.bfloat16 if _detect_rocm() else torch.float16,
-            "bnb_4bit_use_double_quant": True,
-            "device_map": "auto",
-        }
+        quant_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16 if _detect_rocm() else torch.float16,
+            bnb_4bit_use_double_quant=True,
+        )
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16 if _detect_rocm() else torch.float16,
         attn_implementation="sdpa",
-        **quant_kwargs,
+        quantization_config=quant_config,
+        device_map="auto",
     )
     if load_4bit:
         model = prepare_model_for_kbit_training(model)
@@ -189,9 +189,10 @@ def _train_peft(cfg: Config, data: list[dict]) -> int:
     ds = Dataset.from_dict({"text": texts})
 
     trainer = SFTTrainer(
-        model=model, tokenizer=tokenizer, train_dataset=ds,
-        dataset_text_field="text", max_seq_length=max_seq,
+        model=model,
         args=_training_args(t, model, rocm=_detect_rocm()),
+        train_dataset=ds,
+        processing_class=tokenizer,
     )
     trainer.train()
     _save(model, tokenizer, t)
