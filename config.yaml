@@ -1,0 +1,96 @@
+name: auto-finetune
+
+# ── Data sources ────────────────────────────────────────────────────────────
+sources:
+  opencode:
+    # Live/current opencode session store. Has scattered page corruption; the
+    # extractor reads row-by-row and skips unreadable rows.
+    db_path: /media/scott/NAS5/fileserver/opencode/opencode.db
+    # Older migrated / broken snapshots (same schema). Set enabled:false to skip.
+    extra_dbs:
+      - path: /media/scott/NAS5/fileserver/opencode/opencode_old_broken.db
+        enabled: false
+      - path: /media/scott/NAS5/fileserver/opencode/opencode.db.broken-20260626T132349Z
+        enabled: false
+  hermes:
+    # Hermes agent session exports (JSON / JSONL). Not yet harvested.
+    # Point this at a directory of exported Hermes sessions when available.
+    dir: /media/scott/NAS5/fileserver/hermes
+    enabled: false
+
+# ── Extraction ──────────────────────────────────────────────────────────────
+extract:
+  # Only keep sessions whose title/agent matches these (empty = keep all).
+  include_agents: []
+  exclude_agents: []
+  min_messages: 2
+  # Skip rows whose underlying DB page is unreadable (corruption).
+  skip_corrupt_rows: true
+
+# ── Cleaning ────────────────────────────────────────────────────────────────
+clean:
+  # Redact secrets / tokens found in tool inputs & outputs.
+  redact_secrets: true
+  # Drop assistant turns that contain no text and no tool calls.
+  drop_empty_turns: true
+  # Max characters per message; longer are truncated (0 = unlimited).
+  max_chars_per_message: 32000
+  # Remove reasoning parts from training targets (keep as context optionally).
+  keep_reasoning_as_context: false
+  # Deduplicate identical conversations.
+  dedupe: true
+
+# ── Dataset formatting ──────────────────────────────────────────────────────
+format:
+  # chatml | alpaca | sharegpt
+  template: chatml
+  system_prompt: |
+    You are an autonomous coding agent. You help users by exploring codebases,
+    planning changes, editing files, running commands, and verifying results.
+    Respond concisely and use tools when appropriate.
+  # Split long multi-session histories into windows of N turns for training.
+  max_turns_per_example: 0   # 0 = use whole conversation
+  # Character budget per example. Sessions longer than this are split into
+  # sliding windows so each fits max_seq_length. ~24k chars ~ 8k tokens.
+  max_chars_per_example: 24000
+
+# ── Training ────────────────────────────────────────────────────────────────
+# backend: auto | unsloth | peft
+#   unsloth  -> CUDA only, fastest. Requires `pip install unsloth` on a CUDA box.
+#   peft     -> ROCm (AMD) AND CUDA. Uses HuggingFace PEFT + bitsandbytes (4-bit)
+#               or GPTQ. This is what you want on AMD GPUs.
+#   auto     -> use unsloth if a CUDA GPU + unsloth is present, else peft.
+train:
+  backend: auto
+  # Base model to finetune. For AMD/ROCm + peft use a standard HF model id.
+  # NOTE: some models (e.g. Qwen3-8B-Instruct) are *gated* and require
+  # `hf auth login` before download. Qwen2.5-7B-Instruct is open and works
+  # out of the box. For CUDA+unsloth you can use unsloth/Qwen2.5-7B-Instruct.
+  #   ROCm example:  Qwen/Qwen2.5-7B-Instruct
+  #   CUDA example:  unsloth/Qwen2.5-7B-Instruct
+  model_name: Qwen/Qwen2.5-7B-Instruct
+  # LoRA / QLoRA settings
+  lora_r: 32
+  lora_alpha: 64
+  lora_dropout: 0.0
+  max_seq_length: 8192
+  # 4-bit quantization for fitting large models on modest GPUs.
+  # peft backend uses bitsandbytes (CUDA) or auto-gptq (ROCm) under the hood.
+  load_in_4bit: true
+  # Optimizer / schedule
+  learning_rate: 2e-4
+  num_train_epochs: 3
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 8
+  warmup_ratio: 0.03
+  weight_decay: 0.01
+  # Output
+  output_dir: outputs/checkpoints
+  hub_model_id: ""   # set to push to HF Hub
+  push_to_hub: false
+
+# ── Paths ───────────────────────────────────────────────────────────────────
+paths:
+  raw_dir: data/raw
+  cleaned_dir: data/cleaned
+  dataset_dir: data/datasets

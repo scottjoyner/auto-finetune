@@ -1,0 +1,15 @@
+# Core (CPU): data extraction + cleaning + formatting
+apsw>=3.45
+pyyaml>=6.0
+
+# Training backend 1 — CUDA only, fastest:
+# unsloth
+# (install on a CUDA machine: pip install unsloth)
+
+# Training backend 2 — CUDA + AMD/ROCm (auto-selected when unsloth absent):
+# Torch ROCm build:  pip install torch --index-url https://download.pytorch.org/whl/rocm6.2
+# peft
+# trl
+# transformers
+# datasets
+# bitsandbytes   # 4-bit quantization on both CUDA and ROCm

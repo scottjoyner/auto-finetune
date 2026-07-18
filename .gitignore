@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Generated data (can be large)
+data/raw/
+data/cleaned/
+data/datasets/
+
+# Training outputs
+outputs/
