@@ -113,7 +113,7 @@ train:
   save_steps: 50
   logging_steps: 1
   # Output (on SSD staging so checkpoints don't land on the CWD/repo)
-  output_dir: /media/scott/SSD_4TB/finetune-staging/outputs/checkpoints/toolcall-v5-3b-hermes
+  output_dir: /media/scott/data/finetune-staging/outputs/checkpoints/toolcall-v5-3b-hermes
   hub_model_id: ""   # set to push to HF Hub
   push_to_hub: false
 

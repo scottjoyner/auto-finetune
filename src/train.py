@@ -224,7 +224,10 @@ def _training_args(t: dict, model=None, rocm: bool = False) -> "TrainingArgument
         bf16=bf16,
         logging_steps=1,
         output_dir=t.get("output_dir", "outputs/checkpoints"),
-        save_strategy="epoch",
+        # Honor config so long runs are observable (gotcha: a shared
+        # save_strategy="epoch" left the output dir empty for ~8h before).
+        save_strategy=t.get("save_strategy", "epoch"),
+        save_steps=t.get("save_steps", 500),
         report_to="none",
     )
 
