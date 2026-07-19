@@ -103,18 +103,38 @@ def clean_session(rec: dict, cfg: Config) -> dict | None:
     return out
 
 
-def main(cfg: Config) -> int:
+def main(cfg: Config, label: str | None = None) -> int:
     raw_dir = cfg.path("raw_dir")
     cleaned_dir = cfg.path("cleaned_dir")
-    os.makedirs(cleaned_dir, exist_ok=True)
 
+    if label:
+        # Clean a single labeled subdir.
+        src = os.path.join(raw_dir, label)
+        dst = os.path.join(cleaned_dir, label)
+        os.makedirs(dst, exist_ok=True)
+        return _clean_dir(src, dst, cfg)
+    else:
+        # Clean all subdirs.
+        os.makedirs(cleaned_dir, exist_ok=True)
+        total = 0
+        for entry in sorted(os.listdir(raw_dir)):
+            src = os.path.join(raw_dir, entry)
+            if not os.path.isdir(src):
+                continue
+            dst = os.path.join(cleaned_dir, entry)
+            os.makedirs(dst, exist_ok=True)
+            total += _clean_dir(src, dst, cfg)
+        return total
+
+
+def _clean_dir(src: str, dst: str, cfg: Config) -> int:
     dedupe = cfg.get("clean", "dedupe", default=True)
     seen: set[str] = set()
     written = 0
-    for fn in sorted(os.listdir(raw_dir)):
+    for fn in sorted(os.listdir(src)):
         if not fn.endswith(".json"):
             continue
-        with open(os.path.join(raw_dir, fn)) as f:
+        with open(os.path.join(src, fn)) as f:
             rec = json.load(f)
         out = clean_session(rec, cfg)
         if out is None:
@@ -124,8 +144,8 @@ def main(cfg: Config) -> int:
             if h in seen:
                 continue
             seen.add(h)
-        with open(os.path.join(cleaned_dir, fn), "w") as f:
+        with open(os.path.join(dst, fn), "w") as f:
             json.dump(out, f)
         written += 1
-    print(f"[clean] wrote {written} cleaned sessions to {cleaned_dir}")
+    print(f"[clean] wrote {written} cleaned sessions to {dst}")
     return written

@@ -159,19 +159,43 @@ def extract_db(cfg: Config, db_path: str, out_dir: str, progress_every: int = 10
     return written
 
 
-def main(cfg: Config) -> int:
+def main(cfg: Config, label: str | None = None) -> int:
     raw_dir = cfg.path("raw_dir")
     os.makedirs(raw_dir, exist_ok=True)
     total = 0
     oc = cfg.get("sources", "opencode", default={})
-    main_db = oc.get("db_path")
-    if main_db and os.path.exists(main_db):
-        total += extract_db(cfg, main_db, raw_dir)
-    for extra in (oc.get("extra_dbs") or []):
-        if not extra.get("enabled", False):
-            continue
-        p = extra.get("path")
-        if p and os.path.exists(p):
-            total += extract_db(cfg, p, raw_dir)
+
+    if label:
+        # Single-DB mode: extract only the DB matching this label.
+        out_dir = os.path.join(raw_dir, label)
+        os.makedirs(out_dir, exist_ok=True)
+        if label == "ssd":
+            db_path = oc.get("db_path")
+            if db_path and os.path.exists(db_path):
+                total += extract_db(cfg, db_path, out_dir)
+        else:
+            for extra in (oc.get("extra_dbs") or []):
+                if extra.get("label") == label:
+                    p = extra.get("path")
+                    if p and os.path.exists(p):
+                        total += extract_db(cfg, p, out_dir)
+                    break
+    else:
+        # All-DBs mode: main DB goes in raw/ssd, extras in raw/<label>.
+        main_db = oc.get("db_path")
+        if main_db and os.path.exists(main_db):
+            ssd_dir = os.path.join(raw_dir, "ssd")
+            os.makedirs(ssd_dir, exist_ok=True)
+            total += extract_db(cfg, main_db, ssd_dir)
+        for extra in (oc.get("extra_dbs") or []):
+            if not extra.get("enabled", False):
+                continue
+            p = extra.get("path")
+            lab = extra.get("label", os.path.basename(p).replace(".db", ""))
+            if p and os.path.exists(p):
+                out_dir = os.path.join(raw_dir, lab)
+                os.makedirs(out_dir, exist_ok=True)
+                total += extract_db(cfg, p, out_dir)
+
     print(f"[extract] TOTAL sessions written: {total}")
     return total

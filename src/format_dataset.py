@@ -135,7 +135,7 @@ def to_hermes(messages: list[dict], system: str) -> dict:
     return {"messages": out}
 
 
-def main(cfg: Config) -> int:
+def main(cfg: Config, source: str | None = None, label: str | None = None) -> int:
     cleaned_dir = cfg.path("cleaned_dir")
     dataset_dir = cfg.path("dataset_dir")
     os.makedirs(dataset_dir, exist_ok=True)
@@ -145,25 +145,57 @@ def main(cfg: Config) -> int:
     max_turns = cfg.get("format", "max_turns_per_example", default=0) or 0
     max_chars = cfg.get("format", "max_chars_per_example", default=24000) or 0
 
-    examples: list[Any] = []
-    for fn in sorted(os.listdir(cleaned_dir)):
-        if not fn.endswith(".json"):
-            continue
-        with open(os.path.join(cleaned_dir, fn)) as f:
-            rec = json.load(f)
-        msgs = rec.get("messages", [])
-        windows = _window_messages(msgs, max_turns, max_chars)
-        for w in windows:
-            if len(w) < 2:
+    def _format_one(src_dir: str, out_path: str, filter_source: str | None) -> int:
+        examples: list[Any] = []
+        sources_seen: set[str] = set()
+        for fn in sorted(os.listdir(src_dir)):
+            if not fn.endswith(".json"):
                 continue
-            examples.append(_format_window(w, template, system))
+            with open(os.path.join(src_dir, fn)) as f:
+                rec = json.load(f)
+            src = rec.get("source", "")
+            sources_seen.add(src)
+            if filter_source and src != filter_source:
+                continue
+            msgs = rec.get("messages", [])
+            windows = _window_messages(msgs, max_turns, max_chars)
+            for w in windows:
+                if len(w) < 2:
+                    continue
+                examples.append(_format_window(w, template, system))
+        with open(out_path, "w") as f:
+            for ex in examples:
+                f.write(json.dumps(ex) + "\n")
+        return len(examples)
 
-    out_file = os.path.join(dataset_dir, "train.jsonl")
-    with open(out_file, "w") as f:
-        for ex in examples:
-            f.write(json.dumps(ex) + "\n")
-    print(f"[format] wrote {len(examples)} examples to {out_file}")
-    return len(examples)
+    if label:
+        # Format a single labeled cleaned subdir.
+        src_dir = os.path.join(cleaned_dir, label)
+        suffix = f".{label}"
+        if source:
+            suffix += f".{source}"
+        out_path = os.path.join(dataset_dir, f"train{suffix}.jsonl")
+        n = _format_one(src_dir, out_path, source)
+        print(f"[format] {label} ({source or 'all'}): {n} examples -> {out_path}")
+        return n
+    else:
+        # Format all cleaned subdirs (no source filter on per-label files).
+        total = 0
+        for entry in sorted(os.listdir(cleaned_dir)):
+            src_dir = os.path.join(cleaned_dir, entry)
+            if not os.path.isdir(src_dir):
+                continue
+            out_path = os.path.join(dataset_dir, f"train.{entry}.jsonl")
+            n = _format_one(src_dir, out_path, None)  # always full for per-label
+            print(f"[format] {entry}: {n} examples -> {out_path}")
+            total += n
+        # Merged: apply source filter if given.
+        out_path = os.path.join(dataset_dir, "train.jsonl")
+        n = _format_one(cleaned_dir, out_path, source)
+        label_str = source or "merged"
+        print(f"[format] {label_str}: {n} examples -> {out_path}")
+        total += n
+        return total
 
 
 def _window_messages(msgs: list[dict], max_turns: int, max_chars: int) -> list[list[dict]]:

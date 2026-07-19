@@ -140,7 +140,7 @@ def _train_unsloth(cfg: Config, data: list[dict]) -> int:
 def _train_peft(cfg: Config, data: list[dict]) -> int:
     import torch
     from transformers import (AutoModelForCausalLM, AutoTokenizer,
-                              TrainingArguments, TrainerCallback, BitsAndBytesConfig)
+                              TrainingArguments, TrainerCallback)
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from trl import SFTTrainer
     from datasets import Dataset
@@ -149,6 +149,7 @@ def _train_peft(cfg: Config, data: list[dict]) -> int:
     model_name = t.get("model_name", "Qwen/Qwen3-8B-Instruct")
     max_seq = t.get("max_seq_length", 8192)
     load_4bit = t.get("load_in_4bit", True)
+    grad_ckpt = t.get("gradient_checkpointing", False)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
@@ -156,6 +157,7 @@ def _train_peft(cfg: Config, data: list[dict]) -> int:
 
     quant_config = None
     if load_4bit:
+        from transformers import BitsAndBytesConfig
         quant_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
@@ -172,6 +174,10 @@ def _train_peft(cfg: Config, data: list[dict]) -> int:
     )
     if load_4bit:
         model = prepare_model_for_kbit_training(model)
+
+    if grad_ckpt:
+        model.gradient_checkpointing_enable()
+        model.config.use_cache = False
 
     lora = LoraConfig(
         r=t.get("lora_r", 32),
@@ -202,6 +208,9 @@ def _train_peft(cfg: Config, data: list[dict]) -> int:
 def _training_args(t: dict, model=None, rocm: bool = False) -> "TrainingArguments":
     from transformers import TrainingArguments
     bf16 = rocm  # AMD/ROCm prefers bf16
+    # adamw_8bit requires bitsandbytes which may not have ROCm binaries —
+    # fall back to the standard adamw when bnb is unavailable.
+    use_bnb_optim = not rocm
     return TrainingArguments(
         per_device_train_batch_size=t.get("per_device_train_batch_size", 2),
         gradient_accumulation_steps=t.get("gradient_accumulation_steps", 8),
@@ -210,7 +219,7 @@ def _training_args(t: dict, model=None, rocm: bool = False) -> "TrainingArgument
         warmup_ratio=t.get("warmup_ratio", 0.03),
         weight_decay=t.get("weight_decay", 0.01),
         lr_scheduler_type="cosine",
-        optim="adamw_8bit",
+        optim="adamw_torch" if not use_bnb_optim else "adamw_8bit",
         fp16=(not bf16),
         bf16=bf16,
         logging_steps=1,
@@ -251,11 +260,19 @@ def _render_sample_texts(data, tokenizer, max_seq, n: int = 3) -> list[str]:
     return _build_texts(sample, tokenizer, max_seq)
 
 
-def main(cfg: Config, dry_run: bool = False) -> int:
+def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: str | None = None, max_examples: int | None = None) -> int:
     dataset_dir = cfg.path("dataset_dir")
-    data_path = os.path.join(dataset_dir, "train.jsonl")
+    fn_parts = ["train"]
+    if label:
+        fn_parts.append(label)
+    if source:
+        fn_parts.append(source)
+    data_path = os.path.join(dataset_dir, ".".join(fn_parts) + ".jsonl")
     data = validate_dataset(data_path)
-    print(f"[train] {len(data)} examples loaded")
+    if max_examples is not None and max_examples > 0:
+        data = data[:max_examples]
+        print(f"[train] --max-examples={max_examples}: using first {len(data)} examples")
+    print(f"[train] {len(data)} examples loaded from {data_path}")
 
     backend = _resolve_backend(cfg)
     print(f"[train] backend = {backend}  (cuda={_detect_cuda()}, rocm={_detect_rocm()})")

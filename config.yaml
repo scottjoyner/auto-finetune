@@ -3,21 +3,22 @@ name: auto-finetune
 # ── Data sources ────────────────────────────────────────────────────────────
 sources:
   opencode:
-    # Live/current opencode session store. Has scattered page corruption; the
-    # extractor reads row-by-row and skips unreadable rows.
-    # Largest DB first (likely superset); dedupe happens by session id on write.
-    db_path: /media/scott/NAS5/opencode/opencode.db
-    # Older migrated / broken snapshots (same schema). Set enabled:false to skip.
-    # All unique corrupt DBs enabled; sessions dedupe by id across DBs.
+    # Live/current opencode session store on SSD.
+    db_path: /media/scott/SSD_4TB/opencode/opencode.db
+    # Older / broken snapshots on NAS5. Each gets its own checkpoint.
     extra_dbs:
-      - path: /media/scott/NAS5/opencode/opencode_20260717.db
+      - path: /media/scott/NAS5/fileserver/opencode/opencode.db
         enabled: true
-      - path: /media/scott/SSD_4TB/opencode/opencode.db
+        label: nas5-main
+      - path: /media/scott/NAS5/fileserver/opencode/opencode_20260717.db
         enabled: true
-      # opencode_old_broken.db / opencode_recover_old.db are byte-identical
-      # 26.5GB copies of SSD_4TB/opencode/opencode.db -> skip duplicates.
-      - path: /media/scott/NAS5/opencode/opencode_old_broken.db
-        enabled: false
+        label: nas5-20260717
+      - path: /media/scott/NAS5/fileserver/opencode/opencode_old_broken.db
+        enabled: true
+        label: nas5-old-broken
+      - path: /media/scott/NAS5/fileserver/opencode_recover_old.db
+        enabled: true
+        label: nas5-recover-old
   hermes:
     # Hermes canonical session store is the SQLite state.db (system of record),
     # optionally enriched from the live Neo4j knowledge graph. Handled by a
@@ -76,7 +77,7 @@ train:
   # Base model to finetune. For AMD/ROCm + peft use a standard HF model id.
   # RefinedToolCallV5-3b is already finetuned on Hermes agent reasoning traces
   # with tool calling (qwen2 architecture, 3B params, 131K context).
-  model_name: RefinedNeuro/RefinedToolCallV5-3b
+  model_name: /media/scott/SSD_4TB/models-fast/RefinedNeuro/RefinedToolCallV5-3b
   # LoRA / QLoRA settings (adjusted for 3B continued finetune)
   lora_r: 16
   lora_alpha: 32
@@ -90,19 +91,29 @@ train:
     - "gate_proj"
     - "up_proj"
     - "down_proj"
-  max_seq_length: 16384
+  max_seq_length: 8192
+  gradient_checkpointing: true
   # 4-bit quantization for fitting large models on modest GPUs.
   # peft backend uses bitsandbytes (CUDA) or auto-gptq (ROCm) under the hood.
-  load_in_4bit: true
+  # NOTE: bitsandbytes has NO ROCm binary installed here (libbitsandbytes_rocm83.so
+  # missing) — keep this false or the run crashes at model load on AMD/ROCm.
+  load_in_4bit: false
   # Optimizer / schedule
   learning_rate: 1e-4
   num_train_epochs: 2
+  # 890M iGPU (gfx1151) over NFS measured ~65 s/step. Larger effective batch via
+  # grad-accum keeps VRAM low; ~16 ex/step => ~8h/epoch before first epoch checkpoint.
   per_device_train_batch_size: 4
   gradient_accumulation_steps: 4
   warmup_ratio: 0.03
   weight_decay: 0.01
+  # Make a long run observable: checkpoint every ~1h of training (≈55 steps) so the
+  # output dir is never empty for 8h, and log loss each step.
+  save_strategy: steps
+  save_steps: 50
+  logging_steps: 1
   # Output (on SSD staging so checkpoints don't land on the CWD/repo)
-  output_dir: /media/scott/SSD_4TB/finetune-staging/outputs/checkpoints/toolcall-v5-3b-opencode
+  output_dir: /media/scott/SSD_4TB/finetune-staging/outputs/checkpoints/toolcall-v5-3b-hermes
   hub_model_id: ""   # set to push to HF Hub
   push_to_hub: false
 
