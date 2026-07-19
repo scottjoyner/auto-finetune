@@ -38,6 +38,12 @@ cd /home/scott/git/auto-finetune
 $V/python -m src.cli train --source=hermes --dry-run 2>&1 | tail -5
 
 # 3) Launch the real run (fresh local output dir).
+# guard: don't launch if a train process is already running
+if pgrep -f "src.cli train --source=hermes" >/dev/null 2>&1; then
+    echo "[$(date)] train already running — skipping launch."
+    exit 0
+fi
+
 echo "[$(date)] launching Hermes finetune..."
 nohup $V/python -m src.cli train --source=hermes \
     > "$LOGD/train-hermes-full.log" 2>&1 &
