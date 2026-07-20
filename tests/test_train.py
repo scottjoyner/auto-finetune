@@ -39,7 +39,13 @@ def test_detect_rocm_env(monkeypatch):
     monkeypatch.delenv("HSA_PATH", raising=False)
 
 
-def test_detect_rocm_injected():
+def test_detect_rocm_injected(monkeypatch):
+    import torch
+
+    # isolate from this machine's ROCm env vars AND a HIP-enabled torch build
+    monkeypatch.delenv("ROCM_PATH", raising=False)
+    monkeypatch.delenv("HSA_PATH", raising=False)
+    monkeypatch.setattr(torch.version, "hip", None)
     assert _detect_rocm(rocm_path="/x") is True
     assert _detect_rocm(rocm_path=None) is False
     assert _detect_rocm(rocm_path="") is False
@@ -152,7 +158,6 @@ def test_dry_run_writes_nothing_but_validates(tmp_path, capsys):
     cfg = Config(raw=raw)
 
     import src.train as T
-    real = T.AutoTokenizer if hasattr(T, "AutoTokenizer") else None
 
     class FakeTok:
         @staticmethod
@@ -160,7 +165,6 @@ def test_dry_run_writes_nothing_but_validates(tmp_path, capsys):
             return FakeTok()
         def apply_chat_template(self, msgs, tokenize=False, add_generation_prompt=False):
             return "rendered"
-    monkeypatch_tok = FakeTok
 
     # Patch transformers import used inside dry-run
     import sys

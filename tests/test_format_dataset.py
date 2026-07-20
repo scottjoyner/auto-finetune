@@ -148,10 +148,10 @@ def test_main_writes_jsonl(tmp_root, sample_session):
     n = main(cfg)
     assert n >= 1
     lines = (datasets / "train.jsonl").read_text().strip().splitlines()
-    # main writes several per-source files plus a merged train.jsonl; assert the
-    # merged file is non-empty and parses (not that its line count equals the
-    # aggregate `total`, which counts every per-source output).
-    assert len(lines) >= 1
+    # main writes each output file exactly once; the merged file's line count
+    # equals the count returned for that file (the aggregate `total` also
+    # includes per-source subdir files, which is why we assert on train.jsonl).
+    assert len(lines) == n
     obj = json.loads(lines[0])
     assert "messages" in obj
 

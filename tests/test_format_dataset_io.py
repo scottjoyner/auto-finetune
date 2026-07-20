@@ -30,7 +30,10 @@ def test_main_formats_cleaned_dir(tmp_path):
     ds = tmp_path / "datasets"
     cfg = _cfg(str(cleaned), str(ds))
     total = F.main(cfg, source=None)
-    assert total == 2
+    # main writes each output file exactly once; a single source file yields
+    # exactly one example in the merged train.jsonl (the old code double-wrote
+    # and returned 2 — that was the bug).
+    assert total == 1
     out = ds / "train.jsonl"
     assert out.exists()
     ex = json.loads(out.read_text().splitlines()[0])

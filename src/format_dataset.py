@@ -229,15 +229,11 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
         print(f"[format] {label} ({source or 'all'}): {n} examples -> {out_path}")
         return n
     else:
-        # Hermes cleaning writes flat files into cleaned_dir/ directly.
+        # Hermes cleaning writes flat files into cleaned_dir/ directly, plus
+        # opencode sources live in per-source subdirs. Emit one train.<label>.jsonl
+        # per subdir, a merged train.jsonl, and (when --source is given) a
+        # train.<source>.jsonl. Each output file is written exactly once.
         total = 0
-        if any(fn.endswith(".json") for fn in os.listdir(cleaned_dir)):
-            out_name = f"train.{source}.jsonl" if source else "train.jsonl"
-            out_path = os.path.join(dataset_dir, out_name)
-            n = _format_one(cleaned_dir, out_path, source)
-            label_str = source or "merged"
-            print(f"[format] {label_str}: {n} examples -> {out_path}")
-            total += n
         for entry in sorted(os.listdir(cleaned_dir)):
             src_dir = os.path.join(cleaned_dir, entry)
             if not os.path.isdir(src_dir):
@@ -246,12 +242,19 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
             n = _format_one(src_dir, out_path, None)  # always full for per-label
             print(f"[format] {entry}: {n} examples -> {out_path}")
             total += n
-        # Merged: apply source filter if given.
+        # Merged (optionally source-filtered) train.jsonl.
         out_path = os.path.join(dataset_dir, "train.jsonl")
         n = _format_one(cleaned_dir, out_path, source)
         label_str = source or "merged"
         print(f"[format] {label_str}: {n} examples -> {out_path}")
         total += n
+        # Per-source file only when a --source filter is active (otherwise it
+        # would duplicate the merged file written just above).
+        if source:
+            out_path = os.path.join(dataset_dir, f"train.{source}.jsonl")
+            n = _format_one(cleaned_dir, out_path, source)
+            print(f"[format] {source}: {n} examples -> {out_path}")
+            total += n
         return total
 
 

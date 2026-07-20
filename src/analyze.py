@@ -29,7 +29,7 @@ from src.clean import _conv_hash, _dedup_by_session
 
 # ── tool taxonomy ──────────────────────────────────────────────────────────────
 EDIT_TOOLS = {"write", "edit", "patch", "str_replace", "create_file", "update_file",
-              "str_replace_editor"}
+              "str_replace_editor", "write_file"}
 SHELL_TOOLS = {"bash", "shell", "terminal", "sh", "zsh", "cmd", "powershell", "execute"}
 SEARCH_TOOLS = {"grep", "rg", "glob", "find", "search", "ls"}
 READ_TOOLS = {"read", "cat", "view", "open", "open_file"}
@@ -228,6 +228,37 @@ def quality_flag(f: dict, rec: dict) -> tuple[bool, str]:
     return True, "ok"
 
 
+def _file_target(inp: dict) -> tuple[str, str] | None:
+    """Extract (basename, content-snippet) a tool call produces.
+
+    Handles the real tool shapes seen in the corpus: ``write``/``write_file``
+    (``filePath``/``path`` + ``content``), ``edit``/``str_replace``
+    (``filePath``/``path`` + ``new_string``/``newString``) and unified
+    ``patch`` parts (``+++ b/<path>`` + added lines).
+    """
+    if not isinstance(inp, dict):
+        return None
+    path = inp.get("filePath") or inp.get("path") or inp.get("file") or inp.get("filename")
+    content = (inp.get("content") or inp.get("new_string") or inp.get("newString") or "")
+    if isinstance(content, str) and isinstance(path, str) and content.strip():
+        return os.path.basename(path), content.strip()[:60]
+    # patch: pull the file path and the added (+) lines
+    pc = inp.get("patch")
+    if isinstance(pc, str):
+        p = None
+        added = []
+        for line in pc.splitlines():
+            if line.startswith("+++ "):
+                p = line[4:].strip()
+                if p.startswith("b/"):
+                    p = p[2:]
+            elif line.startswith("+"):
+                added.append(line[1:])
+        if p and added:
+            return os.path.basename(p), "\n".join(added).strip()[:60]
+    return None
+
+
 def derive_task(rec: dict, meta: dict) -> dict | None:
     """Turn a successful file-edit session into a seed benchmark task."""
     if not meta["keep"]:
@@ -241,11 +272,9 @@ def derive_task(rec: dict, meta: dict) -> dict | None:
     for m in rec.get("messages", []):
         for p in m.get("parts", []):
             if p.get("type") == "tool" and (p.get("tool") or "").lower() in EDIT_TOOLS:
-                inp = p.get("input") or {}
-                path = inp.get("filePath") or inp.get("path")
-                content = inp.get("content") or inp.get("new_string") or ""
-                if isinstance(content, str) and isinstance(path, str) and content.strip():
-                    target = (os.path.basename(path), content.strip()[:60])
+                tgt = _file_target(p.get("input") or {})
+                if tgt:
+                    target = tgt
                     break
         if target:
             break

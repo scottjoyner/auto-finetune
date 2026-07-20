@@ -30,7 +30,7 @@ def test_cli_extract_runs(make_opencode_db, tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "load", lambda *a, **k: cfg)
     rc = cli_main(["cli", "extract"])
     assert rc == 1
-    assert (tmp_path / "raw" / "ses_demo.json").exists()
+    assert (tmp_path / "raw" / "ssd" / "ses_demo.json").exists()
 
 
 def test_cli_train_error_propagates(tmp_path, monkeypatch):
@@ -72,8 +72,10 @@ def test_cli_train_dry_run(tmp_path, monkeypatch):
     try:
         rc = cli_main(["cli", "train", "--dry-run"])
     finally:
-        if saved: sys.modules["transformers"] = saved
-        else: sys.modules.pop("transformers", None)
+        if saved:
+            sys.modules["transformers"] = saved
+        else:
+            sys.modules.pop("transformers", None)
     assert rc == 0
 
 
