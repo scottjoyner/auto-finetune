@@ -46,8 +46,9 @@ def _redact_obj(obj: Any) -> Any:
     return obj
 
 
-def clean_message(msg: dict, cfg: Config) -> dict | None:
-    keep_reasoning = cfg.get("clean", "keep_reasoning_as_context", default=False)
+def clean_message(msg: dict, cfg: Config, keep_reasoning: bool | None = None) -> dict | None:
+    if keep_reasoning is None:
+        keep_reasoning = cfg.get("clean", "keep_reasoning_as_context", default=False)
     max_chars = cfg.get("clean", "max_chars_per_message", default=32000)
     redact_on = cfg.get("clean", "redact_secrets", default=True)
 
@@ -90,10 +91,10 @@ def _conv_hash(rec: dict) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def clean_session(rec: dict, cfg: Config) -> dict | None:
+def clean_session(rec: dict, cfg: Config, keep_reasoning: bool | None = None) -> dict | None:
     cleaned_msgs = []
     for m in rec.get("messages", []):
-        cm = clean_message(m, cfg)
+        cm = clean_message(m, cfg, keep_reasoning=keep_reasoning)
         if cm is not None:
             cleaned_msgs.append(cm)
     if len(cleaned_msgs) < 2:
@@ -103,31 +104,43 @@ def clean_session(rec: dict, cfg: Config) -> dict | None:
     return out
 
 
-def main(cfg: Config, label: str | None = None) -> int:
+def main(cfg: Config, label: str | None = None, keep_reasoning: bool = False) -> int:
     raw_dir = cfg.path("raw_dir")
     cleaned_dir = cfg.path("cleaned_dir")
+
+    if keep_reasoning and not label:
+        # Reasoning variant of Hermes: clean the flat Hermes files but keep
+        # reasoning parts, writing to a dedicated labeled subdir.
+        os.makedirs(cleaned_dir, exist_ok=True)
+        dst = os.path.join(cleaned_dir, "hermes-reasoning")
+        os.makedirs(dst, exist_ok=True)
+        written = _clean_dir(raw_dir, dst, cfg, keep_reasoning=True)
+        return written
 
     if label:
         # Clean a single labeled subdir.
         src = os.path.join(raw_dir, label)
         dst = os.path.join(cleaned_dir, label)
         os.makedirs(dst, exist_ok=True)
-        return _clean_dir(src, dst, cfg)
+        return _clean_dir(src, dst, cfg, keep_reasoning=keep_reasoning)
     else:
         # Clean all subdirs.
         os.makedirs(cleaned_dir, exist_ok=True)
         total = 0
+        # Hermes extraction writes flat files into raw_dir/ directly.
+        if any(fn.endswith(".json") for fn in os.listdir(raw_dir)):
+            total += _clean_dir(raw_dir, cleaned_dir, cfg, keep_reasoning=keep_reasoning)
         for entry in sorted(os.listdir(raw_dir)):
             src = os.path.join(raw_dir, entry)
             if not os.path.isdir(src):
                 continue
             dst = os.path.join(cleaned_dir, entry)
             os.makedirs(dst, exist_ok=True)
-            total += _clean_dir(src, dst, cfg)
+            total += _clean_dir(src, dst, cfg, keep_reasoning=keep_reasoning)
         return total
 
 
-def _clean_dir(src: str, dst: str, cfg: Config) -> int:
+def _clean_dir(src: str, dst: str, cfg: Config, keep_reasoning: bool = False) -> int:
     dedupe = cfg.get("clean", "dedupe", default=True)
     seen: set[str] = set()
     written = 0
@@ -136,7 +149,7 @@ def _clean_dir(src: str, dst: str, cfg: Config) -> int:
             continue
         with open(os.path.join(src, fn)) as f:
             rec = json.load(f)
-        out = clean_session(rec, cfg)
+        out = clean_session(rec, cfg, keep_reasoning=keep_reasoning)
         if out is None:
             continue
         if dedupe:

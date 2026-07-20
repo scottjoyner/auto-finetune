@@ -2,11 +2,20 @@
 # Post-reboot GPU + finetune verification. Run AFTER rebooting into the
 # GRUB-default kernel (7.0.0-28-generic).
 set -u
-export ROCM_PATH=/opt/rocm
-export HSA_OVERRIDE_GFX_VERSION=11.5.1
 V=/media/scott/data/finetune-venv/bin
 export PATH="$V:$PATH"
 export PYTHONPATH=/home/scott/git/auto-finetune
+TRAIN_ARGS=${TRAIN_ARGS:---source=hermes}
+
+# Keep scratch off NFS + small root: redirect HF/torch temp to local data drive.
+export HF_HOME=/media/scott/data/finetune-staging/hf-home
+export TRANSFORMERS_CACHE=/media/scott/data/finetune-staging/hf-home
+export HF_DATASETS_CACHE=/media/scott/data/finetune-staging/hf-home/datasets
+export TORCH_HOME=/media/scott/data/finetune-staging/torch-home
+export TMPDIR=/media/scott/data/finetune-staging/tmp
+export TEMP=/media/scott/data/finetune-staging/tmp
+export TMP=/media/scott/data/finetune-staging/tmp
+mkdir -p "$TMPDIR" "$HF_HOME" "$TORCH_HOME"
 
 echo "=== kernel ==="; uname -r
 echo "=== GPU visible? ==="
@@ -23,5 +32,5 @@ else:
 PY
 echo "=== dry-run train ==="
 cd /home/scott/git/auto-finetune
-$V/python -m src.cli train --source=hermes --dry-run 2>&1 | tail -5
+$V/python -m src.cli train $TRAIN_ARGS --dry-run 2>&1 | tail -5
 echo "DONE"

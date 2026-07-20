@@ -54,7 +54,7 @@ cleaned_dir: /media/scott/SSD_4TB/finetune-staging/data/cleaned
 dataset_dir: /media/scott/SSD_4TB/finetune-staging/data/datasets
 ```
 If you only copied `datasets/`, you can skip extract/clean/format and go
-straight to `train --source=hermes`.
+straight to `train --source=hermes` or `train --label=ssd`.
 
 ## Launch
 
@@ -64,12 +64,17 @@ export PATH="/path/venv/bin:$PATH" PYTHONPATH="/path/auto-finetune"
 # ROCm only: export ROCM_PATH=/opt/rocm HSA_OVERRIDE_GFX_VERSION=11.5.1
 nohup python -m src.cli train --source=hermes \
   > /path/finetune-staging/logs/train-hermes-full.log 2>&1 &
+
+# or the opencode main split:
+TRAIN_ARGS="--label=ssd" nohup python -m src.cli train $TRAIN_ARGS \
+  > /path/finetune-staging/logs/train-ssd.log 2>&1 &
 ```
 
 Smoke-test first to confirm the pipeline before the long run:
 ```bash
 python -m src.cli train --source=hermes --max-examples=100 --dry-run   # tokenizer only
 python -m src.cli train --source=hermes --max-examples=100             # ~real 100-ex run
+python -m src.cli train --label=ssd --dry-run                          # opencode split check
 ```
 
 ## Gotchas (learned the hard way)

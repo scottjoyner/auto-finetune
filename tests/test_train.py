@@ -171,3 +171,29 @@ def test_dry_run_writes_nothing_but_validates(tmp_path, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "dry-run" in out
+
+
+def test_main_uses_label_dataset_path(tmp_path, monkeypatch):
+    ds = tmp_path / "datasets"
+    ds.mkdir()
+    (ds / "train.ssd.jsonl").write_text(json.dumps({"messages": [{"role": "user", "content": "q"}]}) + "\n")
+
+    raw = copy.deepcopy(_DEFAULTS)
+    raw["paths"] = {"raw_dir": str(tmp_path / "raw"),
+                    "cleaned_dir": str(tmp_path / "cleaned"),
+                    "dataset_dir": str(ds)}
+    cfg = Config(raw=raw)
+
+    import src.train as T
+    seen = {}
+
+    def fake_validate(path):
+        seen["path"] = path
+        return [{"messages": [{"role": "user", "content": "q"}]}]
+
+    monkeypatch.setattr(T, "validate_dataset", fake_validate)
+    monkeypatch.setattr(T, "_resolve_backend", lambda cfg: "peft")
+    monkeypatch.setattr(T, "_train_peft", lambda cfg, data: 0)
+
+    assert T.main(cfg, label="ssd") == 0
+    assert seen["path"].endswith("train.ssd.jsonl")

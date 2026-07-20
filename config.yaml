@@ -7,16 +7,16 @@ sources:
     db_path: /media/scott/SSD_4TB/opencode/opencode.db
     # Older / broken snapshots on NAS5. Each gets its own checkpoint.
     extra_dbs:
-      - path: /media/scott/NAS5/fileserver/opencode/opencode.db
+      - path: /media/scott/NAS5/opencode/opencode.db
         enabled: true
         label: nas5-main
-      - path: /media/scott/NAS5/fileserver/opencode/opencode_20260717.db
+      - path: /media/scott/NAS5/opencode/opencode_20260717.db
         enabled: true
         label: nas5-20260717
-      - path: /media/scott/NAS5/fileserver/opencode/opencode_old_broken.db
+      - path: /media/scott/NAS5/opencode/opencode_old_broken.db
         enabled: true
         label: nas5-old-broken
-      - path: /media/scott/NAS5/fileserver/opencode_recover_old.db
+      - path: /media/scott/NAS5/opencode_recover_old.db
         enabled: true
         label: nas5-recover-old
   hermes:
@@ -119,6 +119,10 @@ train:
 
 # ── Paths ───────────────────────────────────────────────────────────────────
 paths:
-  raw_dir: /media/scott/SSD_4TB/finetune-staging/data/raw
-  cleaned_dir: /media/scott/SSD_4TB/finetune-staging/data/cleaned
-  dataset_dir: /media/scott/SSD_4TB/finetune-staging/data/datasets
+  # Intermediate scratch (extraction output, cleaned data, formatted datasets)
+  # lives on the LOCAL data drive — keep it off the NFS network mount and off
+  # the small root/CWD. Only read-only inputs (Hermes state.db, base model) stay
+  # on SSD_4TB.
+  raw_dir: /media/scott/data/finetune-staging/data/raw
+  cleaned_dir: /media/scott/data/finetune-staging/data/cleaned
+  dataset_dir: /media/scott/data/finetune-staging/data/datasets

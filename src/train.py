@@ -170,7 +170,9 @@ def _train_peft(cfg: Config, data: list[dict]) -> int:
         torch_dtype=torch.bfloat16 if _detect_rocm() else torch.float16,
         attn_implementation="sdpa",
         quantization_config=quant_config,
-        device_map="auto",
+        # device_map="auto" wedges the ROCm runtime on this gfx1151 iGPU after a
+        # long run (core dump at from_pretrained). Single-GPU so None is equivalent.
+        device_map=None,
     )
     if load_4bit:
         model = prepare_model_for_kbit_training(model)
@@ -223,7 +225,7 @@ def _training_args(t: dict, model=None, rocm: bool = False) -> "TrainingArgument
         fp16=(not bf16),
         bf16=bf16,
         logging_steps=1,
-        output_dir=t.get("output_dir", "outputs/checkpoints"),
+        output_dir=_output_dir(t),
         # Honor config so long runs are observable (gotcha: a shared
         # save_strategy="epoch" left the output dir empty for ~8h before).
         save_strategy=t.get("save_strategy", "epoch"),
@@ -233,7 +235,7 @@ def _training_args(t: dict, model=None, rocm: bool = False) -> "TrainingArgument
 
 
 def _save(model, tokenizer, t: dict) -> None:
-    out_dir = t.get("output_dir", "outputs/checkpoints")
+    out_dir = _output_dir(t)
     os.makedirs(out_dir, exist_ok=True)
     # PEFT models expose save_pretrained; unwrap if needed.
     getattr(model, "save_pretrained", lambda p: None)(out_dir)
@@ -263,8 +265,16 @@ def _render_sample_texts(data, tokenizer, max_seq, n: int = 3) -> list[str]:
     return _build_texts(sample, tokenizer, max_seq)
 
 
+def _output_dir(t: dict) -> str:
+    """Resolve the checkpoint output dir, honoring TRAIN_OUTPUT_DIR override."""
+    env = os.environ.get("TRAIN_OUTPUT_DIR")
+    if env:
+        return env
+    return t.get("output_dir", "outputs/checkpoints")
+
+
 def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: str | None = None, max_examples: int | None = None) -> int:
-    dataset_dir = cfg.path("dataset_dir")
+    dataset_dir = os.environ.get("TRAIN_DATASET_DIR") or cfg.path("dataset_dir")
     fn_parts = ["train"]
     if label:
         fn_parts.append(label)

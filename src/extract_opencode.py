@@ -159,13 +159,35 @@ def extract_db(cfg: Config, db_path: str, out_dir: str, progress_every: int = 10
     return written
 
 
-def main(cfg: Config, label: str | None = None) -> int:
+def main(cfg: Config, label: str | None = None, project: str | None = None) -> int:
     raw_dir = cfg.path("raw_dir")
     os.makedirs(raw_dir, exist_ok=True)
     total = 0
     oc = cfg.get("sources", "opencode", default={})
 
-    if label:
+    if project:
+        # Per-project mode: extract every DB, then keep only sessions whose
+        # `directory` contains the project substring. Written to raw/opencode-<project>.
+        proj_label = f"opencode-{project}"
+        out_dir = os.path.join(raw_dir, proj_label)
+        os.makedirs(out_dir, exist_ok=True)
+        dbs = []
+        main_db = oc.get("db_path")
+        if main_db and os.path.exists(main_db):
+            dbs.append(main_db)
+        for extra in (oc.get("extra_dbs") or []):
+            if not extra.get("enabled", False):
+                continue
+            p = extra.get("path")
+            if p and os.path.exists(p):
+                dbs.append(p)
+        kept = 0
+        for db_path in dbs:
+            kept += _extract_db_filtered(cfg, db_path, out_dir, project)
+        total += kept
+        print(f"[extract] project={project}: wrote {kept} sessions to {out_dir}", flush=True)
+        print(f"[extract] FINAL out_dir exists={os.path.isdir(out_dir)} files={len(os.listdir(out_dir)) if os.path.isdir(out_dir) else 'N/A'}", flush=True)
+    elif label:
         # Single-DB mode: extract only the DB matching this label.
         out_dir = os.path.join(raw_dir, label)
         os.makedirs(out_dir, exist_ok=True)
@@ -199,3 +221,26 @@ def main(cfg: Config, label: str | None = None) -> int:
 
     print(f"[extract] TOTAL sessions written: {total}")
     return total
+
+
+def _extract_db_filtered(cfg: Config, db_path: str, out_dir: str, project: str) -> int:
+    """Extract a DB but keep only sessions whose directory contains `project`."""
+    os.makedirs(out_dir, exist_ok=True)
+    tmp = out_dir + ".tmp"
+    os.makedirs(tmp, exist_ok=True)
+    n = extract_db(cfg, db_path, tmp)
+    kept = 0
+    for fn in sorted(os.listdir(tmp)):
+        if not fn.endswith(".json"):
+            continue
+        with open(os.path.join(tmp, fn)) as f:
+            rec = json.load(f)
+        d = rec.get("directory", "") or ""
+        if project in d:
+            with open(os.path.join(out_dir, fn), "w") as f:
+                json.dump(rec, f)
+            kept += 1
+        os.remove(os.path.join(tmp, fn))
+    os.rmdir(tmp)
+    print(f"[filter] {os.path.basename(db_path)}: kept {kept}, out_dir now has {len(os.listdir(out_dir))}", flush=True)
+    return kept

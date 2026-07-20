@@ -83,6 +83,10 @@ export PYTHONPATH=/home/scott/git/auto-finetune
 export ROCM_PATH=/opt/rocm HSA_OVERRIDE_GFX_VERSION=11.5.1
 nohup python -m src.cli train --source=hermes \
   > /media/scott/data/finetune-staging/logs/train-hermes-full.log 2>&1 &
+
+# or the opencode main split:
+TRAIN_ARGS="--label=ssd" nohup python -m src.cli train $TRAIN_ARGS \
+  > /media/scott/data/finetune-staging/logs/train-ssd.log 2>&1 &
 ```
 - Model load is SILENT ~6 min (434 shards streamed over NFS). Not a hang.
 - `save_steps: 50` → first checkpoint ~1.5 h in. Watch:

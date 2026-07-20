@@ -81,6 +81,31 @@ def test_cli_train_dry_run(tmp_path, monkeypatch):
     assert rc == 0
 
 
+def test_cli_train_passes_label(monkeypatch):
+    import src.cli as cli
+    from src.config import Config, _DEFAULTS
+    import copy
+
+    raw = copy.deepcopy(_DEFAULTS)
+    cfg = Config(raw=raw)
+    monkeypatch.setattr(cli, "load", lambda *a, **k: cfg)
+
+    captured = {}
+
+    def fake_train(cfg, dry_run=False, source=None, label=None, max_examples=None):
+        captured["dry_run"] = dry_run
+        captured["source"] = source
+        captured["label"] = label
+        captured["max_examples"] = max_examples
+        return 0
+
+    monkeypatch.setattr("src.train.main", fake_train)
+
+    cli_cli = cli_main(["cli", "train", "--label=ssd", "--source=opencode"])
+    assert cli_cli == 0
+    assert captured == {"dry_run": False, "source": "opencode", "label": "ssd", "max_examples": None}
+
+
 def test_cli_clean_and_format(make_opencode_db, tmp_path, monkeypatch):
     import src.cli as cli
     from src.config import Config, _DEFAULTS

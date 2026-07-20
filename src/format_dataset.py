@@ -168,6 +168,53 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
                 f.write(json.dumps(ex) + "\n")
         return len(examples)
 
+    def _collect_examples(src_dir: str, max_turns: int, max_chars: int,
+                          template: str, system: str) -> list[Any]:
+        examples: list[Any] = []
+        for fn in sorted(os.listdir(src_dir)):
+            if not fn.endswith(".json"):
+                continue
+            with open(os.path.join(src_dir, fn)) as f:
+                rec = json.load(f)
+            if rec.get("source") != "opencode":
+                continue
+            msgs = rec.get("messages", [])
+            windows = _window_messages(msgs, max_turns, max_chars)
+            for w in windows:
+                if len(w) < 2:
+                    continue
+                examples.append(_format_window(w, template, system))
+        return examples
+
+    if label == "opencode-all":
+        # Merge every opencode source subdir (ssd, nas5-*, opencode-<project>)
+        # into one corpus. Identified by peeking each cleaned subdir's records.
+        out_path = os.path.join(dataset_dir, "train.opencode-all.jsonl")
+        examples: list[Any] = []
+        for entry in sorted(os.listdir(cleaned_dir)):
+            src_dir = os.path.join(cleaned_dir, entry)
+            if not os.path.isdir(src_dir):
+                continue
+            is_opencode = False
+            for fn in sorted(os.listdir(src_dir)):
+                if not fn.endswith(".json"):
+                    continue
+                try:
+                    with open(os.path.join(src_dir, fn)) as f:
+                        rec = json.load(f)
+                    if rec.get("source") == "opencode":
+                        is_opencode = True
+                except Exception:
+                    pass
+                break
+            if not is_opencode:
+                continue
+            examples.extend(_collect_examples(src_dir, max_turns, max_chars, template, system))
+        with open(out_path, "w") as f:
+            for ex in examples:
+                f.write(json.dumps(ex) + "\n")
+        print(f"[format] opencode-all: {len(examples)} examples -> {out_path}")
+        return len(examples)
     if label:
         # Format a single labeled cleaned subdir.
         src_dir = os.path.join(cleaned_dir, label)
@@ -179,8 +226,15 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
         print(f"[format] {label} ({source or 'all'}): {n} examples -> {out_path}")
         return n
     else:
-        # Format all cleaned subdirs (no source filter on per-label files).
+        # Hermes cleaning writes flat files into cleaned_dir/ directly.
         total = 0
+        if any(fn.endswith(".json") for fn in os.listdir(cleaned_dir)):
+            out_name = f"train.{source}.jsonl" if source else "train.jsonl"
+            out_path = os.path.join(dataset_dir, out_name)
+            n = _format_one(cleaned_dir, out_path, source)
+            label_str = source or "merged"
+            print(f"[format] {label_str}: {n} examples -> {out_path}")
+            total += n
         for entry in sorted(os.listdir(cleaned_dir)):
             src_dir = os.path.join(cleaned_dir, entry)
             if not os.path.isdir(src_dir):
@@ -233,3 +287,49 @@ def _format_window(msgs: list[dict], template: str, system: str) -> Any:
     if template == "hermes":
         return to_hermes(msgs, system)
     return {"messages": to_chatml(msgs, system)}
+
+
+# Merged-corpus label set: every per-source training dataset EXCEPT the
+# already-merged opencode-all (which is a subset of these) and any eval split.
+_COMBINE_LABELS = (
+    "ssd",
+    "nas5-main",
+    "nas5-20260717",
+    "nas5-old-broken",
+    "nas5-recover-old",
+    "opencode-portfolio",
+    "hermes-reasoning",
+)
+
+
+def combine(cfg: Config) -> int:
+    """Merge all per-source datasets into one train.combined.jsonl.
+
+    This is the "finetune them all together" equivalent: a single corpus over
+    the union of sources, ready for one LoRA run with --label=combined.
+    """
+    dataset_dir = cfg.path("dataset_dir")
+    out_path = os.path.join(dataset_dir, "train.combined.jsonl")
+    seen: set[str] = set()
+    total = 0
+    with open(out_path, "w") as out:
+        for label in _COMBINE_LABELS:
+            src = os.path.join(dataset_dir, f"train.{label}.jsonl")
+            if not os.path.exists(src):
+                print(f"[combine] skip missing {src}")
+                continue
+            n = 0
+            for line in open(src):
+                line = line.strip()
+                if not line:
+                    continue
+                # de-dupe identical examples across sources
+                if line in seen:
+                    continue
+                seen.add(line)
+                out.write(line + "\n")
+                n += 1
+            print(f"[combine] {label}: {n} examples")
+            total += n
+    print(f"[combine] wrote {total} unique examples -> {out_path}")
+    return total
