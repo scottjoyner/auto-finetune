@@ -231,3 +231,18 @@ def test_analyze_dedups_by_session(tmp_path):
     assert summary["n_sessions"] == 1
     b = json.loads((out / "buckets.json").read_text())
     assert set(b) == {"dup"}
+
+
+def test_benchmark_session_ids(tmp_path):
+    tasks = tmp_path / "auto-tasks.jsonl"
+    tasks.write_text("\n".join([
+        json.dumps({"task_id": "auto-hermes-20260529_205350_e6f596", "source": "hermes"}),
+        json.dumps({"task_id": "auto-opencode-ses_0fb0c0944ffeuDsob6", "source": "opencode"}),
+        json.dumps({"task_id": "manual-foo", "source": "hermes"}),  # not an auto-task
+    ]) + "\n")
+    ids = A.benchmark_session_ids(tasks)
+    assert ids == {"20260529_205350_e6f596", "ses_0fb0c0944ffeuDsob6"}
+
+
+def test_benchmark_session_ids_missing_file():
+    assert A.benchmark_session_ids("/no/such/file.jsonl") == set()

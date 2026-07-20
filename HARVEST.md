@@ -170,6 +170,9 @@ Turn the manifest into training corpora with **`python -m src.cli strata`**
 - with `--balance [--cap=N]` it equalizes every bucket to `N` examples
   (upsampling small buckets, **stride-downsampling** the dominant `debug`/
   `reasoning` buckets) and also writes a combined `train.balanced.jsonl`.
+- with `--holdout=<tasks.jsonl>` it excludes the source sessions behind
+  mined auto-tasks (recovered from each `task_id`) so the benchmark
+  is a true held-out of the training corpus.
 
 This directly addresses the merged corpus being dominated by `reasoning`+`debug`:
 the actionable tool-use buckets (`file-edit`, `data-analysis`, `code-search`, …)

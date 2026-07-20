@@ -306,6 +306,34 @@ def derive_task(rec: dict, meta: dict) -> dict | None:
     }
 
 
+def benchmark_session_ids(tasks_path: str | Path) -> set[str]:
+    """Recover the source session ids behind mined auto-tasks.
+
+    An auto-task ``task_id`` is ``auto-{source}-{session_id}`` (see
+    ``derive_task``). This inverts it so those sessions can be held
+    out of the training mix for a true benchmark -- otherwise the
+    49-task eval would overlap the SFT corpus.
+
+    Returns an empty set (not an error) when ``tasks_path`` is absent.
+    """
+    ids: set[str] = set()
+    p = Path(tasks_path)
+    if not p.exists():
+        return ids
+    for line in p.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        t = json.loads(line)
+        tid = t.get("task_id", "")
+        if not tid.startswith("auto-"):
+            continue
+        prefix = f"auto-{t.get('source', '')}-"
+        if tid.startswith(prefix):
+            ids.add(tid[len(prefix):])
+    return ids
+
+
 def compute_stats(metas: list[dict]) -> dict:
     by_source: Counter = Counter()
     by_bucket: Counter = Counter()

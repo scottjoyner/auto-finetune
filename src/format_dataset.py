@@ -353,7 +353,8 @@ def iter_cleaned_records(cleaned_dir: str) -> list[dict]:
 
 
 def emit_strata(cfg: "Config", bucket_map: dict, out_dir: str,
-                balance: bool = False, cap: int | None = None) -> dict:
+                balance: bool = False, cap: int | None = None,
+                exclude: set[str] | None = None) -> dict:
     """Emit one training jsonl per task-bucket into ``out_dir`` (staging).
 
     Reads the (deduplicated) cleaned corpus, looks up each session's bucket from
@@ -377,7 +378,11 @@ def emit_strata(cfg: "Config", bucket_map: dict, out_dir: str,
 
     unique = _dedup_by_session(iter_cleaned_records(cfg.path("cleaned_dir")))
     buckets: dict[str, list] = defaultdict(list)
+    excluded = 0
     for sid, rec in unique.items():
+        if exclude and sid in exclude:
+            excluded += 1
+            continue
         b = (bucket_map.get(sid) or {}).get("bucket")
         if not b:
             from src import analyze as _a
@@ -413,4 +418,6 @@ def emit_strata(cfg: "Config", bucket_map: dict, out_dir: str,
                     f.write(json.dumps(ex) + "\n")
                     total += 1
         counts["balanced"] = total
+    if exclude is not None:
+        counts["excluded"] = excluded
     return counts

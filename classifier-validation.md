@@ -126,6 +126,9 @@ rule — do **not** copy into `datasets/` while a training job holds the GPU):
 
 - `launch/focused/train.focused.jsonl` — the balanced 10k SFT mix
   (`messages` format, directly consumable by `src.cli train --label=focused`).
+  Built with `--holdout=analysis/auto-tasks.jsonl` so the **80
+  benchmark source sessions are excluded** — the 49-task eval is a
+  true held-out, not an overlap of the training corpus.
 - `launch/focused/launch_focused.sh` — copies the mix into
   `datasets/train.focused.jsonl` (new file, no clobber), sets an isolated
   `TRAIN_OUTPUT_DIR` (`outputs/checkpoints/toolcall-v5-3b-focused`), runs

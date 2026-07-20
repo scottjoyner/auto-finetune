@@ -246,3 +246,30 @@ def test_emit_strata_balance_downsamples(tmp_root):
     assert counts["shell"] == 2
     assert counts["file-edit"] == 2
     assert counts["balanced"] == 4
+
+
+def test_emit_strata_excludes_holdout(tmp_root):
+    cleaned = tmp_root / "data" / "cleaned"
+    out = tmp_root / "data" / "analysis"
+    bm = {}
+    bm.update(_write_session(
+        cleaned / "s.json", "s1", "shell",
+        [_text("user", "run the tests"),
+         {"role": "assistant", "parts": [_tool("bash", {"command": "pytest"}, "ok")] * 3}]))
+    bm.update(_write_session(
+        cleaned / "e.json", "e1", "file-edit",
+        [_text("user", "create an add module"),
+         {"role": "assistant", "parts": [
+             _tool("write", {"filePath": "/repo/add.py", "content": "def add(a,b):\n    return a+b"}, "ok")]},
+         _text("assistant", "Done.")]))
+    cfg = make_cfg(paths={
+        "raw_dir": str(tmp_root / "data" / "raw"),
+        "cleaned_dir": str(cleaned),
+        "dataset_dir": str(tmp_root / "data" / "datasets")})
+    counts = emit_strata(cfg, bm, str(out), exclude={"s1"})
+    # s1 is held out: no shell examples, file-edit still emitted
+    assert counts.get("excluded") == 1
+    assert counts.get("shell", 0) == 0
+    assert counts["file-edit"] >= 1
+    assert not (out / "train.shell.jsonl").exists()
+    assert (out / "train.file-edit.jsonl").exists()

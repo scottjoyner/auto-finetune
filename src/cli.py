@@ -136,8 +136,15 @@ def main(argv: list[str]) -> int:
             bucket_map = json.loads(Path(bm_path).read_text())
             balance = "--balance" in argv
             cap = _parse_int_flag(argv, "--cap")
-            counts = emit_strata(cfg, bucket_map, out, balance=balance, cap=cap)
+            holdout = _parse_str_flag(argv, "--holdout")
+            exclude = None
+            if holdout:
+                from src.analyze import benchmark_session_ids
+                exclude = benchmark_session_ids(holdout)
+            counts = emit_strata(cfg, bucket_map, out, balance=balance, cap=cap, exclude=exclude)
             print(f"[strata] wrote {len(counts)} strata -> {out}")
+            if exclude is not None:
+                print(f"[strata] held out {counts.get('excluded', 0)} benchmark sessions")
             for b, n in sorted(counts.items()):
                 print(f"  {b:<22} {n}")
             return 0
