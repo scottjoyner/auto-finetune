@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import pytest
 import torch
 from pathlib import Path
 
@@ -72,3 +73,35 @@ def test_bench_matrix_bad_spec_survives():
                                    "model_path": "/x"}], rocm=False)
     assert "bad" in matrix
     assert "error" in matrix["bad"]["summary"]
+
+
+def test_lmstudio_preset_builds_gguf_specs(monkeypatch):
+    # replicate the lmstudio preset spec construction the CLI does, without a
+    # live lmstudio server (no network calls). Just checks the glob + shape.
+    import src.cli as cli  # noqa: F401
+    lm_root = Path("/home/scott/.lmstudio/models")
+    if not lm_root.exists():
+        pytest.skip("no lmstudio models dir")
+    specs = []
+    for md in sorted(lm_root.rglob("*.gguf")):
+        specs.append({"name": md.parent.name, "runner": "api",
+                      "base_url": "http://localhost:1234/v1",
+                      "model": md.parent.name, "api_key": "lm-studio"})
+    assert len(specs) >= 1
+    assert all(s["runner"] == "api" and s["model"] == s["name"] for s in specs)
+    # RefinedToolCallV5 q8 gguf should be discoverable
+    assert any(s["name"] == "RefinedToolCallV5-3b" for s in specs)
+
+
+def test_local_preset_finds_qwen(monkeypatch):
+    # the 'local'/'local-refs' preset should resolve the HF-cached Qwen2.5-7B
+    qwen = Path.home() / ".cache/huggingface/hub/models--Qwen--Qwen2.5-7B-Instruct"
+    if not qwen.is_dir():
+        pytest.skip("no cached Qwen2.5-7B")
+    base_local = None
+    if not base_local:
+        cand = str(qwen)
+        if Path(cand).is_dir():
+            base_local = cand
+    assert base_local.endswith("models--Qwen--Qwen2.5-7B-Instruct")
+

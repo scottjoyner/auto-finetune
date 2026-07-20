@@ -98,10 +98,27 @@ python -m src.cli bench-matrix --specs='[
 ]'
 
 # presets (no --specs needed)
-python -m src.cli bench-matrix --preset=local-refs   # local qwen7b + any finished FT adapters
+python -m src.cli bench-matrix --preset=local-refs   # qwen2.5-7b (HF) + any finished FT adapters
+python -m src.cli bench-matrix --preset=local        # alias for local-refs
+python -m src.cli bench-matrix --preset=lmstudio     # *.gguf under ~/.lmstudio/models (needs lmstudio server on :1234)
 python -m src.cli bench-matrix --preset=fleet        # all models in endpoints.json
 python -m src.cli bench-matrix --preset=local-refs --report   # also write eval/bench-matrix.md
 ```
+
+### local reference models — transformers vs GGUF
+
+- `local-chat` (and the `local`/`local-refs` presets) load a **transformers /
+  safetensors** checkpoint. The right local large-reference is the cached
+  `Qwen/Qwen2.5-7B-Instruct` at
+  `~/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B-Instruct` (overridable via
+  `LOCAL_REF_MODEL=...`).
+- The `~/.lmstudio/models` trees are **GGUF** (`*.gguf`, llama.cpp format) — e.g.
+  `RefinedNeuro/RefinedToolCallV5-3b-Q8_0.gguf`, `VibeThinker-3B-Hermes-GGUF`,
+  `Qwen3.6-14B-A3B-VibeForged-v2-Q4_K_M.gguf`. These are **not** loadable by
+  `transformers`; run them via lmstudio's OpenAI-compatible server with
+  `--preset=lmstudio` (or `--runner=api --base-url=http://localhost:1234/v1`),
+  which needs lmstudio's local server enabled. They're a faster local large-ref
+  if you'd rather not load the fp16 build on CPU.
 
 `--tasks=` overrides the default `eval/tasks/*.jsonl`. Each spec runs in
 isolation; a failing spec (e.g. bad runner) errors out without killing the

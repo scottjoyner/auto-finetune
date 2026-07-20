@@ -294,12 +294,24 @@ def main(argv: list[str]) -> int:
             specs: list = []
             if specs_json:
                 specs = json.loads(specs_json)
-            elif preset == "local-refs":
-                # local, no-network reference set: base + any finished adapters
+            elif preset in ("local-refs", "local"):
+                # local, no-network reference set: a transformers-loadable
+                # large reference (qwen2.5-7b) + any finished FT adapters.
+                # NOTE: the lmstudio q8 *.gguf models need llama.cpp / lmstudio's
+                # OpenAI server (use --preset=lmstudio or --runner=api), not the
+                # transformers 'local-chat' runner.
                 out_base = "/media/scott/data/finetune-staging/outputs/checkpoints"
-                base_local = (os.environ.get("LOCAL_REF_MODEL")
-                              or "/home/scott/.cache/huggingface/hub/"
-                                 "models--Qwen--Qwen2.5-7B-Instruct")
+                base_local = os.environ.get("LOCAL_REF_MODEL")
+                if not base_local:
+                    cand = "/home/scott/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B-Instruct"
+                    if os.path.isdir(cand):
+                        base_local = cand
+                    else:
+                        # search the HF cache for any Qwen2.5-7B dir
+                        hc = Path.home() / ".cache/huggingface/hub"
+                        hits = sorted(p for p in hc.glob("models--Qwen--Qwen2.5-7B*")
+                                      if (p / "config.json").exists())
+                        base_local = str(hits[0]) if hits else cand
                 specs.append({"name": "qwen2.5-7b", "runner": "local-chat",
                               "model_path": base_local})
                 for lb in ("ssd", "nas5-main", "nas5-20260717", "opencode-all",
@@ -308,13 +320,30 @@ def main(argv: list[str]) -> int:
                     if os.path.exists(os.path.join(ap, "adapter_config.json")):
                         specs.append({"name": f"ft-{lb}", "runner": "subagent",
                                       "model_path": ap, "variant": "auto"})
+            elif preset == "lmstudio":
+                # lmstudio q8 *.gguf models served over OpenAI-compatible /v1.
+                # Requires lmstudio's local server to be running (default 1234).
+                lm_root = "/home/scott/.lmstudio/models"
+                base_url = os.environ.get("LMSTUDIO_URL", "http://localhost:1234/v1")
+                api_key = os.environ.get("LMSTUDIO_API_KEY", "lm-studio")
+                specs = []
+                for md in sorted(Path(lm_root).rglob("*.gguf")):
+                    # model id = parent dir name (lmstudio serves by folder name)
+                    specs.append({"name": md.parent.name, "runner": "api",
+                                  "base_url": base_url, "model": md.parent.name,
+                                  "api_key": api_key})
+                if not specs:
+                    print("[error] lmstudio preset: no *.gguf found under "
+                          f"{lm_root}")
+                    return 2
             elif preset == "fleet":
                 from src.fleet import pick_model, MODELS
                 for m in MODELS:
                     specs.append({"name": m["model"], "runner": "api",
                                   "base_url": m["base_url"], "model": m["model"]})
             if not specs:
-                print("[error] bench-matrix needs --specs=<json> or --preset=local-refs|fleet")
+                print("[error] bench-matrix needs --specs=<json> or "
+                      "--preset=local-refs|local|lmstudio|fleet")
                 return 2
             rocm = _detect_rocm()
             print(f"[bench-matrix] {len(specs)} specs, {len(tasks)} tasks, rocm={rocm}")
