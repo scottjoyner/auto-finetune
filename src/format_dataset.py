@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import json
 import os
+from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
+from src.clean import _dedup_by_session
 from src.config import Config
 
 
@@ -333,3 +336,78 @@ def combine(cfg: Config) -> int:
             total += n
     print(f"[combine] wrote {total} unique examples -> {out_path}")
     return total
+
+
+def iter_cleaned_records(cleaned_dir: str) -> list[dict]:
+    """Yield every cleaned session record under ``cleaned_dir`` (flat + subdirs)."""
+    recs: list[dict] = []
+    for path in sorted(Path(cleaned_dir).rglob("*.json")):
+        try:
+            recs.append(json.loads(path.read_text()))
+        except Exception:
+            continue
+    return recs
+
+
+def emit_strata(cfg: "Config", bucket_map: dict, out_dir: str,
+                balance: bool = False, cap: int | None = None) -> dict:
+    """Emit one training jsonl per task-bucket into ``out_dir`` (staging).
+
+    Reads the (deduplicated) cleaned corpus, looks up each session's bucket from
+    ``bucket_map`` (session_id -> {bucket, ...}; falls back to a live ``analyze``
+    classification when a session is absent), and writes ``train.<bucket>.jsonl``
+    into ``out_dir`` using the configured chat template / windowing.
+
+    When ``balance`` is set, every bucket is upsampled by repetition to ``cap``
+    examples (default: the largest bucket's count) and a combined
+    ``train.balanced.jsonl`` is also written — this directly addresses the
+    actionable buckets being under-represented in the merged corpus.
+
+    ``out_dir`` must be a staging path (e.g. ``<data>/analysis``) — never the
+    live ``datasets/`` dir, which a running training job memory-maps.
+    """
+    os.makedirs(out_dir, exist_ok=True)
+    template = cfg.get("format", "template", default="chatml")
+    system = cfg.get("format", "system_prompt", default="") or ""
+    max_turns = cfg.get("format", "max_turns_per_example", default=0) or 0
+    max_chars = cfg.get("format", "max_chars_per_example", default=24000) or 0
+
+    unique = _dedup_by_session(iter_cleaned_records(cfg.path("cleaned_dir")))
+    buckets: dict[str, list] = defaultdict(list)
+    for sid, rec in unique.items():
+        b = (bucket_map.get(sid) or {}).get("bucket")
+        if not b:
+            from src import analyze as _a
+            b = _a.classify_bucket(_a.extract_features(rec))
+        for w in _window_messages(rec.get("messages", []), max_turns, max_chars):
+            if len(w) < 2:
+                continue
+            buckets[b].append(_format_window(w, template, system))
+
+    target = cap if cap else (max(len(v) for v in buckets.values()) if buckets else 0)
+    counts: dict[str, int] = {}
+    for b, exs in sorted(buckets.items()):
+        if balance and target:
+            if len(exs) < target:
+                # upsample by repetition
+                reps = target // len(exs)
+                exs = exs * reps + exs[: target - len(exs) * reps]
+            elif len(exs) > target:
+                # downsample the dominant buckets by even stride sampling
+                step = len(exs) / target
+                exs = [exs[int(i * step)] for i in range(target)]
+            buckets[b] = exs
+        counts[b] = len(exs)
+        with open(os.path.join(out_dir, f"train.{b}.jsonl"), "w") as f:
+            for ex in exs:
+                f.write(json.dumps(ex) + "\n")
+
+    if balance and buckets:
+        total = 0
+        with open(os.path.join(out_dir, "train.balanced.jsonl"), "w") as f:
+            for b, exs in buckets.items():
+                for ex in exs:
+                    f.write(json.dumps(ex) + "\n")
+                    total += 1
+        counts["balanced"] = total
+    return counts

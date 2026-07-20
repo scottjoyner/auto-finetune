@@ -25,7 +25,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from src.clean import _conv_hash
+from src.clean import _conv_hash, _dedup_by_session
 
 # ── tool taxonomy ──────────────────────────────────────────────────────────────
 EDIT_TOOLS = {"write", "edit", "patch", "str_replace", "create_file", "update_file",
@@ -326,12 +326,15 @@ def analyze_all(cleaned_dir: str, out_dir: str | None = None) -> dict:
       corpus.json         aggregate stats
       auto-tasks.jsonl    mined benchmark tasks (seed quality)
       failures.jsonl      sessions with unresolved tool errors
+
+    The corpus is deduplicated by ``session_id`` (see ``src.clean._dedup_by_session``)
+    so cross-source / snapshot duplicates count once.
     """
     if out_dir is None:
         out_dir = os.path.join(os.path.dirname(str(cleaned_dir)), "analysis")
     os.makedirs(out_dir, exist_ok=True)
 
-    recs = load_sessions(cleaned_dir)
+    recs = list(_dedup_by_session(load_sessions(cleaned_dir)).values())
     metas: list[dict] = []
     paired: list[tuple[dict, dict]] = []
     for rec in recs:

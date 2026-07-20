@@ -215,3 +215,19 @@ def test_analyze_all_writes_artifacts(tmp_path):
     assert (out / "failures.jsonl").exists()
     tasks = [json.loads(l) for l in (out / "auto-tasks.jsonl").read_text().splitlines()]
     assert any(t["task_id"] == "auto-hermes-b" for t in tasks)
+
+
+def test_analyze_dedups_by_session(tmp_path):
+    cleaned = tmp_path / "cleaned"
+    cleaned.mkdir()
+    short = [_text("user", "do x"),
+             {"role": "assistant", "parts": [_tool("bash", {"command": "ls"}, "ok")]}]
+    longer = short + [{"role": "assistant", "parts": [_tool("bash", {"command": "pwd"}, "ok")]}]
+    # same session_id in two files (cross-source snapshot) -> counted once
+    (cleaned / "a1.json").write_text(json.dumps(_rec("opencode", "dup", short)))
+    (cleaned / "a2.json").write_text(json.dumps(_rec("opencode", "dup", longer)))
+    out = tmp_path / "analysis"
+    summary = A.analyze_all(str(cleaned), out_dir=str(out))
+    assert summary["n_sessions"] == 1
+    b = json.loads((out / "buckets.json").read_text())
+    assert set(b) == {"dup"}

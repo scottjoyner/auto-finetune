@@ -163,6 +163,19 @@ It is fully CPU-safe and writes a staging dir (default
 - `failures.jsonl` — sessions containing error/traceback text (candidate
   negative-mining set)
 
+Turn the manifest into training corpora with **`python -m src.cli strata`**
+(`src.format_dataset.emit_strata`, also CPU-safe, writes to staging only):
+
+- emits `train.<bucket>.jsonl` per task-bucket into `<data>/analysis`
+- with `--balance [--cap=N]` it equalizes every bucket to `N` examples
+  (upsampling small buckets, **stride-downsampling** the dominant `debug`/
+  `reasoning` buckets) and also writes a combined `train.balanced.jsonl`.
+
+This directly addresses the merged corpus being dominated by `reasoning`+`debug`:
+the actionable tool-use buckets (`file-edit`, `data-analysis`, `code-search`, …)
+are otherwise a tiny minority. The balanced set is a ready-to-train staging
+artifact — promote it into `datasets/` only when the GPU is idle (see §4).
+
 Later, when the GPU is free, an LLM-based classifier (or a small fine-tuned
 tagger) can replace the heuristics for finer buckets. The heuristic pass is
 the right first iteration and is fully CPU-safe.

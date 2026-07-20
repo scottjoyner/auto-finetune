@@ -91,6 +91,28 @@ def _conv_hash(rec: dict) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+def _dedup_by_session(recs: list[dict]) -> dict[str, dict]:
+    """Collapse cross-source / snapshot duplicate sessions.
+
+    The same ``session_id`` is frequently present in more than one cleaned file
+    (e.g. the live opencode DB plus a NAS5 snapshot, or two Hermes cron dumps).
+    They carry identical message counts but slightly divergent tool outputs. Keep
+    the single most-complete copy: most messages, then largest serialized size.
+    """
+    best: dict[str, dict] = {}
+    for r in recs:
+        sid = r.get("session_id") or ""
+        cur = best.get(sid)
+        score = (len(r.get("messages", [])), len(json.dumps(r, sort_keys=True)))
+        if cur is None:
+            best[sid] = r
+        else:
+            cscore = (len(cur.get("messages", [])), len(json.dumps(cur, sort_keys=True)))
+            if score > cscore:
+                best[sid] = r
+    return best
+
+
 def clean_session(rec: dict, cfg: Config, keep_reasoning: bool | None = None) -> dict | None:
     cleaned_msgs = []
     for m in rec.get("messages", []):

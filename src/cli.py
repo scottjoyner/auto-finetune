@@ -122,6 +122,25 @@ def main(argv: list[str]) -> int:
                   f"{summary['n_tasks']} tasks, {summary['n_failures']} failures")
             print(f"[analyze] buckets written to {summary['out_dir']}")
             return 0
+        if cmd == "strata":
+            from src.format_dataset import emit_strata
+            out = _parse_str_flag(argv, "--out")
+            bm_path = _parse_str_flag(argv, "--bucket-map")
+            if bm_path is None or out is None:
+                analysis_dir = os.path.join(os.path.dirname(cfg.path("cleaned_dir")), "analysis")
+                bm_path = bm_path or os.path.join(analysis_dir, "buckets.json")
+                out = out or analysis_dir
+            if not os.path.exists(bm_path):
+                print(f"[error] bucket map not found: {bm_path} (run `analyze` first)")
+                return 2
+            bucket_map = json.loads(Path(bm_path).read_text())
+            balance = "--balance" in argv
+            cap = _parse_int_flag(argv, "--cap")
+            counts = emit_strata(cfg, bucket_map, out, balance=balance, cap=cap)
+            print(f"[strata] wrote {len(counts)} strata -> {out}")
+            for b, n in sorted(counts.items()):
+                print(f"  {b:<22} {n}")
+            return 0
         if cmd == "train":
             from src.train import main as run
             dry = "--dry-run" in argv
@@ -446,8 +465,9 @@ def main(argv: list[str]) -> int:
         print(f"[error] {e}")
         return 2
     print(__doc__)
-    print("Commands: extract | hermes | clean | format | combine | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | all")
+    print("Commands: extract | hermes | clean | format | combine | analyze | strata | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | all")
     print("Flags:    --source=hermes|opencode  --label=<name>  --all-split  --dry-run  --max-examples=<n>  --frac=<held-out-frac>  --loss-only  --report  --metric=<loss|tool_exact>")
+    print("Analyze:  analyze [--out=<dir>]   strata [--out=<dir>] [--bucket-map=<json>] [--balance] [--cap=<n>]")
     print("Bench:    --runner=self|subagent|api|hermes|local-chat  --model=<dir>  --tasks=<jsonl>  --fleet [--fleet-hint=]  --base-url=  --api-model=")
     print("Bench-matrix: --specs=<json-list> | --preset=local-refs|local|lmstudio|fleet|fast|all   --tasks=<jsonl>  --report")
     return 0
