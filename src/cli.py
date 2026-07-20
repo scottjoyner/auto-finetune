@@ -231,6 +231,26 @@ def main(argv: list[str]) -> int:
                   "true_difficulty,")
             print(f"  then: python -m src.validate_classifier score {out}")
             return 0
+        if cmd == "dpo":
+            from src.dpo import load_dpo_pairs, train_dpo
+            pairs_path = (_parse_str_flag(argv, "--pairs")
+                           or os.path.join(cfg.path("analysis_dir"),
+                                           "repairs.dpo.jsonl"))
+            model_arg = _parse_str_flag(argv, "--model")
+            if not model_arg:
+                print("[error] dpo requires --model=<base or SFT checkpoint>")
+                return 2
+            out = (_parse_str_flag(argv, "--output-dir")
+                      or os.path.join(cfg.path("dataset_dir"), "..",
+                                      "outputs", "checkpoints", "dpo"))
+            dry = "--dry-run" in argv
+            max_steps = _parse_int_flag(argv, "--max-steps") or 0
+            pairs = load_dpo_pairs(pairs_path)
+            print(f"[dpo] {len(pairs)} pairs from {pairs_path}")
+            rc = train_dpo(cfg, pairs, model_arg, output_dir=out,
+                             dry_run=dry, max_steps=max_steps)
+            print(f"[dpo] done -> {out}")
+            return rc
         if cmd == "train":
             from src.train import main as run
             dry = "--dry-run" in argv

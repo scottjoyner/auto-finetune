@@ -14,6 +14,8 @@ import json
 from pathlib import Path
 from typing import Iterable
 
+from src.format_dataset import to_hermes
+
 
 def _asst_call(call: dict) -> dict:
     return {
@@ -32,6 +34,22 @@ def _asst_call(call: dict) -> dict:
     }
 
 
+def _normalize_prompt(raw_messages: list[dict]) -> list[dict]:
+    """Raw session messages -> OpenAI chat messages.
+
+    The mined ``prompt_messages`` are the raw live-store schema
+    (``parts``-based, ``role``/``agent``/``tool`` turns). The chat
+    template and ``load_dpo_dataset`` need OpenAI ``messages``
+    (``role`` + ``content``, with ``tool_calls`` for assistant and
+    ``tool`` turns for results) -- the same shape ``to_hermes``
+    produces for the SFT finetune data. Already-normalized
+    (``content``/``tool_calls``, no ``parts``) prompts pass through.
+    """
+    if raw_messages and any("parts" in m for m in raw_messages):
+        return to_hermes(raw_messages, system="")["messages"]
+    return raw_messages
+
+
 def build_dpo_mix(repairs_in: str | Path, dpo_out: str | Path) -> int:
     """Convert repair pairs -> DPO rows. Returns the number of pairs written."""
     repairs_in = Path(repairs_in)
@@ -44,7 +62,7 @@ def build_dpo_mix(repairs_in: str | Path, dpo_out: str | Path) -> int:
                 continue
             r = json.loads(line)
             row = {
-                "prompt": r["prompt_messages"],
+                "prompt": _normalize_prompt(r["prompt_messages"]),
                 "chosen": [_asst_call(r["chosen_call"])],
                 "rejected": [_asst_call(r["rejected_call"])],
             }
