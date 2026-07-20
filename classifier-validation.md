@@ -102,22 +102,35 @@ is small now that the dominant `debug` inflation is fixed.
 
 ### Root cause of the residual error false-positives
 
-The 6 error FPs are *not* a bucket problem — they are `_ERROR_MARKERS`
-matching the substring `"error:"` inside **benign** content:
+The 6 error FPs are *not* a bucket problem, and they are **not** all
+the bare `"error:"` substring (an earlier draft guessed that — it was
+wrong). Measured against the labeled set: dropping `"error:"` clears
+**0/6** FPs and hurts **0** true-errors, so it is not the cause.
+The real cause is genuine error-terminology appearing as **benign text**
+inside other tool outputs:
 
-- 3× `cron_e2d25a4…` (true `reasoning`): a cron status JSON whose
-  `"error":` *key* happens to contain the substring `error:` — no failure.
-- `20260601_103…` / `20260605_231…` (true `code-search` / `docs`):
-  a `search`/`read` tool returned *source code* containing `if error:`.
-- `ses_09f7b66…` (true `mixed`): a genuine `Traceback` — the hand-label
-  marked `is_error=0`, so this is **label noise**, not a classifier bug.
+- 3× `cron_e2d25a4…` (true `reasoning`): a cron status/log
+  containing `no such file or directory`, `command not found`,
+  `syntaxerror` as ordinary prose (commands it tried, not failures).
+- `20260601_103…` (true `code-search`): `search` returned *source
+  code* containing `if error:` and `except Exception`.
+- `20260605_231…` (true `docs`): a `read` of a module whose
+  docstring/log text contains `traceback` / `exception` / `command not found`.
+- `ses_09f7b66…` (true `mixed`): a **genuine `Traceback`** — the
+  hand-label marked `is_error=0`, so this is **label noise**, not a
+  classifier bug.
 
-Net: ~5 genuine FPs (all `"error:"` in code/JSON) + 1 label-noise case.
-The fix is deliberately **not** "drop `error:` from the marker list" —
-that would cripple recall on the real corpus (API/tool errors arrive as
-`{"error": "..."}`). The principled next step is to **expand the
-hand-label set** (currently 30, with one noisy row) before touching the
-heuristic, so the metric is robust enough to justify a change.
+Net: ~5 genuine FPs (error-terminology in benign cron logs / code /
+docs) + 1 label-noise case. This is a **precision ceiling** of
+substring matching: the same words mark a real failure *and* appear in
+healthy status output, so no substring tweak fixes it. A robust fix needs
+**output-structure awareness** — trust a tool's own `success`/`exit_code`/
+`error` fields over prose scanning (and only treat `traceback`/`exception`
+as failure when at line-start, not embedded in code). That is a larger,
+deliberately-deferred change; it is *not* worth doing on a 30-sample
+metric. For the classifier's actual job (strata weights + failure mining)
+precision ~0.57 is acceptable — the 1249-failure set is still dominated
+by real failures, and the file-check benchmark is unaffected.
 
 ### Staged launch artifacts (CPU-only prep, GPU still busy)
 
