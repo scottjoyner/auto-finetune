@@ -5,7 +5,7 @@ actually get done?** It drives a *model* (not a dataset row) through a real
 multi-turn tool-use loop in a throwaway sandbox and verifies the outcome with
 concrete checkers.
 
-## Three runners (per the benchmark design)
+## Five runners (per the benchmark design)
 
 | runner | what it is | model source |
 | --- | --- | --- |
@@ -13,10 +13,11 @@ concrete checkers.
 | `api` | OpenAI-compatible endpoint (e.g. the lan lm-fleet-router) | `--base-url` + `--api-model`, or `--fleet` to auto-pick a large model |
 | `hermes` | delegates to the hermes-agent harness on this machine (`mini_swe_runner.py`) — Hermes runs its OWN model+tool loop | whatever Hermes is configured with |
 | `subagent` | **optimized** harness built specifically for RefinedToolCallV5 variants (see below) | a local HF dir (base / finetune / merged) |
+| `local-chat` | **standard HF chat model** using its NATIVE function-call format (not the RefinedToolCallV5 dialect) — for genuine local large references like the cached Qwen2.5-7B | a local HF chat dir (e.g. Qwen2.5-7B-Instruct) |
 
-The `self`, `api`, and `subagent` runners share the same tool protocol and task
-suite, so they are directly comparable (3B finetune vs 35B reference vs the
-optimized loop on the same model).
+The `self`, `api`, `subagent`, and `local-chat` runners share the same task
+suite and verifiers, so they are directly comparable (3B finetune vs 35B
+reference vs the optimized loop vs a native-format 7B — all on the same suite).
 
 ## `subagent` — the optimized harness
 
@@ -54,6 +55,57 @@ python -m src.cli bench --runner=subagent \
 Intended to later run as a subagent inside opencode / hermes-agent; for now it
 is a drop-in `bench` runner so you can measure the optimization's impact
 (`self` vs `subagent` on the same checkpoint).
+
+## `local-chat` — standard HF chat model (native tool format)
+
+For models that are NOT RefinedToolCallV5 (e.g. the locally-cached
+`Qwen/Qwen2.5-7B-Instruct` at
+`/home/scott/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B-Instruct`), which
+emit tool calls as native function-call JSON
+(`{"name":..,"arguments":{..}}` or `{"function":{..}}`) rather than the
+`<tool_call>` dialect. `LocalChatDriver` (`src/drivers_localchat.py`):
+
+  * builds the JSON-schema tool list and passes it to `apply_chat_template`
+    (`tools=...`) so the model knows the tools,
+  * parses tool calls with a balanced-brace tolerant extractor that handles
+    **nested** argument objects,
+  * feeds results back as a `tool` role message (HF convention),
+  * defaults to **CPU** (`device_map="cpu"`) because a 7B model won't fit the
+    12GB iGPU in fp16; override `rocm=True` if you have enough VRAM / offload.
+
+The `q8` GGUF/quantized build is also available at
+`/home/scott/.lmstudio/models` (lmstudio) if you want a faster local large
+reference — point `local-chat` at it, or load the fp16 if higher fidelity is
+needed. The 7B is a genuine *local* reference (no network, no LAN fleet).
+
+```bash
+python -m src.cli bench --runner=local-chat \
+  --model=/home/scott/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B-Instruct
+```
+
+## `bench-matrix` — one suite, many models
+
+Run the same task suite across several model/runner specs and emit a single
+combined table (aggregate pass/complete rates *and* a per-task ✓/✗ grid). Two
+ways to specify specs:
+
+```bash
+# explicit: --specs is a JSON list of {name, runner, ...make_driver kwargs}
+python -m src.cli bench-matrix --specs='[
+  {"name":"qwen2.5-7b","runner":"local-chat","model_path":"/home/scott/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B-Instruct"},
+  {"name":"ssd-ft","runner":"subagent","model_path":"/media/scott/data/finetune-staging/outputs/checkpoints/toolcall-v5-3b-ssd"},
+  {"name":"fleet-35b","runner":"api","base_url":"http://...","model":"qwen3.6-35b"}
+]'
+
+# presets (no --specs needed)
+python -m src.cli bench-matrix --preset=local-refs   # local qwen7b + any finished FT adapters
+python -m src.cli bench-matrix --preset=fleet        # all models in endpoints.json
+python -m src.cli bench-matrix --preset=local-refs --report   # also write eval/bench-matrix.md
+```
+
+`--tasks=` overrides the default `eval/tasks/*.jsonl`. Each spec runs in
+isolation; a failing spec (e.g. bad runner) errors out without killing the
+matrix.
 
 ## Task spec (`eval/tasks/*.jsonl`)
 
@@ -98,6 +150,10 @@ python -m src.cli bench --runner=hermes
 
 # custom task file
 python -m src.cli bench --runner=self --model=... --tasks=eval/tasks/mytasks.jsonl
+
+# one suite, many models (combined comparison table)
+python -m src.cli bench-matrix --preset=local-refs --report
+python -m src.cli bench-matrix --specs='[{"name":"qwen7b","runner":"local-chat","model_path":"/home/scott/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B-Instruct"},{"name":"ssd-ft","runner":"subagent","model_path":"/media/scott/data/finetune-staging/outputs/checkpoints/toolcall-v5-3b-ssd"}]'
 ```
 
 Output is a markdown table: per-task success, checks passed, turns, completion

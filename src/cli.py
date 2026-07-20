@@ -239,6 +239,8 @@ def main(argv: list[str]) -> int:
             from src.bench import (load_tasks, make_driver, bench_suite,
                                    format_bench_results)
             from src.train import _detect_rocm
+            # register the local-chat (standard HF model) runner
+            import src.drivers_localchat  # noqa: F401  (self-registers)
             # runner selection
             runner = _parse_str_flag(argv, "--runner") or "self"
             tasks_path = (_parse_str_flag(argv, "--tasks")
@@ -278,6 +280,52 @@ def main(argv: list[str]) -> int:
             results = bench_suite(driver, tasks, model_name, runner)
             print(format_bench_results(results))
             return 0
+        if cmd == "bench-matrix":
+            from src.bench import (load_tasks, bench_matrix,
+                                    format_bench_matrix)
+            from src.train import _detect_rocm
+            import src.drivers_localchat  # noqa: F401  (self-registers "local-chat")
+            tasks_path = (_parse_str_flag(argv, "--tasks")
+                          or os.path.join(os.path.dirname(__file__), "..",
+                                         "eval", "tasks", "sample.jsonl"))
+            tasks = load_tasks(tasks_path)
+            specs_json = _parse_str_flag(argv, "--specs")
+            preset = _parse_str_flag(argv, "--preset")
+            specs: list = []
+            if specs_json:
+                specs = json.loads(specs_json)
+            elif preset == "local-refs":
+                # local, no-network reference set: base + any finished adapters
+                out_base = "/media/scott/data/finetune-staging/outputs/checkpoints"
+                base_local = (os.environ.get("LOCAL_REF_MODEL")
+                              or "/home/scott/.cache/huggingface/hub/"
+                                 "models--Qwen--Qwen2.5-7B-Instruct")
+                specs.append({"name": "qwen2.5-7b", "runner": "local-chat",
+                              "model_path": base_local})
+                for lb in ("ssd", "nas5-main", "nas5-20260717", "opencode-all",
+                           "opencode-portfolio", "hermes-reasoning", "combined"):
+                    ap = os.path.join(out_base, f"toolcall-v5-3b-{lb}")
+                    if os.path.exists(os.path.join(ap, "adapter_config.json")):
+                        specs.append({"name": f"ft-{lb}", "runner": "subagent",
+                                      "model_path": ap, "variant": "auto"})
+            elif preset == "fleet":
+                from src.fleet import pick_model, MODELS
+                for m in MODELS:
+                    specs.append({"name": m["model"], "runner": "api",
+                                  "base_url": m["base_url"], "model": m["model"]})
+            if not specs:
+                print("[error] bench-matrix needs --specs=<json> or --preset=local-refs|fleet")
+                return 2
+            rocm = _detect_rocm()
+            print(f"[bench-matrix] {len(specs)} specs, {len(tasks)} tasks, rocm={rocm}")
+            matrix = bench_matrix(tasks, specs, rocm=rocm)
+            print(format_bench_matrix(matrix))
+            if "--report" in argv:
+                rep = os.path.join(os.path.dirname(__file__), "..", "eval",
+                                   "bench-matrix.md")
+                Path(rep).write_text(format_bench_matrix(matrix))
+                print(f"[bench-matrix] written -> {rep}")
+            return 0
         if cmd == "all":
             from src.extract_opencode import main as run_extract
             from src.extract_hermes import main as run_hermes
@@ -295,8 +343,10 @@ def main(argv: list[str]) -> int:
         print(f"[error] {e}")
         return 2
     print(__doc__)
-    print("Commands: extract | hermes | clean | format | combine | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | all")
+    print("Commands: extract | hermes | clean | format | combine | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | all")
     print("Flags:    --source=hermes|opencode  --label=<name>  --all-split  --dry-run  --max-examples=<n>  --frac=<held-out-frac>  --loss-only  --report  --metric=<loss|tool_exact>")
+    print("Bench:    --runner=self|subagent|api|hermes|local-chat  --model=<dir>  --tasks=<jsonl>  --fleet [--fleet-hint=]  --base-url=  --api-model=")
+    print("Bench-matrix: --specs=<json-list> | --preset=local-refs|fleet   --tasks=<jsonl>  --report")
     return 0
 
 

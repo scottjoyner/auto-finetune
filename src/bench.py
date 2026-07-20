@@ -482,7 +482,7 @@ def run_task(driver: ModelDriver, task: Task, model_name: str, runner_name: str,
             res.turns = turn + 1
             text = driver.generate(messages, max_new_tokens=gen_max_tokens)
             res.transcript.append({"role": "assistant", "content": text})
-            calls = parse_tool_calls(text)
+            calls = (getattr(driver, "parse_tool_calls", parse_tool_calls))(text)
             if not calls:
                 res.completed = True
                 messages.append({"role": "assistant", "content": text})
@@ -609,4 +609,83 @@ def format_bench_results(results: list[TaskResult]) -> str:
     lines.append("")
     lines.append(f"**completion: {ok}/{n} tasks fully passed "
                  f"({ok/n*100:.0f}%)**")
+    return "\n".join(lines)
+
+
+# the "local-chat" runner (standard HF model, native tool format) registers itself
+# when this module is imported.
+def _ensure_local_chat():
+    try:
+        import src.drivers_localchat  # noqa: F401  (self-registers "local-chat")
+    except Exception:
+        pass
+
+
+def bench_matrix(tasks: list[Task], specs: list[dict],
+                 gen_max_tokens: int = 512, rocm: bool = False) -> dict:
+    """Run the same task suite across several model/runner specs.
+
+    `specs` is a list of dicts, each:
+        {"name": <str>, "runner": <str>, ...kwargs for make_driver}
+    e.g.
+        {"name": "base",    "runner": "local-chat", "model_path": ".../Qwen2.5-7B-Instruct"}
+        {"name": "ssd-ft",  "runner": "subagent",   "model_path": ".../toolcall-v5-3b-ssd", "rocm": True}
+        {"name": "fleet",   "runner": "api",        "base_url": "...", "model": "qwen3.6-35b"}
+    Returns {spec_name: {"results": [TaskResult], "summary": {...}}}.
+    """
+    _ensure_local_chat()
+    out: dict = {}
+    for spec in specs:
+        name = spec.get("name", spec.get("runner", "unknown"))
+        runner = spec["runner"]
+        kw = {k: v for k, v in spec.items() if k not in ("name", "runner")}
+        if runner in ("self", "subagent", "local-chat") and "rocm" not in kw:
+            kw["rocm"] = rocm
+        try:
+            driver = make_driver(runner, **kw)
+        except Exception as e:  # noqa: BLE001
+            out[name] = {"results": [], "summary": {"error": f"{type(e).__name__}: {e}"}}
+            continue
+        results = bench_suite(driver, tasks, name, runner,
+                              gen_max_tokens=gen_max_tokens)
+        n = len(results)
+        ok = sum(1 for r in results if r.success)
+        comp = sum(1 for r in results if r.completed)
+        errors = sum(1 for r in results if r.error)
+        out[name] = {
+            "results": results,
+            "summary": {
+                "n": n, "passed": ok, "completed": comp, "errors": errors,
+                "pass_rate": (ok / n) if n else 0.0,
+            },
+        }
+    return out
+
+
+def format_bench_matrix(matrix: dict) -> str:
+    lines = ["## Benchmark matrix (same suite, multiple models)", "",
+             "| model | pass | complete | errors | pass-rate |",
+             "| --- | ---: | ---: | ---: | ---: |"]
+    for name, block in matrix.items():
+        s = block.get("summary", {})
+        if "error" in s:
+            lines.append(f"| {name} | — | — | 1 | ERR: {s['error']} |")
+            continue
+        lines.append(f"| {name} | {s['passed']}/{s['n']} | {s['completed']}/{s['n']} "
+                     f"| {s['errors']} | {s['pass_rate']*100:.0f}% |")
+    # per-task breakdown
+    lines += ["", "### per-task", "",
+              "| task | " + " | ".join(matrix.keys()) + " |",
+              "| --- | " + " | ".join(["---:"] * len(matrix)) + " |"]
+    # align by task id across specs
+    by_task: dict[str, dict] = {}
+    for name, block in matrix.items():
+        for r in block["results"]:
+            by_task.setdefault(r.task_id, {})[name] = r
+    for tid, per in by_task.items():
+        cells = []
+        for name in matrix:
+            r = per.get(name)
+            cells.append("✓" if (r and r.success) else ("✗" if r else "—"))
+        lines.append(f"| {tid} | " + " | ".join(cells) + " |")
     return "\n".join(lines)
