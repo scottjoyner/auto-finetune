@@ -58,6 +58,29 @@ def _target_file(tool: str, inp: dict) -> Optional[str]:
     return None
 
 
+# Tools whose self-repair is worth mining as a contrastive pair. Read /
+# search / web calls rarely "self-correct" into a better same-tool call,
+# so they stay in the `no_target` taxonomy (quality gate).
+SHELL_TOOLS = {"bash", "terminal", "execute_code", "execute_command",
+                "sh", "zsh", "cmd", "shell"}
+
+
+def _match_key(step: dict, include_commands: bool) -> tuple | None:
+    """Pairing key for an in-session self-repair.
+
+    File-target steps pair on the target basename (the existing,
+    high-quality signal). When ``include_commands`` is set, shell-tool
+    steps also pair on the tool name -- an errored command followed
+    (later, same session) by a *successful* call to the same tool
+    with different arguments is a genuine command self-repair.
+    """
+    if step.get("target"):
+        return ("file", step["target"])
+    if include_commands and (step.get("tool") or "").lower() in SHELL_TOOLS:
+        return ("tool", (step.get("tool") or "").lower())
+    return None
+
+
 def _iter_steps(rec: dict) -> list[dict]:
     """Reconstruct (call -> result) steps for a session.
 
@@ -86,11 +109,16 @@ def _iter_steps(rec: dict) -> list[dict]:
 
 
 def mine_repairs(cleaned_dir: str, failures_path: str,
-                  out_path: str) -> tuple[int, dict]:
+                  out_path: str, include_commands: bool = False) -> tuple[int, dict]:
     """Mine in-session self-repairs from failures into DPO-style pairs.
 
     Returns ``(n_pairs, taxonomy)``. Writes one JSON object per pair to
     ``out_path``.
+
+    By default only file-target self-repairs are emitted (the highest
+    signal). With ``include_commands=True`` shell-tool self-repairs are
+    also mined: an errored command followed (later, same session) by a
+    *successful* call to the same tool with different arguments.
     """
     sessions = load_session_map(cleaned_dir)
     pairs: list[dict] = []
@@ -109,21 +137,24 @@ def mine_repairs(cleaned_dir: str, failures_path: str,
             if rec is None:
                 continue
             steps = _iter_steps(rec)
-            # error steps that have a matchable file target
+            # error steps that have a matchable key (file target, or a
+            # shell tool when include_commands is set)
             err_idx = [k for k, s in enumerate(steps)
-                       if _is_error(s["result"]) and s["target"]]
+                       if _is_error(s["result"]) and _match_key(s, include_commands)]
             if not err_idx:
                 tax["no_target"] += 1
                 continue
             for k in err_idx:
+                key_k = _match_key(steps[k], include_commands)
                 marked = next((m for m in _ERROR_MARKERS
                                if m in (steps[k]["result"] or "").lower()), None)
                 tax["by_marker"][marked] += 1
                 tax["by_tool"][steps[k]["tool"]] += 1
                 tax["by_bucket"][bucket] += 1
-                # later step on the SAME target that did NOT error -> the fix
+                # later step with the SAME key, different args, no error -> fix
                 for j in range(k + 1, len(steps)):
-                    if (steps[j]["target"] == steps[k]["target"]
+                    if (_match_key(steps[j], include_commands) == key_k
+                            and steps[j]["input"] != steps[k]["input"]
                             and not _is_error(steps[j]["result"])):
                         pairs.append({
                             "session": sid,

@@ -133,9 +133,13 @@ rule — do **not** copy into `datasets/` while a training job holds the GPU):
   `datasets/train.focused.jsonl` (new file, no clobber), sets an isolated
   `TRAIN_OUTPUT_DIR` (`outputs/checkpoints/toolcall-v5-3b-focused`), runs
   `train --label=focused`, then `bench-build` for the 49-task benchmark.
-- `launch/repairs/repairs.dpo.jsonl` — 27 DPO pairs
-  (`prompt` / `chosen` / `rejected`) from `mine-repairs`, ready for a
-  future contrastive run that teaches self-correction on file writes.
+- `launch/repairs/repairs.dpo.jsonl` — **605** DPO pairs
+  (`prompt` / `chosen` / `rejected`) from `mine-repairs --include-commands`,
+  ready for a future contrastive run that teaches self-correction.
+  Default `mine-repairs` mines only file-target self-repairs (26);
+  `--include-commands` adds shell-tool self-repairs (errored command
+  -> later successful call to the same tool, different args) — 519
+  `terminal` + 107 `bash` + 75 `execute_code` — for 605 total.
   Built reproducibly by `src/repair_mix.build_dpo_mix` (tested).
 
 The validation harness (`src/validate_classifier.py`) is committed and

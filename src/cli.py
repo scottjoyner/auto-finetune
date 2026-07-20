@@ -180,7 +180,9 @@ def main(argv: list[str]) -> int:
                 print(f"[error] failures.jsonl not found: {failures} "
                       f"(run `analyze` first)")
                 return 2
-            n, tax = mine_repairs(cleaned, failures, out)
+            include_cmds = "--include-commands" in argv
+            n, tax = mine_repairs(cleaned, failures, out,
+                                   include_commands=include_cmds)
             print(f"[mine-repairs] {n} contrastive repair pairs -> {out}")
             print(f"  repaired (in-session self-fix): {tax['repaired']}")
             print(f"  failures w/o a file-target error: {tax['no_target']}")

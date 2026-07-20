@@ -68,3 +68,38 @@ def test_mine_repairs_skips_non_target_errors(tmp_path: Path) -> None:
                            str(tmp_path / "repairs.jsonl"))
     assert n == 0
     assert tax["no_target"] == 1
+
+
+def test_mine_repairs_command_self_repair(tmp_path: Path) -> None:
+    # terminal failure (no file target), later a *successful* terminal call
+    # with a different command -> a command self-repair (only when
+    # include_commands is set)
+    rec = _rec("s3", [
+        {"role": "user", "parts": [{"type": "text", "content": "deploy"}]},
+        {"role": "assistant", "parts": [
+            {"type": "tool", "tool": "terminal",
+             "input": {"command": "kubectl apply -f bad.yaml"}}]},
+        {"role": "user", "parts": [{"type": "text",
+                                    "content": "error: no such file or directory"}]},
+        {"role": "assistant", "parts": [
+            {"type": "tool", "tool": "terminal",
+             "input": {"command": "kubectl apply -f good.yaml"}}]},
+        {"role": "user", "parts": [{"type": "text", "content": "created ok"}]},
+    ])
+    (tmp_path / "cleaned").mkdir()
+    (tmp_path / "cleaned" / "test_s3.json").write_text(json.dumps(rec))
+    failures = tmp_path / "failures.jsonl"
+    failures.write_text(json.dumps({"session_id": "s3", "bucket": "debug"}) + "\n")
+    out = str(tmp_path / "repairs.jsonl")
+
+    # default: command repairs are not mined (file-target only)
+    n0, tax0 = mine_repairs(str(tmp_path / "cleaned"), str(failures), out)
+    assert n0 == 0 and tax0["no_target"] == 1
+
+    # with include_commands: the errored -> fixed command is a pair
+    n1, tax1 = mine_repairs(str(tmp_path / "cleaned"), str(failures), out,
+                                include_commands=True)
+    assert n1 == 1, tax1
+    pr = json.loads(Path(out).read_text().splitlines()[0])
+    assert pr["rejected_call"]["arguments"]["command"] == "kubectl apply -f bad.yaml"
+    assert pr["chosen_call"]["arguments"]["command"] == "kubectl apply -f good.yaml"
