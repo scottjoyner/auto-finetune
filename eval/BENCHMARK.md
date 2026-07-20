@@ -102,8 +102,15 @@ python -m src.cli bench-matrix --preset=local-refs   # qwen2.5-7b (HF) + any fin
 python -m src.cli bench-matrix --preset=local        # alias for local-refs
 python -m src.cli bench-matrix --preset=lmstudio     # *.gguf under ~/.lmstudio/models (needs lmstudio server on :1234)
 python -m src.cli bench-matrix --preset=fleet        # all models in endpoints.json
-python -m src.cli bench-matrix --preset=local-refs --report   # also write eval/bench-matrix.md
+python -m src.cli bench-matrix --preset=all          # ALL THREE combined: local + lmstudio + fleet
+python -m src.cli bench-matrix --preset=all --report # also write eval/bench-matrix.md
 ```
+
+`--preset=all` is what the post-training pipeline runs (`post-queue.sh` step 8):
+it aggregates the local Qwen2.5-7B (local-chat), every lmstudio q8 GGUF (api),
+and every lan-fleet model (api) into one combined comparison matrix. Each spec
+fails in isolation, so a reference whose server is down just errors that one row
+rather than aborting the whole matrix.
 
 ### local reference models — transformers vs GGUF
 

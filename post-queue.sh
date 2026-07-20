@@ -8,7 +8,10 @@
 #   4. merge --label=<winner> (fuse LoRA into a standalone model)
 #   5. validate merged model  (must actually emit a <tool_call> — catches
 #      "loads fine but generates garbage" merge bugs)
-#   6. write a final consolidated report
+#   6. side-by-side probe across ALL finished adapters
+#   7. write a final consolidated report
+#   8. agentic benchmark across ALL references (local Qwen2.5-7B + lmstudio
+#      q8 GGUFs + lan fleet) via `bench-matrix --preset=all`
 #
 # Usage:
 #   ./post-queue.sh            # wait for queue, then run everything
@@ -149,6 +152,14 @@ PY
 
 log "=== 6/6 side-by-side probe across ALL finished adapters ==="
 "$V/python" -m src.cli compare || log "compare returned non-zero"
+
+log "=== 7/7 agentic benchmark across ALL references (local + lmstudio + fleet) ==="
+# Runs the task suite through every available reference: local Qwen2.5-7B
+# (local-chat), the lmstudio q8 GGUFs (api), and the lan fleet models (api).
+# Best-effort: a reference whose server is down just errors that one spec
+# (bench_matrix isolates per-spec failures), so the matrix still completes.
+"$V/python" -m src.cli bench-matrix --preset=all --report \
+  || log "bench-matrix --preset=all returned non-zero (some references unreachable)"
 
 log "=== final report ==="
 "$V/python" -m src.cli report --label="$WINNER" || log "report returned non-zero"

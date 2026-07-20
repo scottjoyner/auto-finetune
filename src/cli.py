@@ -50,6 +50,38 @@ def _has_flag(argv: list[str], name: str) -> bool:
     return any(a == name for a in argv)
 
 
+def _local_ref_specs() -> list[dict]:
+    """Local, no-network reference set: a transformers-loadable large reference
+    (qwen2.5-7b) plus any finished FT adapters found on disk.
+
+    The lmstudio q8 *.gguf models are NOT included here (they need llama.cpp /
+    lmstudio's OpenAI server, i.e. the `lmstudio` preset or `--runner=api`).
+    """
+    out_base = "/media/scott/data/finetune-staging/outputs/checkpoints"
+    base_local = os.environ.get("LOCAL_REF_MODEL")
+    if not base_local:
+        cand = "/home/scott/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B-Instruct"
+        if os.path.isdir(cand):
+            base_local = cand
+        else:
+            # search the HF cache for any Qwen2.5-7B dir
+            hc = Path.home() / ".cache/huggingface/hub"
+            hits = sorted(p for p in hc.glob("models--Qwen--Qwen2.5-7B*")
+                          if (p / "config.json").exists())
+            base_local = str(hits[0]) if hits else cand
+    specs = []
+    if base_local:
+        specs.append({"name": "qwen2.5-7b", "runner": "local-chat",
+                      "model_path": base_local})
+        for lb in ("ssd", "nas5-main", "nas5-20260717", "opencode-all",
+                   "opencode-portfolio", "hermes-reasoning", "combined"):
+            ap = os.path.join(out_base, f"toolcall-v5-3b-{lb}")
+            if os.path.exists(os.path.join(ap, "adapter_config.json")):
+                specs.append({"name": f"ft-{lb}", "runner": "subagent",
+                              "model_path": ap, "variant": "auto"})
+    return specs
+
+
 def main(argv: list[str]) -> int:
     cmd = argv[1] if len(argv) > 1 else "help"
     cfg = load()
@@ -295,38 +327,13 @@ def main(argv: list[str]) -> int:
             if specs_json:
                 specs = json.loads(specs_json)
             elif preset in ("local-refs", "local"):
-                # local, no-network reference set: a transformers-loadable
-                # large reference (qwen2.5-7b) + any finished FT adapters.
-                # NOTE: the lmstudio q8 *.gguf models need llama.cpp / lmstudio's
-                # OpenAI server (use --preset=lmstudio or --runner=api), not the
-                # transformers 'local-chat' runner.
-                out_base = "/media/scott/data/finetune-staging/outputs/checkpoints"
-                base_local = os.environ.get("LOCAL_REF_MODEL")
-                if not base_local:
-                    cand = "/home/scott/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B-Instruct"
-                    if os.path.isdir(cand):
-                        base_local = cand
-                    else:
-                        # search the HF cache for any Qwen2.5-7B dir
-                        hc = Path.home() / ".cache/huggingface/hub"
-                        hits = sorted(p for p in hc.glob("models--Qwen--Qwen2.5-7B*")
-                                      if (p / "config.json").exists())
-                        base_local = str(hits[0]) if hits else cand
-                specs.append({"name": "qwen2.5-7b", "runner": "local-chat",
-                              "model_path": base_local})
-                for lb in ("ssd", "nas5-main", "nas5-20260717", "opencode-all",
-                           "opencode-portfolio", "hermes-reasoning", "combined"):
-                    ap = os.path.join(out_base, f"toolcall-v5-3b-{lb}")
-                    if os.path.exists(os.path.join(ap, "adapter_config.json")):
-                        specs.append({"name": f"ft-{lb}", "runner": "subagent",
-                                      "model_path": ap, "variant": "auto"})
+                specs = _local_ref_specs()
             elif preset == "lmstudio":
                 # lmstudio q8 *.gguf models served over OpenAI-compatible /v1.
                 # Requires lmstudio's local server to be running (default 1234).
                 lm_root = "/home/scott/.lmstudio/models"
                 base_url = os.environ.get("LMSTUDIO_URL", "http://localhost:1234/v1")
                 api_key = os.environ.get("LMSTUDIO_API_KEY", "lm-studio")
-                specs = []
                 for md in sorted(Path(lm_root).rglob("*.gguf")):
                     # model id = parent dir name (lmstudio serves by folder name)
                     specs.append({"name": md.parent.name, "runner": "api",
@@ -337,13 +344,42 @@ def main(argv: list[str]) -> int:
                           f"{lm_root}")
                     return 2
             elif preset == "fleet":
-                from src.fleet import pick_model, MODELS
-                for m in MODELS:
+                from src.fleet import list_models
+                for m in list_models():
                     specs.append({"name": m["model"], "runner": "api",
                                   "base_url": m["base_url"], "model": m["model"]})
+            elif preset == "all":
+                # aggregate every reference source into one matrix:
+                #   local    -> transformers Qwen2.5-7B (local-chat) + FT adapters
+                #   lmstudio -> *.gguf served over OpenAI /v1 (api)
+                #   fleet    -> lan fleet-router models (api)
+                # each source is best-effort; a down server just errors that one
+                # spec (bench_matrix isolates per-spec failures).
+                acc = list(_local_ref_specs())
+                lm_root = "/home/scott/.lmstudio/models"
+                if os.path.isdir(lm_root):
+                    base_url = os.environ.get("LMSTUDIO_URL",
+                                               "http://localhost:1234/v1")
+                    api_key = os.environ.get("LMSTUDIO_API_KEY", "lm-studio")
+                    for md in sorted(Path(lm_root).rglob("*.gguf")):
+                        acc.append({"name": md.parent.name, "runner": "api",
+                                    "base_url": base_url,
+                                    "model": md.parent.name, "api_key": api_key})
+                try:
+                    from src.fleet import list_models as _lm
+                    for m in _lm():
+                        acc.append({"name": m["model"], "runner": "api",
+                                    "base_url": m["base_url"], "model": m["model"]})
+                except Exception:
+                    pass
+                if not acc:
+                    print("[error] bench-matrix --preset=all: no local / "
+                          "lmstudio / fleet references found")
+                    return 2
+                specs = acc
             if not specs:
                 print("[error] bench-matrix needs --specs=<json> or "
-                      "--preset=local-refs|local|lmstudio|fleet")
+                      "--preset=local-refs|local|lmstudio|fleet|all")
                 return 2
             rocm = _detect_rocm()
             print(f"[bench-matrix] {len(specs)} specs, {len(tasks)} tasks, rocm={rocm}")
@@ -375,7 +411,7 @@ def main(argv: list[str]) -> int:
     print("Commands: extract | hermes | clean | format | combine | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | all")
     print("Flags:    --source=hermes|opencode  --label=<name>  --all-split  --dry-run  --max-examples=<n>  --frac=<held-out-frac>  --loss-only  --report  --metric=<loss|tool_exact>")
     print("Bench:    --runner=self|subagent|api|hermes|local-chat  --model=<dir>  --tasks=<jsonl>  --fleet [--fleet-hint=]  --base-url=  --api-model=")
-    print("Bench-matrix: --specs=<json-list> | --preset=local-refs|fleet   --tasks=<jsonl>  --report")
+    print("Bench-matrix: --specs=<json-list> | --preset=local-refs|local|lmstudio|fleet|all   --tasks=<jsonl>  --report")
     return 0
 
 

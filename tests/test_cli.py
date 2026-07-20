@@ -243,3 +243,58 @@ def test_cli_bench_matrix_writes_report(monkeypatch):
     rc = cli.main(["cli", "bench-matrix", f"--specs={specs}",
                    "--tasks=/tmp/none", "--report"])
     assert rc == 0
+
+
+def test_cli_bench_matrix_all_preset_combines_sources(monkeypatch, capsys):
+    # --preset=all must include all three reference sources: local-chat (qwen),
+    # lmstudio gguf (api), and fleet (api). No model loads (faked).
+    import importlib
+    cli = importlib.import_module("src.cli")
+    B = importlib.import_module("src.bench")
+
+    captured = {}
+    def fake_matrix(tasks, specs, rocm=False):
+        captured["specs"] = specs
+        return {sp["name"]: {"results": [], "summary": {"n": 0, "passed": 0,
+                "completed": 0, "errors": 0, "pass_rate": 0.0}} for sp in specs}
+    monkeypatch.setattr(B, "bench_matrix", fake_matrix)
+    monkeypatch.setattr(B, "load_tasks", lambda p: [])
+    rc = cli.main(["cli", "bench-matrix", "--preset=all", "--tasks=/tmp/none"])
+    assert rc == 0
+    specs = captured["specs"]
+    runners = {s["runner"] for s in specs}
+    assert "local-chat" in runners      # local Qwen2.5-7B reference
+    assert "api" in runners             # lmstudio + fleet
+    assert any(s["name"] == "qwen2.5-7b" for s in specs)
+
+
+def test_cli_bench_matrix_local_ref_specs_helper(monkeypatch):
+    import importlib
+    cli = importlib.import_module("src.cli")
+    specs = cli._local_ref_specs()
+    # qwen2.5-7b local-chat reference should always be present (HF cache exists)
+    assert any(s["name"] == "qwen2.5-7b" and s["runner"] == "local-chat"
+               for s in specs)
+    # any finished adapters on disk are appended as subagent specs
+    for s in specs:
+        if s["name"].startswith("ft-"):
+            assert s["runner"] == "subagent"
+
+
+def test_cli_bench_matrix_fleet_preset_no_crash(monkeypatch, capsys):
+    # --preset=fleet builds api specs from endpoints.json; must not raise even
+    # if individual nodes are down (per-spec failures handled at run time).
+    import importlib
+    cli = importlib.import_module("src.cli")
+    B = importlib.import_module("src.bench")
+    captured = {}
+    def fake_matrix(tasks, specs, rocm=False):
+        captured["specs"] = specs
+        return {sp["name"]: {"results": [], "summary": {"n": 0, "passed": 0,
+                "completed": 0, "errors": 0, "pass_rate": 0.0}} for sp in specs}
+    monkeypatch.setattr(B, "bench_matrix", fake_matrix)
+    monkeypatch.setattr(B, "load_tasks", lambda p: [])
+    rc = cli.main(["cli", "bench-matrix", "--preset=fleet", "--tasks=/tmp/none"])
+    assert rc == 0
+    assert len(captured["specs"]) >= 1
+    assert all(s["runner"] == "api" for s in captured["specs"])
