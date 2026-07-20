@@ -14,7 +14,6 @@ import json
 from pathlib import Path
 from typing import Optional
 
-
 DEFAULT_ENDPOINTS = "/home/scott/.config/opencode/endpoints.json"
 
 # models we treat as "large reference" candidates (>= ~12B effective)

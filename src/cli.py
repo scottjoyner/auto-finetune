@@ -162,7 +162,7 @@ def main(argv: list[str]) -> int:
                 print(f"[eval-all] report written -> {path}")
             return 0
         if cmd == "best":
-            from src.eval import evaluate_all, best_adapter, format_report
+            from src.eval import best_adapter, evaluate_all, format_report
             from src.train import _detect_rocm
             dset = cfg.path("dataset_dir")
             out_base = "/media/scott/data/finetune-staging/outputs/checkpoints"
@@ -207,9 +207,14 @@ def main(argv: list[str]) -> int:
             # One-shot consolidated eval: loss table + probe + best, written to
             # a local report. Runs eval-all (loss_only if training busy) plus
             # probe + best, then persists everything via write_report.
-            from src.eval import (evaluate_all, format_report, write_report,
-                                  best_adapter, grade_probe, grade_probe_baseline,
-                                  load_probe_set)
+            from src.eval import (
+                best_adapter,
+                evaluate_all,
+                format_report,
+                grade_probe,
+                grade_probe_baseline,
+                write_report,
+            )
             from src.train import _detect_rocm
             dset = cfg.path("dataset_dir")
             out_base = "/media/scott/data/finetune-staging/outputs/checkpoints"
@@ -245,7 +250,7 @@ def main(argv: list[str]) -> int:
             out_base = "/media/scott/data/finetune-staging/outputs/checkpoints"
             adapter = os.environ.get("TRAIN_OUTPUT_DIR") or os.path.join(out_base, f"toolcall-v5-3b-{label}")
             probe_path = os.path.join(os.path.dirname(__file__), "..", "eval", "probe.jsonl")
-            print(f"[probe] baseline (base model)...")
+            print("[probe] baseline (base model)...")
             b = grade_probe_baseline(base, probe_path, rocm=_detect_rocm(), label=label)
             print(f"[probe] adapter {adapter}...")
             a = grade_probe(adapter, base, probe_path, rocm=_detect_rocm(), label=label)
@@ -268,11 +273,10 @@ def main(argv: list[str]) -> int:
             print(format_probe_comparison(results))
             return 0
         if cmd == "bench":
-            from src.bench import (load_tasks, make_driver, bench_suite,
-                                   format_bench_results)
-            from src.train import _detect_rocm
             # register the local-chat (standard HF model) runner
             import src.drivers_localchat  # noqa: F401  (self-registers)
+            from src.bench import bench_suite, format_bench_results, load_tasks, make_driver
+            from src.train import _detect_rocm
             # runner selection
             runner = _parse_str_flag(argv, "--runner") or "self"
             tasks_path = (_parse_str_flag(argv, "--tasks")
@@ -313,10 +317,9 @@ def main(argv: list[str]) -> int:
             print(format_bench_results(results))
             return 0
         if cmd == "bench-matrix":
-            from src.bench import (load_tasks, bench_matrix,
-                                    format_bench_matrix)
-            from src.train import _detect_rocm
             import src.drivers_localchat  # noqa: F401  (self-registers "local-chat")
+            from src.bench import bench_matrix, format_bench_matrix, load_tasks
+            from src.train import _detect_rocm
             tasks_path = (_parse_str_flag(argv, "--tasks")
                           or os.path.join(os.path.dirname(__file__), "..",
                                          "eval", "tasks", "sample.jsonl"))
@@ -348,6 +351,33 @@ def main(argv: list[str]) -> int:
                 for m in list_models():
                     specs.append({"name": m["model"], "runner": "api",
                                   "base_url": m["base_url"], "model": m["model"]})
+            elif preset == "fast":
+                # quick smoke: ONE model per reference source (local + lmstudio
+                # + fleet). Cheap enough for a pre-merge / pre-queue sanity gate.
+                specs = list(_local_ref_specs()[:1]) or []
+                lm_root = "/home/scott/.lmstudio/models"
+                if os.path.isdir(lm_root):
+                    ggufs = sorted(Path(lm_root).rglob("*.gguf"))
+                    if ggufs:
+                        base_url = os.environ.get("LMSTUDIO_URL",
+                                                   "http://localhost:1234/v1")
+                        api_key = os.environ.get("LMSTUDIO_API_KEY", "lm-studio")
+                        specs.append({"name": ggufs[0].parent.name, "runner": "api",
+                                      "base_url": base_url,
+                                      "model": ggufs[0].parent.name,
+                                      "api_key": api_key})
+                try:
+                    from src.fleet import list_models as _lm
+                    fm = _lm()
+                    if fm:
+                        specs.append({"name": fm[0]["model"], "runner": "api",
+                                      "base_url": fm[0]["base_url"],
+                                      "model": fm[0]["model"]})
+                except Exception:
+                    pass
+                if not specs:
+                    print("[error] bench-matrix --preset=fast: no references found")
+                    return 2
             elif preset == "all":
                 # aggregate every reference source into one matrix:
                 #   local    -> transformers Qwen2.5-7B (local-chat) + FT adapters
@@ -379,7 +409,7 @@ def main(argv: list[str]) -> int:
                 specs = acc
             if not specs:
                 print("[error] bench-matrix needs --specs=<json> or "
-                      "--preset=local-refs|local|lmstudio|fleet|all")
+                      "--preset=local-refs|local|lmstudio|fleet|fast|all")
                 return 2
             rocm = _detect_rocm()
             print(f"[bench-matrix] {len(specs)} specs, {len(tasks)} tasks, rocm={rocm}")
@@ -392,9 +422,9 @@ def main(argv: list[str]) -> int:
                 print(f"[bench-matrix] written -> {rep}")
             return 0
         if cmd == "all":
-            from src.extract_opencode import main as run_extract
-            from src.extract_hermes import main as run_hermes
             from src.clean import main as run_clean
+            from src.extract_hermes import main as run_hermes
+            from src.extract_opencode import main as run_extract
             from src.format_dataset import main as run_format
             cfg.ensure_dirs()
             run_extract(cfg)
@@ -411,7 +441,7 @@ def main(argv: list[str]) -> int:
     print("Commands: extract | hermes | clean | format | combine | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | all")
     print("Flags:    --source=hermes|opencode  --label=<name>  --all-split  --dry-run  --max-examples=<n>  --frac=<held-out-frac>  --loss-only  --report  --metric=<loss|tool_exact>")
     print("Bench:    --runner=self|subagent|api|hermes|local-chat  --model=<dir>  --tasks=<jsonl>  --fleet [--fleet-hint=]  --base-url=  --api-model=")
-    print("Bench-matrix: --specs=<json-list> | --preset=local-refs|local|lmstudio|fleet|all   --tasks=<jsonl>  --report")
+    print("Bench-matrix: --specs=<json-list> | --preset=local-refs|local|lmstudio|fleet|fast|all   --tasks=<jsonl>  --report")
     return 0
 
 

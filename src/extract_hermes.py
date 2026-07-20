@@ -65,7 +65,7 @@ def _read_dir(h: dict, raw_dir: str) -> int:
         try:
             if fn.endswith(".jsonl"):
                 with open(path) as f:
-                    rows = [json.loads(l) for l in f if l.strip()]
+                    rows = [json.loads(line) for line in f if line.strip()]
             else:
                 with open(path) as f:
                     rows = [json.load(f)]

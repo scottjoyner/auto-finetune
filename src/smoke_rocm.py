@@ -10,7 +10,6 @@ Then:  python -m src.smoke_rocm
 """
 from __future__ import annotations
 
-import sys
 import torch
 
 
@@ -31,7 +30,6 @@ def main() -> int:
     try:
         import bitsandbytes as bnb
         print("bitsandbytes:", bnb.__version__)
-        from bitsandbytes.nn import Linear4bit
         print("4-bit Linear available: OK")
     except Exception as e:
         print("bitsandbytes unavailable:", e)

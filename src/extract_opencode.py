@@ -30,8 +30,8 @@ import json
 import os
 from typing import Any
 
-from src.db import CorruptDB
 from src.config import Config
+from src.db import CorruptDB
 
 
 def _safe_json(text: str) -> Any:
@@ -228,7 +228,7 @@ def _extract_db_filtered(cfg: Config, db_path: str, out_dir: str, project: str) 
     os.makedirs(out_dir, exist_ok=True)
     tmp = out_dir + ".tmp"
     os.makedirs(tmp, exist_ok=True)
-    n = extract_db(cfg, db_path, tmp)
+    extract_db(cfg, db_path, tmp)
     kept = 0
     for fn in sorted(os.listdir(tmp)):
         if not fn.endswith(".json"):

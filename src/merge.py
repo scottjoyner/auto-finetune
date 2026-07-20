@@ -13,7 +13,6 @@ module merges ONE chosen adapter into base.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 
 def merge_adapter(
@@ -27,8 +26,8 @@ def merge_adapter(
     Returns the output dir path. Uses bf16 on ROCm, fp16 otherwise.
     """
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     os.makedirs(out_dir, exist_ok=True)
     dtype = torch.bfloat16 if rocm else torch.float16

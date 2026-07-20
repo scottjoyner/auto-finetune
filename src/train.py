@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-from typing import Any
 
 from src.config import Config
 
@@ -100,10 +99,9 @@ def _build_texts(dataset: list[dict], tokenizer, max_seq: int) -> list[str]:
 
 # ── Unsloth (CUDA) backend ────────────────────────────────────────────────────
 def _train_unsloth(cfg: Config, data: list[dict]) -> int:
-    from unsloth import FastLanguageModel
-    from trl import SFTTrainer
-    from transformers import TrainingArguments
     from datasets import Dataset
+    from trl import SFTTrainer
+    from unsloth import FastLanguageModel
 
     t = cfg.get("train", default={})
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -139,11 +137,10 @@ def _train_unsloth(cfg: Config, data: list[dict]) -> int:
 # ── PEFT (CUDA + ROCm) backend ────────────────────────────────────────────────
 def _train_peft(cfg: Config, data: list[dict]) -> int:
     import torch
-    from transformers import (AutoModelForCausalLM, AutoTokenizer,
-                              TrainingArguments, TrainerCallback)
-    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-    from trl import SFTTrainer
     from datasets import Dataset
+    from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from trl import SFTTrainer
 
     t = cfg.get("train", default={})
     model_name = t.get("model_name", "Qwen/Qwen3-8B-Instruct")
@@ -207,7 +204,7 @@ def _train_peft(cfg: Config, data: list[dict]) -> int:
     return 0
 
 
-def _training_args(t: dict, model=None, rocm: bool = False) -> "TrainingArguments":
+def _training_args(t: dict, model=None, rocm: bool = False) -> "TrainingArguments":  # noqa: F821
     from transformers import TrainingArguments
     bf16 = rocm  # AMD/ROCm prefers bf16
     # adamw_8bit requires bitsandbytes which may not have ROCm binaries —

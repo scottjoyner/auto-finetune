@@ -37,7 +37,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-
 # ── tool_call parsing (tolerant of both the real U+276E char and the literal
 #    backslash-escaped "\u276E\u276E\u276E" seen in the serialized datasets) ──
 _SEP_CHARS = "\u276E\u276E\u276E"          # real separator the model emits
@@ -95,7 +94,6 @@ def format_tool_result(result: str, variant: str = "finetune") -> str:
     if variant == "base":
         return f"<tool_response>\n{result}\n</tool_response>"
     return f"<tool_result>{result}</tool_result>"
-    return calls
 
 
 def parse_tool_results(text: str) -> list[str]:
@@ -312,7 +310,6 @@ class LocalDriver(ModelDriver):
     def _load(self):
         if self._model is not None:
             return
-        import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
         dev = {"device_map": "auto"} if self.rocm else {"device_map": "cpu"}
         self._model = AutoModelForCausalLM.from_pretrained(self.model_path,

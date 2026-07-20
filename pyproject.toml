@@ -23,3 +23,11 @@ exclude_lines = [
     "raise NotImplementedError",
     'if __name__ == .__main__.:',
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E741", "E501"]

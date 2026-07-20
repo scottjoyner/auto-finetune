@@ -16,7 +16,6 @@ import json
 import math
 import os
 import re
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -134,7 +133,7 @@ def build_held_out(dataset_dir: str, label: str, frac: float = 0.1, seed: int = 
 
     import random
     rng = random.Random(seed)
-    rows = [json.loads(l) for l in src.read_text().splitlines() if l.strip()]
+    rows = [json.loads(line) for line in src.read_text().splitlines() if line.strip()]
     rng.shuffle(rows)
     n = max(1, int(len(rows) * frac))
     held = rows[:n]
@@ -240,10 +239,9 @@ def evaluate(
     generation) is filled in only when loss_only=False.
     """
     import torch
-    from transformers import AutoModelForCausalLM, AutoTokenizer
 
     model, tok = load_model_and_tokenizer(adapter_path, base_model, rocm=rocm)
-    examples = [json.loads(l) for l in Path(held_out_path).read_text().splitlines() if l.strip()]
+    examples = [json.loads(line) for line in Path(held_out_path).read_text().splitlines() if line.strip()]
 
     loss = eval_loss(model, tok, examples, max_seq)
     ppl = math.exp(loss) if loss == loss else float("nan")
@@ -365,7 +363,7 @@ def load_probe_set(path: str, label: "str | None" = None) -> list[dict]:
     --label=X` scope the qualitative check to a bucket's domain probes while
     still running the generic ones.
     """
-    rows = [json.loads(l) for l in Path(path).read_text().splitlines() if l.strip()]
+    rows = [json.loads(line) for line in Path(path).read_text().splitlines() if line.strip()]
     if label is None:
         return rows
     scoped = [r for r in rows if r.get("label") == label]

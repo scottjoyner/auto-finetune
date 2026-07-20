@@ -298,3 +298,23 @@ def test_cli_bench_matrix_fleet_preset_no_crash(monkeypatch, capsys):
     assert rc == 0
     assert len(captured["specs"]) >= 1
     assert all(s["runner"] == "api" for s in captured["specs"])
+
+
+def test_cli_bench_matrix_fast_preset_smoke(monkeypatch, capsys):
+    # --preset=fast runs ONE model per source (local + lmstudio + fleet).
+    import importlib
+    cli = importlib.import_module("src.cli")
+    B = importlib.import_module("src.bench")
+    captured = {}
+    def fake_matrix(tasks, specs, rocm=False):
+        captured["specs"] = specs
+        return {sp["name"]: {"results": [], "summary": {"n": 0, "passed": 0,
+                "completed": 0, "errors": 0, "pass_rate": 0.0}} for sp in specs}
+    monkeypatch.setattr(B, "bench_matrix", fake_matrix)
+    monkeypatch.setattr(B, "load_tasks", lambda p: [])
+    rc = cli.main(["cli", "bench-matrix", "--preset=fast", "--tasks=/tmp/none"])
+    assert rc == 0
+    specs = captured["specs"]
+    # at least the local qwen reference, and no more than one per source family
+    assert any(s["name"] == "qwen2.5-7b" for s in specs)
+    assert len([s for s in specs if s["runner"] == "local-chat"]) <= 1

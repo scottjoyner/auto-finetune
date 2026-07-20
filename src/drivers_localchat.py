@@ -167,7 +167,6 @@ class LocalChatDriver(ModelDriver):
     def _load(self):
         if self._model is not None:
             return
-        import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
         dev = {"device_map": "auto"} if self.rocm else {"device_map": "cpu"}
         self._model = AutoModelForCausalLM.from_pretrained(self.model_path,
@@ -194,4 +193,5 @@ def _make_local_chat(runner: str = "local-chat", **kw) -> ModelDriver:
 # self-register so `make_driver("local-chat", ...)` works without the caller
 # importing this module explicitly.
 from src.bench import register_runner  # noqa: E402
+
 register_runner("local-chat", _make_local_chat)
