@@ -93,7 +93,14 @@ def build_sheet(cleaned_dir: str, failures_path: str, out_path: str,
                 "first_user_text": (f0["first_user_text"] or first_user)[:200],
                 "actions": actions[:25],
                 "error_snippet": f0["error_snippet"][:160],
-                "true_bucket": "", "true_is_error": "", "true_difficulty": "",
+                # two error axes are recorded separately:
+                #  - true_cmd_error   : did a TOOL COMMAND actually fail?
+                #                       (what `pred_is_error` = has_error detects)
+                #  - true_is_error    : did the SESSION ultimately fail?
+                #                       (original hand-label meaning)
+                "true_bucket": "", "true_difficulty": "",
+                "true_cmd_error": "", "true_is_error": "",
+                "true_session_failed": "",
             }
             f.write(json.dumps(sheet) + "\n")
             n += 1
@@ -130,20 +137,38 @@ def score(sheet_path: str) -> dict:
                             "recall": round(rec, 2),
                             "support": bucket_true[b]}
 
-    tp = fp = fn = tn = 0
-    for r in rows:
-        p = bool(r["pred_is_error"])
-        t = bool(r["true_is_error"])
-        if t and p:
-            tp += 1
-        elif t and not p:
-            fn += 1
-        elif (not t) and p:
-            fp += 1
-        else:
-            tn += 1
-    prec = tp / (tp + fp) if (tp + fp) else 0.0
-    rec = tp / (tp + fn) if (tp + fn) else 0.0
+    def _err_axis(rows, pred_key, true_key):
+        """Confusion matrix for one (pred, true) error axis.
+
+        Sessions missing the ``true_*`` label are skipped on that axis
+        (so the two axes can be scored independently as the sheet grows).
+        ``pred`` is always ``pred_is_error`` (the command-level signal
+        ``has_error``); the axes differ only in what truth they are
+        checked against.
+        """
+        tp = fp = fn = tn = 0
+        for r in rows:
+            if true_key not in r or r[true_key] in ("", None):
+                continue
+            p = bool(r[pred_key])
+            t = bool(r[true_key])
+            if t and p:
+                tp += 1
+            elif t and not p:
+                fn += 1
+            elif (not t) and p:
+                fp += 1
+            else:
+                tn += 1
+        prec = tp / (tp + fp) if (tp + fp) else 0.0
+        rec = tp / (tp + fn) if (tp + fn) else 0.0
+        return {"precision": round(prec, 3), "recall": round(rec, 3),
+                "tp": tp, "fp": fp, "fn": fn, "tn": tn}
+
+    # Axis 1: command-level error (what has_error actually detects).
+    cmd = _err_axis(rows, "pred_is_error", "true_cmd_error")
+    # Axis 2: session-level failure (the original hand-label meaning).
+    sess = _err_axis(rows, "pred_is_error", "true_is_error")
 
     diff_ok = sum(1 for r in rows if r["pred_difficulty"] == r["true_difficulty"])
 
@@ -151,9 +176,8 @@ def score(sheet_path: str) -> dict:
         "n_labeled": n,
         "bucket_accuracy": round(correct / n, 3) if n else 0.0,
         "bucket_per_bucket": bucket_report,
-        "error_precision": round(prec, 3),
-        "error_recall": round(rec, 3),
-        "error_matrix": {"tp": tp, "fp": fp, "fn": fn, "tn": tn},
+        "cmd_error": cmd,
+        "session_failure": sess,
         "difficulty_accuracy": round(diff_ok / n, 3) if n else 0.0,
     }
     _print_report(metrics)
@@ -166,6 +190,13 @@ def _print_report(m: dict) -> None:
     print("per-bucket (precision / recall / support):")
     for b, v in m["bucket_per_bucket"].items():
         print(f"  {b:18s} P={v['precision']:.2f} R={v['recall']:.2f} n={v['support']}")
+    c = m["cmd_error"]
+    print(f"COMMAND-error   : precision={c['precision']} recall={c['recall']} "
+          f"(tp={c['tp']} fp={c['fp']} fn={c['fn']} tn={c['tn']})  [pred=has_error]")
+    s = m["session_failure"]
+    print(f"SESSION-failure : precision={s['precision']} recall={s['recall']} "
+          f"(tp={s['tp']} fp={s['fp']} fn={s['fn']} tn={s['tn']})  "
+          f"[pred=has_error, mis-scoped]")
     e = m["error_matrix"]
     print(f"error detection  : precision={m['error_precision']} recall={m['error_recall']} "
           f"(tp={e['tp']} fp={e['fp']} fn={e['fn']} tn={e['tn']})")
