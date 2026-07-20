@@ -113,3 +113,21 @@ side.
 - `hermes` runner trusts Hermes's own `completed` flag; pass `--sandbox_root` to
   also run our verifiers against the dir Hermes wrote into.
 - Keep all artifacts on the local data drive; the fleet endpoints are read-only.
+
+## Running the subagent as a real MCP/ACP server
+
+`src/subagent.py` wraps `OptimizedDriver` as an MCP/ACP-over-stdio server (no
+`mcp` SDK needed — stdlib JSON-RPC 2.0). opencode (`opencode acp`/`serve`) or
+hermes (`mcp serve`) can connect to its stdio and call the `run_task` tool,
+delegating real tasks to the optimized RefinedToolCallV5 loop.
+
+```bash
+# launch with the model you want it to run
+python -m src.subagent --model=/media/scott/SSD_4TB/models-fast/RefinedNeuro/RefinedToolCallV5-3b --variant=base
+# or a finetune / merged
+python -m src.subagent --model=/media/scott/data/finetune-staging/outputs/checkpoints/toolcall-v5-3b-ssd-merged
+```
+
+The server speaks `initialize` / `tools/list` / `tools/call` with MCP-shaped
+responses. Tests: tests/test_subagent.py (7) cover the protocol handler and a
+full stdio round-trip without loading a model.
