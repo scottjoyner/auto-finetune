@@ -152,6 +152,17 @@ needed while the GPU is busy):
   `datasets/`, to respect rule §2.1), plus a stats report (bucket sizes,
   overlap, dedup rate).
 
+This is implemented today as **`python -m src.cli analyze`** (`src/analyze.py`).
+It is fully CPU-safe and writes a staging dir (default
+`<data>/analysis`, **never `datasets/`**) with:
+
+- `buckets.json` — `session_id → {source, bucket, difficulty, keep, quality_reason}`
+- `corpus.json` — aggregate stats (bucket/source/difficulty counts, top tools &
+  file-types, avg turns, error rate, dedup rate, opencode↔hermes overlap)
+- `auto-tasks.jsonl` — benchmark tasks mined from successful file-edit sessions
+- `failures.jsonl` — sessions containing error/traceback text (candidate
+  negative-mining set)
+
 Later, when the GPU is free, an LLM-based classifier (or a small fine-tuned
 tagger) can replace the heuristics for finer buckets. The heuristic pass is
 the right first iteration and is fully CPU-safe.

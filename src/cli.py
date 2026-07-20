@@ -114,6 +114,14 @@ def main(argv: list[str]) -> int:
             from src.format_dataset import combine as run
             run(cfg)
             return 0
+        if cmd == "analyze":
+            from src.analyze import analyze_all
+            out = _parse_str_flag(argv, "--out")
+            summary = analyze_all(cfg.path("cleaned_dir"), out_dir=out)
+            print(f"[analyze] {summary['n_sessions']} sessions -> "
+                  f"{summary['n_tasks']} tasks, {summary['n_failures']} failures")
+            print(f"[analyze] buckets written to {summary['out_dir']}")
+            return 0
         if cmd == "train":
             from src.train import main as run
             dry = "--dry-run" in argv
