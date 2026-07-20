@@ -100,37 +100,61 @@ are rarely emitted; tightening intent keywords or adding an
 `automation`/`cron` bucket would help but the marginal value
 is small now that the dominant `debug` inflation is fixed.
 
-### Root cause of the residual error false-positives
+### Root cause of the residual error "false-positives" — semantics, not bugs
 
-The 6 error FPs are *not* a bucket problem, and they are **not** all
-the bare `"error:"` substring (an earlier draft guessed that — it was
-wrong). Measured against the labeled set: dropping `"error:"` clears
-**0/6** FPs and hurts **0** true-errors, so it is not the cause.
-The real cause is genuine error-terminology appearing as **benign text**
-inside other tool outputs:
+The 6 error FPs are *not* a substring-over-fire problem, and they are
+**not** benign prose. Inspecting the actual tool outputs shows they are
+**real command errors in sessions that ultimately recovered** — i.e. the
+`has_error` *command-level* signal is **correct**; the hand-label
+`true_is_error` instead means **session-level failure**. The two are
+different axes:
 
-- 3× `cron_e2d25a4…` (true `reasoning`): a cron status/log
-  containing `no such file or directory`, `command not found`,
-  `syntaxerror` as ordinary prose (commands it tried, not failures).
-- `20260601_103…` (true `code-search`): `search` returned *source
-  code* containing `if error:` and `except Exception`.
-- `20260605_231…` (true `docs`): a `read` of a module whose
-  docstring/log text contains `traceback` / `exception` / `command not found`.
-- `ses_09f7b66…` (true `mixed`): a **genuine `Traceback`** — the
-  hand-label marked `is_error=0`, so this is **label noise**, not a
-  classifier bug.
+- `20260601_103…` (true `code-search`, labeled ok): a `git push`
+  returned `error: failed to push some refs` / `error: could not apply`
+  — a genuine command error, but the session proceeded and finished.
+- `20260609_124059…` (true `shell`): terminal JSON
+  `{"output": "curl: (22) ... error: 422", "exit_code": 0, "error": null}`
+  — `exit_code:0` means success; the `error: 422` is HTTP prose.
+  `extract_features` now honors `exit_code` and counts this as **success**.
+- `20260605_231…` (true `docs`): `{"output": "...python: command not found",
+  "exit_code": 127}` — a real command failure (`exit_code` 127) in a
+  session that worked around it.
+- 2× `cron_e2d25a4…` (true `reasoning`): cron-automation logs with
+  stray error-terminology in commands that *ran* (not failed).
+- `ses_09f7b66…` (true `mixed`): a **genuine `Traceback`** the hand-label
+  marked `is_error=0` — **label noise**, not a classifier bug.
 
-Net: ~5 genuine FPs (error-terminology in benign cron logs / code /
-docs) + 1 label-noise case. This is a **precision ceiling** of
-substring matching: the same words mark a real failure *and* appear in
-healthy status output, so no substring tweak fixes it. A robust fix needs
-**output-structure awareness** — trust a tool's own `success`/`exit_code`/
-`error` fields over prose scanning (and only treat `traceback`/`exception`
-as failure when at line-start, not embedded in code). That is a larger,
-deliberately-deferred change; it is *not* worth doing on a 30-sample
-metric. For the classifier's actual job (strata weights + failure mining)
-precision ~0.57 is acceptable — the 1249-failure set is still dominated
-by real failures, and the file-check benchmark is unaffected.
+**Implication.** `has_error` answers "did a tool command fail?" — exactly
+what the contrastive-mining / strata-failure job needs, and exactly the
+signal that makes good DPO self-repair pairs (a recovered error *is* a
+repair opportunity). The validation harness's "error precision/recall"
+therefore measures the **wrong target**: it penalizes the classifier for
+correctly flagging sub-step command errors in sessions the human judged
+"overall successful." The 6 "FPs" are, for our purposes, **true
+positives of the right thing**.
+
+**What changed (commit 9170abe-era `analyze` fix).** `extract_features`
+is now structure-aware via `_tool_error`: it honors a tool's own
+`exit_code` / `success` / `error` fields when present (JSON-string shell
+outputs carry `exit_code`), so `exit_code:0` is never an error even when
+the text says "error". This removes the clean `curl error:422` class of
+false positive. It does **not** move the 30-sample numbers, because those
+residual FPs are real command errors the label simply doesn't count as
+session failures.
+
+**Decision needed (B / validation methodology).** Before tuning further,
+decide what `true_is_error` should mean:
+1. *Session-level failure* (current labels) → the harness is right and
+   `has_error` is mis-scoped; we'd need a session-outcome signal
+   (e.g. did the assistant end with an unresolved error / exhaust retries).
+2. *Command-level error* (classifier's actual job) → relabel the sheet
+   (the 6 "FPs" become TPs) and the validator will show ~precision 1.0.
+
+For the classifier's real consumers (strata weights, failure mining, DPO
+pairs) the command-level definition is the one that matters, so precision
+~0.57 against the *session* labels is acceptable and not worth chasing on
+a 30-sample metric. Expand the label set (C) under the agreed definition
+before drawing stronger conclusions.
 
 ### Staged launch artifacts (CPU-only prep, GPU still busy)
 

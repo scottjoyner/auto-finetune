@@ -49,6 +49,55 @@ def _is_error(text: str) -> bool:
     return any(m in t for m in _ERROR_MARKERS)
 
 
+def _tool_error(grp: str, out: Any) -> str | None:
+    """Return an error snippet if ``out`` is a tool failure, else ``None``.
+
+    Structure-aware. Shell/exec tools emit JSON strings carrying an
+    ``exit_code`` field; ``exit_code == 0`` is a success even when the
+    text mentions "error" (e.g. ``curl: (22) ... error: 422``), which
+    is the dominant false-positive source in the corpus. Non-zero
+    ``exit_code`` is a confirmed failure. Plain (non-JSON) outputs
+    fall back to substring marker scanning, applied only to executable
+    tools -- read tools return file contents that routinely contain the
+    word "error".
+    """
+    if grp == "read":
+        return None
+    if isinstance(out, dict):
+        if out.get("error"):
+            return str(out.get("error"))
+        if out.get("success") is False:
+            return str(out.get("content") or out.get("error") or "failed")
+        ec = out.get("exit_code")
+        if ec == 0 or ec == "0":
+            return None
+        if ec not in (None, ""):
+            return str(out.get("content") or f"exit_code {ec}")
+        return _is_error_str(str(out.get("content", "")))
+    if isinstance(out, str):
+        s = out.strip()
+        if s.startswith("{") and "exit_code" in s:
+            try:
+                d = json.loads(s)
+            except Exception:
+                d = None
+            if isinstance(d, dict):
+                ec = d.get("exit_code")
+                if ec == 0 or ec == "0":
+                    return None
+                if d.get("error"):
+                    return str(d.get("error"))
+                if ec not in (None, ""):
+                    return s
+                s = str(d.get("output", s))
+        return _is_error_str(s)
+    return None
+
+
+def _is_error_str(text: str) -> str | None:
+    return text if _is_error(text) else None
+
+
 def _group(name: str) -> str:
     n = name.lower()
     if n in SHELL_TOOLS:
@@ -146,19 +195,13 @@ def extract_features(rec: dict) -> dict:
                 exts |= _exts_from_input(p.get("input"))
                 paths |= _paths_from_input(p.get("input"))
                 out = p.get("output")
-                # Only treat an *executable-tool* result as a failure. Read
-                # tools return file CONTENTS, which routinely contain the word
-                # "error" (docstrings, logs) -> false positives. An explicit
-                # `error` field always counts.
+                # Structure-aware error detection (see ``_tool_error``):
+                # executable tools only, with `exit_code`/`success`/`error`
+                # honored when present.
                 grp = _group(name)
-                if isinstance(out, str):
-                    if grp != "read" and _is_error(out):
-                        errors.append(out)
-                elif isinstance(out, dict):
-                    if out.get("error"):
-                        errors.append(str(out.get("error")))
-                    elif grp != "read" and _is_error(str(out.get("content", ""))):
-                        errors.append(str(out.get("content", "")))
+                err = _tool_error(grp, out)
+                if err:
+                    errors.append(err)
             elif t == "text" and isinstance(p.get("text"), str):
                 txt = p["text"]
                 total_chars += len(txt)
