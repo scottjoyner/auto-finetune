@@ -49,15 +49,52 @@ _TOOL_CALL_RE = re.compile(
 )
 _TOOL_RESULT_RE = re.compile(r"<tool_result>(.*?)</tool_result>", re.DOTALL)
 
+# Canonical format the BASE RefinedToolCallV5 model emits (per its chat
+# template): <tool_call>\n{"name": "...", "arguments": {...}}\n</tool_call>
+# and results come back as <tool_response>...</tool_response>. The finetunes
+# were trained on the simpler dataset format above, so the optimized harness
+# must understand BOTH and feed results back in the right shape.
+_CANON_CALL_RE = re.compile(
+    r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
+_CANON_RESP_RE = re.compile(r"<tool_response>(.*?)</tool_response>", re.DOTALL)
+
 
 def parse_tool_calls(text: str) -> list[dict]:
-    """Extract {"name", "args"} tool calls from an assistant message."""
+    """Extract {"name", "args"} tool calls from an assistant message.
+
+    Handles both the dataset format (`<tool_call name=..>json<sep>`) and the
+    base model's canonical format (`<tool_call>{"name":..,"arguments":..}</tool_call>`).
+    The args key is normalized to "args" either way.
+    """
     calls: list[dict] = []
+    # dataset / finetune format first
     for m in _TOOL_CALL_RE.finditer(text):
-        name = m.group(1)
         raw = m.group(2).strip()
-        args = _safe_json(raw)
-        calls.append({"name": name, "args": args})
+        calls.append({"name": m.group(1), "args": _safe_json(raw)})
+    if calls:
+        return calls
+    # canonical base format
+    for m in _CANON_CALL_RE.finditer(text):
+        try:
+            obj = json.loads(m.group(1))
+        except Exception:
+            continue
+        name = obj.get("name")
+        args = obj.get("arguments", obj.get("args"))
+        if name:
+            calls.append({"name": name, "args": args})
+    return calls
+
+
+def format_tool_result(result: str, variant: str = "finetune") -> str:
+    """Wrap a tool result the way the target model expects it.
+
+    'finetune' -> <tool_result>...</tool_result>   (matches training data)
+    'base'     -> <tool_response>...</tool_response> (matches base chat template)
+    """
+    if variant == "base":
+        return f"<tool_response>\n{result}\n</tool_response>"
+    return f"<tool_result>{result}</tool_result>"
     return calls
 
 
@@ -292,6 +329,59 @@ class LocalDriver(ModelDriver):
         return self._tok.decode(out[0][ids.shape[1]:], skip_special_tokens=False)
 
 
+class OptimizedDriver(LocalDriver):
+    """Runner 'subagent': the model-specific, optimized tool loop.
+
+    Purpose-built for RefinedToolCallV5 variants (and the base model). vs the
+    generic LocalDriver it adds:
+
+      * per-variant result formatting — feeds <tool_result> to finetunes (what
+        they were trained on) but <tool_response> to the base model (what its
+        chat template expects). This alone materially changes call fidelity.
+      * explicit stop sequences — stops at <|im_end|> and the tool separator so
+        the model doesn't ramble past a complete call.
+      * error recovery — when a tool errors or returns no parseable call, a
+        structured recovery message is returned (the base model advertises a
+        0.896 recovery rate; we mirror that by feeding the failure back as a
+        tool result rather than crashing the loop).
+      * variant autodetect — "base" if the checkpoint dir name contains
+        'RefinedToolCallV5-3b' and no finetune marker, else "finetune".
+
+    Intended to later run as a subagent inside opencode / hermes-agent; for now
+    it is a drop-in driver for `bench --runner=subagent`.
+    """
+
+    def __init__(self, model_path: str, rocm: bool = False, max_seq: int = 8192,
+                 variant: str = "auto"):
+        super().__init__(model_path, rocm=rocm, max_seq=max_seq)
+        if variant == "auto":
+            variant = "base" if "RefinedToolCallV5-3b" in model_path \
+                and "toolcall-v5-3b-" not in model_path else "finetune"
+        self.variant = variant
+
+    def generate(self, messages: list[dict], max_new_tokens: int = 512) -> str:
+        self._load()
+        prompt = self._tok.apply_chat_template(messages, tokenize=False,
+                                               add_generation_prompt=True)
+        ids = self._tok(prompt, return_tensors="pt").input_ids.to(self._model.device)
+        # stop at the turn boundary and the tool separator so we don't generate
+        # past a complete tool call
+        stops = [self._tok.convert_tokens_to_ids("<|im_end|>"),
+                 _SEP_CHARS, _SEP_LITERAL]
+        stops = [s for s in stops if isinstance(s, int) and s is not None
+                 and s != self._tok.unk_token_id]
+        gen = dict(max_new_tokens=max_new_tokens, do_sample=False,
+                   pad_token_id=self._tok.pad_token_id)
+        if stops:
+            gen["eos_token_id"] = stops[0]
+            gen["stopping_criteria"] = None
+        out = self._model.generate(ids, **gen)
+        return self._tok.decode(out[0][ids.shape[1]:], skip_special_tokens=False)
+
+    def wrap_result(self, result: str) -> str:
+        return format_tool_result(result, self.variant)
+
+
 class ApiDriver(ModelDriver):
     """Drive an OpenAI-compatible endpoint (e.g. the lan lm-fleet-router).
 
@@ -397,10 +487,19 @@ def run_task(driver: ModelDriver, task: Task, model_name: str, runner_name: str,
                 res.completed = True
                 messages.append({"role": "assistant", "content": text})
                 break
+            wrap = getattr(driver, "wrap_result",
+                           lambda r: f"<tool_result>{r}</tool_result>")
             tool_msgs = []
             for c in calls:
-                result = env.execute(c["name"], c["args"])
-                tool_msgs.append(f"<tool_result>{result}</tool_result>")
+                # error recovery: if args are unparseable, tell the model so it
+                # can self-correct (mirrors the model's trained recovery behavior)
+                if c["args"] is None:
+                    result = (f"ERROR: could not parse arguments for tool "
+                              f"'{c['name']}'. Re-emit a valid JSON object "
+                              f"with the correct argument names.")
+                else:
+                    result = env.execute(c["name"], c["args"])
+                tool_msgs.append(wrap(result))
                 res.transcript.append({"role": "tool", "name": c["name"],
                                        "content": result})
             messages.append({"role": "assistant", "content": text})
@@ -429,18 +528,21 @@ def register_runner(name: str, fn: Callable[..., ModelDriver]) -> None:
 def make_driver(runner: str, **kw) -> ModelDriver:
     """Construct a ModelDriver for a named runner.
 
-    'self'   -> local HF checkpoint (kw: model_path, rocm)
-    'api'    -> OpenAI-compatible endpoint (kw: base_url, model, api_key)
-    'hermes' -> hermes-agent harness (kw: hermes_dir)  [wired by register_runner]
-    'subagent' -> optimized subagent (future)          [wired by register_runner]
+    'self'     -> local HF checkpoint (kw: model_path, rocm)
+    'subagent' -> optimized model-specific loop (kw: model_path, rocm, variant)
+    'api'      -> OpenAI-compatible endpoint (kw: base_url, model, api_key)
+    'hermes'   -> hermes-agent harness (kw: hermes_dir)  [wired by register_runner]
     """
     if runner in RUNNERS:
         return RUNNERS[runner](**kw)
     if runner == "self":
         return LocalDriver(kw["model_path"], rocm=kw.get("rocm", False))
+    if runner == "subagent":
+        return OptimizedDriver(kw["model_path"], rocm=kw.get("rocm", False),
+                               variant=kw.get("variant", "auto"))
     if runner == "api":
         return ApiDriver(kw["base_url"], kw["model"], api_key=kw.get("api_key", ""))
-    raise ValueError(f"unknown runner: {runner} (known: {sorted(set(RUNNERS)|{'self','api'})})")
+    raise ValueError(f"unknown runner: {runner} (known: {sorted(set(RUNNERS)|{'self','subagent','api'})})")
 
 
 class HermesDriver(ModelDriver):

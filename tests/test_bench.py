@@ -7,6 +7,7 @@ and the run-to-completion loop.
 from __future__ import annotations
 
 import json
+import importlib
 from pathlib import Path
 
 from src import bench as B
@@ -193,4 +194,63 @@ def test_hermes_driver_run_one(monkeypatch, tmp_path):
     assert res.completed is True
     assert res.success is True
     assert res.checks_passed == 1
+
+
+def test_parse_canonical_base_format():
+    B = importlib.import_module("src.bench")
+    text = ('planning...\n<tool_call>\n'
+            '{"name": "bash", "arguments": {"command": "ls -la"}}\n'
+            '</tool_call>')
+    calls = B.parse_tool_calls(text)
+    assert len(calls) == 1
+    assert calls[0]["name"] == "bash"
+    assert calls[0]["args"]["command"] == "ls -la"
+
+
+def test_format_tool_result_variants():
+    B = importlib.import_module("src.bench")
+    assert B.format_tool_result("x", "base") == "<tool_response>\nx\n</tool_response>"
+    assert B.format_tool_result("x", "finetune") == "<tool_result>x</tool_result>"
+
+
+def test_optimized_driver_variant_autodetect():
+    import importlib
+    B = importlib.import_module("src.bench")
+
+    class FakeOpt(B.OptimizedDriver):
+        def _load(self):
+            self._model = object()
+            self._tok = None
+    # base path -> variant 'base'
+    d = FakeOpt("/media/scott/SSD_4TB/models-fast/RefinedNeuro/RefinedToolCallV5-3b")
+    assert d.variant == "base"
+    assert d.wrap_result("o") == "<tool_response>\no\n</tool_response>"
+    # finetune path -> variant 'finetune'
+    d2 = FakeOpt("/media/scott/data/.../toolcall-v5-3b-ssd-merged")
+    assert d2.variant == "finetune"
+    assert d2.wrap_result("o") == "<tool_result>o</tool_result>"
+
+
+def test_run_task_uses_wrap_result_for_subagent(tmp_path):
+    import importlib
+    B = importlib.import_module("src.bench")
+
+    class FakeOpt(B.OptimizedDriver):
+        def __init__(self):
+            self.variant = "base"
+        def generate(self, messages, max_new_tokens=512):
+            # emit a canonical base-format call
+            return ('<tool_call>\n{"name":"write",'
+                    '"arguments":{"filePath":"g.txt","content":"hi"}}\n</tool_call>')
+        def wrap_result(self, r):
+            return B.format_tool_result(r, self.variant)
+
+    task = B.Task.from_dict(json.loads(
+        '{"id":"t9","prompt":"x",'
+        '"checks":[{"kind":"file_exists","path":"g.txt"},'
+        '{"kind":"file_contains","path":"g.txt","expect":"hi"}]}'))
+    res = B.run_task(FakeOpt(), task, "opt", "subagent", sandbox_root=tmp_path)
+    assert res.success
+    # the recovery/error path is exercised when args are None
+    assert res.checks_passed == 2
 

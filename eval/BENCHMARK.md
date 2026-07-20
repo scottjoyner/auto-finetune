@@ -12,9 +12,48 @@ concrete checkers.
 | `self` | self-contained harness in this repo: parses `<tool_call>`, runs bash+file tools in a temp sandbox | a local HF dir (base / finetune / merged) |
 | `api` | OpenAI-compatible endpoint (e.g. the lan lm-fleet-router) | `--base-url` + `--api-model`, or `--fleet` to auto-pick a large model |
 | `hermes` | delegates to the hermes-agent harness on this machine (`mini_swe_runner.py`) — Hermes runs its OWN model+tool loop | whatever Hermes is configured with |
+| `subagent` | **optimized** harness built specifically for RefinedToolCallV5 variants (see below) | a local HF dir (base / finetune / merged) |
 
-The `self` and `api` runners share the same tool protocol, so a task suite is
-directly comparable between a 3B finetune and a 35B reference model.
+The `self`, `api`, and `subagent` runners share the same tool protocol and task
+suite, so they are directly comparable (3B finetune vs 35B reference vs the
+optimized loop on the same model).
+
+## `subagent` — the optimized harness
+
+This is the model-specific loop (the "third runner" you asked for), built to
+wring the best tool-calling out of RefinedToolCallV5. Key insight that drove it:
+the model has **two** tool-call formats depending on variant —
+
+  * **finetunes** were trained on the simpler dataset format:
+    `<tool_call name="x" call_id="y">{json}\u276E\u276E\u276E` then `<tool_result>...</tool_result>`
+  * **the base model** emits the chat-template format:
+    `<tool_call>{"name":..,"arguments":..}</tool_call>` and expects results as
+    `<tool_response>...</tool_response>`
+
+The generic `self` runner only understood the finetune format. `subagent`
+(`OptimizedDriver`) adds:
+
+  * **per-variant result formatting** — feeds `<tool_result>` to finetunes (what
+    they were trained on) but `<tool_response>` to the base model (what its chat
+    template expects). This alone changes call fidelity.
+  * **explicit stop sequences** — stops at `<|im_end|>` and the tool separator so
+    the model doesn't ramble past a complete call.
+  * **error recovery** — when args are unparseable, a structured recovery message
+    is returned (mirrors the model's advertised 0.896 recovery rate) so it can
+    self-correct instead of the loop dying.
+  * **variant autodetect** — `base` if the checkpoint path is the bare
+    `RefinedToolCallV5-3b` dir, else `finetune` (override with `--variant=`).
+
+```bash
+python -m src.cli bench --runner=subagent \
+  --model=/media/scott/SSD_4TB/models-fast/RefinedNeuro/RefinedToolCallV5-3b
+python -m src.cli bench --runner=subagent \
+  --model=/media/scott/data/finetune-staging/outputs/checkpoints/toolcall-v5-3b-ssd-merged
+```
+
+Intended to later run as a subagent inside opencode / hermes-agent; for now it
+is a drop-in `bench` runner so you can measure the optimization's impact
+(`self` vs `subagent` on the same checkpoint).
 
 ## Task spec (`eval/tasks/*.jsonl`)
 
@@ -45,14 +84,14 @@ messages in `replay_context` if needed; the verifier checks the end-state.)
 # self-contained, local 3B base model (needs GPU when not training)
 python -m src.cli bench --runner=self --model=/media/scott/SSD_4TB/models-fast/RefinedNeuro/RefinedToolCallV5-3b
 
+# the optimized loop on the same base model
+python -m src.cli bench --runner=subagent --model=/media/scott/SSD_4TB/models-fast/RefinedNeuro/RefinedToolCallV5-3b
+
 # a finetune / merged variant
 python -m src.cli bench --runner=self --model=/media/scott/data/finetune-staging/outputs/checkpoints/toolcall-v5-3b-ssd-merged
 
 # large reference via the lan fleet router (auto-pick a big model)
 python -m src.cli bench --runner=api --fleet --fleet-hint=35b
-
-# or pin explicitly
-python -m src.cli bench --runner=api --base-url=http://100.78.106.121:1234/v1 --api-model=qwen3.6-35b-a3b-claude-4.7-opus-reasoning-distilled-apex
 
 # hermes harness (uses Hermes's own configured model)
 python -m src.cli bench --runner=hermes
@@ -67,9 +106,10 @@ side.
 
 ## Notes / caveats
 - The local `self` harness uses the RefinedToolCallV5 `<tool_call name=..>json\u276E\u276E\u276E`
-  format (parsed tolerantly for both the real char and the escaped form).
+  format (parsed tolerantly for both the real char and the escaped form) AND the
+  base model's canonical `<tool_call>json</tool_call>` format.
+- `subagent` feeds results back in the variant-correct wrapper
+  (`<tool_result>` for finetunes, `<tool_response>` for base).
 - `hermes` runner trusts Hermes's own `completed` flag; pass `--sandbox_root` to
   also run our verifiers against the dir Hermes wrote into.
-- Subagent runner (optimized harness for this model, run inside opencode/hermes)
-  is a future extension — register it via `bench.register_runner("subagent", ...)`.
 - Keep all artifacts on the local data drive; the fleet endpoints are read-only.
