@@ -74,5 +74,7 @@ def test_build_sheet_stratified_sample(tmp_path: Path) -> None:
     by_id = {r["session_id"]: r for r in rows}
     assert by_id["f1"]["pred_is_error"] is True
     assert by_id["o1"]["pred_is_error"] is False
-    assert by_id["f1"]["pred_bucket"] == "debug"
+    # f1 is a 1-tool errored session with no debug intent -> reasoning
+    # (the old cascade forced any shell error -> debug, which over-predicted)
+    assert by_id["f1"]["pred_bucket"] == "reasoning"
     assert by_id["o1"]["pred_bucket"] == "reasoning"

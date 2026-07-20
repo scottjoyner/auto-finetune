@@ -61,21 +61,44 @@ Per-bucket (precision / recall / support):
 
 4. **Difficulty heuristic is solid (0.97).** Keep it.
 
-## Recommended fixes (next lift — CPU-only)
+## Fixes A+B implemented (this turn, CPU-only)
 
-- **A. Tighten error detection.** Only treat `_is_error` as a failure
-  when the marker is in a *tool result* of an **executable** tool
-  (`terminal`/`bash`/`execute_code`) or an explicit `error` field — NOT
-  in `read`/`read_file`/file-content outputs (which routinely contain
-  the word "error"). This alone should cut most FPs and shrink the
-  `debug` over-prediction.
-- **B. Refine the bucket cascade.** Require `debug` *intent*
-  (`fix`/`bug`/`traceback`/`why`) rather than mere `has_error AND
-  shell`; emit `shell`/`refactor`/`docs` when those dominate.
-- **C. Re-run the pipeline after A+B**: `analyze` -> `verify` ->
-  `verify-exec` -> `mine-repairs` -> `bench-build`, so the balanced
-  corpus, the failures set, and the 27 repair pairs reflect corrected
-  labels.
+- **A.** `extract_features` now skips `_is_error` on `read`-group
+  tool outputs (file contents routinely contain the word "error").
+  Explicit `error` fields still count.
+- **B.** `classify_bucket` cascades edit/search/shell/data/docs
+  *before* the `has_error -> debug` fallback, and `debug` only
+  wins outright on debug *intent* — so an errored session that
+  edits files is classified by its edit/file nature, not force-bucketed
+  to `debug`.
+
+Re-validated with the **same 30 hand-labels** (recomputed
+predictions only):
+
+| metric | before | after |
+| --- | --- | --- |
+| bucket accuracy | 0.50 | **0.60** |
+| error precision | 0.53 | **0.57** (fp 7→6) |
+| error recall | 1.00 | 1.00 (tp=8, fn=0) |
+| difficulty accuracy | 0.97 | 0.97 |
+| `failures.jsonl` count | 1338 | **1249** (−89 false positives) |
+| `debug` sessions | inflated (dominant) | **645** (reasoning 1505 now largest) |
+| debug precision | 0.29 | **0.50** |
+
+Pipeline re-run (all CPU-only, writes only to staging `analysis/`):
+`analyze` (2945 sessions → 80 tasks, 1249 failures) → `strata`
+(refreshed balanced 10k) → `verify` (49/80 = 0.613, unchanged) →
+`verify-exec` → `mine-repairs` (**27** repair pairs, unchanged) →
+`bench-build` (**49** verifiable tasks, unchanged). The verify /
+repair / benchmark counts are stable because they rest on *file-target*
+signals, not the `debug` over-prediction — so the earlier
+deliverables stay valid.
+
+**Remaining (optional):** a few `shell`/`multi-file-refactor` sessions
+are still misrouted (precision 0.50 / 0.33) and `docs`/`mixed`
+are rarely emitted; tightening intent keywords or adding an
+`automation`/`cron` bucket would help but the marginal value
+is small now that the dominant `debug` inflation is fixed.
 
 The validation harness (`src/validate_classifier.py`) is committed and
 reproducible; only the hand-labeling step is manual.

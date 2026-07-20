@@ -146,10 +146,19 @@ def extract_features(rec: dict) -> dict:
                 exts |= _exts_from_input(p.get("input"))
                 paths |= _paths_from_input(p.get("input"))
                 out = p.get("output")
-                if isinstance(out, str) and _is_error(out):
-                    errors.append(out)
-                elif isinstance(out, dict) and _is_error(str(out.get("content", ""))):
-                    errors.append(str(out.get("content", "")))
+                # Only treat an *executable-tool* result as a failure. Read
+                # tools return file CONTENTS, which routinely contain the word
+                # "error" (docstrings, logs) -> false positives. An explicit
+                # `error` field always counts.
+                grp = _group(name)
+                if isinstance(out, str):
+                    if grp != "read" and _is_error(out):
+                        errors.append(out)
+                elif isinstance(out, dict):
+                    if out.get("error"):
+                        errors.append(str(out.get("error")))
+                    elif grp != "read" and _is_error(str(out.get("content", ""))):
+                        errors.append(str(out.get("content", "")))
             elif t == "text" and isinstance(p.get("text"), str):
                 txt = p["text"]
                 total_chars += len(txt)
@@ -191,7 +200,8 @@ def classify_bucket(f: dict) -> str:
 
     if g.get("web", 0) > 0:
         return "web-research"
-    if ({"debug"} & intent) or (f["has_error"] and g.get("shell", 0) > 0):
+    # debug intent wins even when the session also edits files
+    if {"debug"} & intent:
         return "debug"
     if g.get("edit", 0) > 0:
         return "multi-file-refactor" if f["distinct_files"] >= 3 else "file-edit"
@@ -206,6 +216,9 @@ def classify_bucket(f: dict) -> str:
         return "docs"
     if f["n_tool"] <= 1:
         return "reasoning"
+    # only fall back to debug for errored sessions no other signal claimed
+    if f["has_error"]:
+        return "debug"
     return "mixed"
 
 
