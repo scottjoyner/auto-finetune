@@ -100,5 +100,40 @@ are rarely emitted; tightening intent keywords or adding an
 `automation`/`cron` bucket would help but the marginal value
 is small now that the dominant `debug` inflation is fixed.
 
+### Root cause of the residual error false-positives
+
+The 6 error FPs are *not* a bucket problem — they are `_ERROR_MARKERS`
+matching the substring `"error:"` inside **benign** content:
+
+- 3× `cron_e2d25a4…` (true `reasoning`): a cron status JSON whose
+  `"error":` *key* happens to contain the substring `error:` — no failure.
+- `20260601_103…` / `20260605_231…` (true `code-search` / `docs`):
+  a `search`/`read` tool returned *source code* containing `if error:`.
+- `ses_09f7b66…` (true `mixed`): a genuine `Traceback` — the hand-label
+  marked `is_error=0`, so this is **label noise**, not a classifier bug.
+
+Net: ~5 genuine FPs (all `"error:"` in code/JSON) + 1 label-noise case.
+The fix is deliberately **not** "drop `error:` from the marker list" —
+that would cripple recall on the real corpus (API/tool errors arrive as
+`{"error": "..."}`). The principled next step is to **expand the
+hand-label set** (currently 30, with one noisy row) before touching the
+heuristic, so the metric is robust enough to justify a change.
+
+### Staged launch artifacts (CPU-only prep, GPU still busy)
+
+Ready to launch the moment `nas5-20260717` frees (see harvest-safety
+rule — do **not** copy into `datasets/` while a training job holds the GPU):
+
+- `launch/focused/train.focused.jsonl` — the balanced 10k SFT mix
+  (`messages` format, directly consumable by `src.cli train --label=focused`).
+- `launch/focused/launch_focused.sh` — copies the mix into
+  `datasets/train.focused.jsonl` (new file, no clobber), sets an isolated
+  `TRAIN_OUTPUT_DIR` (`outputs/checkpoints/toolcall-v5-3b-focused`), runs
+  `train --label=focused`, then `bench-build` for the 49-task benchmark.
+- `launch/repairs/repairs.dpo.jsonl` — 27 DPO pairs
+  (`prompt` / `chosen` / `rejected`) from `mine-repairs`, ready for a
+  future contrastive run that teaches self-correction on file writes.
+  Built reproducibly by `src/repair_mix.build_dpo_mix` (tested).
+
 The validation harness (`src/validate_classifier.py`) is committed and
 reproducible; only the hand-labeling step is manual.
