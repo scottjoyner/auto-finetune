@@ -54,6 +54,10 @@ auto-finetune/
 | Benchmark | `python -m src.cli bench` / `bench-matrix` | Agentic "did-the-task-get-done?" benchmark |
 | All | `./launch-next.sh --loop` then `./post-queue.sh` | Full train→eval→merge→benchmark automation |
 
+> **Data harvesting (extract → clean → format) is documented separately in
+> [`HARVEST.md`](HARVEST.md)** — including how to harvest on CPU *while* a GPU
+> training run is live without disturbing it.
+
 ## The agentic benchmark (`src/bench.py`)
 
 `eval`/`loss` only say *"does it look like the training data?"*. The benchmark

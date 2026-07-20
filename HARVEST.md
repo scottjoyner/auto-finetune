@@ -1,0 +1,157 @@
+# Harvesting procedure (data prep, CPU-only)
+
+"Harvesting" is the data-collection half of the pipeline: pull real agent
+sessions out of the opencode / Hermes session stores, normalize them, and turn
+them into training datasets. It is **pure CPU work** — no GPU — so it is the
+right thing to run *while a training run occupies the GPU*.
+
+```
+extract  →  clean  →  format  →  combine  →  eval-split   →  (training consumes the datasets)
+ (raw)      (cleaned) (datasets/*.jsonl)            (eval/held-out-<label>.jsonl)
+```
+
+This file documents the *procedure*, the *safety rules* learned the hard way,
+and a *future extension* (task-bucket classification). See `README.md` for the
+DB schema and the corruption workaround.
+
+---
+
+## 0. Environment
+
+```bash
+export PATH="/media/scott/data/finetune-venv/bin:$PATH"
+export PYTHONPATH=/home/scott/git/auto-finetune
+export HF_HOME=/media/scott/data/finetune-staging/hf-home
+export TMPDIR=/media/scott/data/finetune-staging/tmp
+cd /home/scott/git/auto-finetune
+```
+
+All outputs land on the **local** data drive (`/media/scott/data/finetune-staging/data/{raw,cleaned,datasets}`),
+never on the network mounts, so harvesting never contends with training's
+checkpoint writes.
+
+---
+
+## 1. Where the data lives (and what is worth reading)
+
+| Source | Path | New data? | Notes |
+|--------|------|-----------|-------|
+| Live opencode | `/media/scott/SSD_4TB/opencode/opencode.db` (26 GB) | **Yes** | The only growing opencode store. Corrupt (`database disk image is malformed`) — `CorruptDB` reads it row-by-row. |
+| Live Hermes | `/media/scott/SSD_4TB/hermes-home/.hermes/state.db` (1.2 GB) | **Yes** | Hermes canonical store; harvest with the `hermes` command. |
+| NAS5 snapshots | `/media/scott/NAS5/opencode/opencode*.db` (157 GB + 55 GB + …) | **No** | Static (last modified Jul 13–17). Already harvested. Re-reading hammers NAS5 for zero new sessions — **skip**. |
+
+**Key rule:** the *only* sources of genuinely new sessions are the two live
+`SSD_4TB` DBs. Target them; do not re-scan the NAS5 snapshots.
+
+Both live DBs are in **WAL mode** (`opencode.db-wal` / `-shm` present), so a
+read-only extractor does **not** block opencode's own writes to your live
+session store. Reading them is safe.
+
+---
+
+## 2. Safety rules (GPU training must stay live)
+
+1. **Never overwrite `datasets/` while a training run is reading it.**
+   HuggingFace jsonl loaders memory-map the file; replacing
+   `train.<label>.jsonl` mid-run can crash the live training. So:
+
+   - **During training:** run only `extract` + `clean` (they touch `raw/` and
+     `cleaned/`, never `datasets/`).
+   - **When training is idle:** run `format` / `combine` / `eval-split` to
+     actually produce the `train.*.jsonl` files.
+
+2. **Read the source DBs read-only; never write to a network mount.** All
+   harvested artifacts go to local `/media/scott/data`.
+
+3. **Confirm the GPU is live and there is disk headroom** before/after:
+   ```bash
+   rocm-smi --showuse 2>/dev/null | grep -A1 "GPU use"   # expect ~100%
+   df -h /media/scott/data                                # ~588G free as of last run
+   ```
+
+---
+
+## 3. Commands (exact)
+
+### 3a. During training — harvest + clean only (safe)
+
+```bash
+# opencode: just the live SSD_4TB store (skip the static NAS5 snapshots)
+python -m src.cli extract --label=ssd
+
+# Hermes: the live state.db
+python -m src.cli hermes
+
+# Normalize everything in raw/ -> cleaned/  (~1 min for ~2500 sessions)
+python -m src.cli clean
+```
+
+`extract --label=ssd` writes `raw/ssd/`; `hermes` writes `raw/hermes_*.json`.
+`clean` emits `cleaned/` (flat, mostly Hermes) plus per-source subdirs
+(`ssd`, `nas5-*`, `opencode-portfolio`, `hermes-reasoning`).
+
+> If a prior harvest already exists, `extract` is idempotent (files are named
+> by session id); it adds only sessions created since the last pass. The live
+> opencode store is usually already caught up; the live Hermes store is where
+> the new sessions appear.
+
+### 3b. When training is idle — turn cleaned data into datasets
+
+```bash
+python -m src.cli format                 # train.jsonl (merged) + train.<subdir>.jsonl
+python -m src.cli format --source=hermes # train.hermes.jsonl
+python -m src.cli format --label=opencode-all   # train.opencode-all.jsonl (merged opencode subdirs)
+python -m src.cli combine                # train.combined.jsonl (deduped union of all labels)
+# carve held-out splits the evaluator expects, per label:
+for L in ssd nas5-main nas5-20260717 nas5-old-broken nas5-recover-old \
+         opencode-portfolio hermes-reasoning opencode-all combined; do
+  python -m src.cli eval-split --label=$L --frac=0.1 || true
+done
+```
+
+`launch-next.sh` then trains each label in turn
+(`ssd → nas5-main → nas5-20260717 → opencode-all → opencode-portfolio →
+hermes-reasoning → combined`) and `post-queue.sh` finishes with a
+`bench-matrix --preset=all` sweep.
+
+---
+
+## 4. Verify a harvest
+
+```bash
+echo "raw/ssd:       $(ls /media/scott/data/finetune-staging/data/raw/ssd 2>/dev/null | wc -l)"
+echo "raw/hermes:    $(ls /media/scott/data/finetune-staging/data/raw/hermes_* 2>/dev/null | wc -l)"
+echo "cleaned:       $(ls /media/scott/data/finetune-staging/data/cleaned/*.json 2>/dev/null | wc -l)"
+echo "datasets (untouched during training):"
+ls /media/scott/data/finetune-staging/data/datasets/*.jsonl | xargs -n1 basename | tr '\n' ' '
+```
+
+---
+
+## 5. Future: classify sessions into task buckets
+
+The current buckets are by **source** (`ssd`, `nas5-main`, `hermes-reasoning`,
+…). A more useful axis is **task type** — what the agent was actually doing —
+so we can train or weight specialized corpora (e.g. a "shell-heavy" adapter, a
+"multi-file refactor" adapter) and build a balanced combined corpus.
+
+This is doable on CPU with a **deterministic heuristic classifier** (no LLM
+needed while the GPU is busy):
+
+- **Features per cleaned session:** tool-call histogram (`bash`, `read`,
+  `write`, `edit`/`patch`, `grep`/`glob`, `web`/`fetch`, `python`, …); file
+  extensions touched (`*.py`, `*.md`, `*.json`, `*.csv`, `*.sh`, …); the
+  user's intent keywords in the first message/title (`fix`, `debug`,
+  `refactor`, `implement`, `search`, `explain`, `test`, …); turn count;
+  tool-call diversity; presence of error/traceback text (failure signal).
+- **Buckets:** `shell`, `file-edit`, `multi-file-refactor`, `code-search`,
+  `debug`, `web-research`, `data-analysis`, `docs`, `reasoning/math`,
+  `mixed`/`general`.
+- **Output:** tag each session with `task_type` and emit
+  `train.<bucket>.jsonl` (into a *staging* dir during training, not
+  `datasets/`, to respect rule §2.1), plus a stats report (bucket sizes,
+  overlap, dedup rate).
+
+Later, when the GPU is free, an LLM-based classifier (or a small fine-tuned
+tagger) can replace the heuristics for finer buckets. The heuristic pass is
+the right first iteration and is fully CPU-safe.
