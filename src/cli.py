@@ -160,6 +160,29 @@ def main(argv: list[str]) -> int:
                   f"(unsupported_checks={s['unsupported_checks']})")
             print(f"[verify] report -> {out}")
             return 0
+        if cmd == "verify-exec":
+            from src.verify import summarize
+            from src.verify_exec import verify_all_exec
+            analysis_dir = os.path.join(os.path.dirname(cfg.path("cleaned_dir")), "analysis")
+            tasks = _parse_str_flag(argv, "--tasks") or os.path.join(analysis_dir, "auto-tasks.jsonl")
+            out = _parse_str_flag(argv, "--out") or os.path.join(analysis_dir, "verify-exec-report.jsonl")
+            timeout = _parse_int_flag(argv, "--timeout") or 30
+            if not os.path.exists(tasks):
+                print(f"[error] tasks not found: {tasks} (run `analyze` first)")
+                return 2
+            print("[verify-exec] WARNING: replays recorded bash/code in a temp dir; "
+                  "destructive/network commands are skipped (denylist).")
+            results = verify_all_exec(tasks, cfg.path("cleaned_dir"), timeout=timeout)
+            os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+            with open(out, "w") as f:
+                for r in results:
+                    f.write(json.dumps(r) + "\n")
+            s = summarize(results)
+            print(f"[verify-exec] {s['n_tasks']} tasks | sessions_found={s['sessions_found']} "
+                  f"checks_passed={s['checks_passed']} | pass_rate={s['pass_rate']} "
+                  f"(unsupported_checks={s['unsupported_checks']})")
+            print(f"[verify-exec] report -> {out}")
+            return 0
         if cmd == "train":
             from src.train import main as run
             dry = "--dry-run" in argv
@@ -484,7 +507,7 @@ def main(argv: list[str]) -> int:
         print(f"[error] {e}")
         return 2
     print(__doc__)
-    print("Commands: extract | hermes | clean | format | combine | analyze | strata | verify | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | all")
+    print("Commands: extract | hermes | clean | format | combine | analyze | strata | verify | verify-exec | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | all")
     print("Flags:    --source=hermes|opencode  --label=<name>  --all-split  --dry-run  --max-examples=<n>  --frac=<held-out-frac>  --loss-only  --report  --metric=<loss|tool_exact>")
     print("Analyze:  analyze [--out=<dir>]   strata [--out=<dir>] [--bucket-map=<json>] [--balance] [--cap=<n>]")
     print("Bench:    --runner=self|subagent|api|hermes|local-chat  --model=<dir>  --tasks=<jsonl>  --fleet [--fleet-hint=]  --base-url=  --api-model=")

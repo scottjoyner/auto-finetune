@@ -112,10 +112,16 @@ def _run_check(check: dict, workspace: str) -> tuple[bool, str]:
     if kind == "file_contains":
         path = os.path.basename(check.get("path") or "")
         expect = check.get("expect") or ""
-        dest = os.path.join(workspace, path)
-        if not os.path.exists(dest):
+        # walk the workspace subtree: replayed bash/code may create the
+        # file in a subdir rather than at the workspace root.
+        hit = None
+        for root, _dirs, files in os.walk(workspace):
+            if path in files:
+                hit = os.path.join(root, path)
+                break
+        if not hit:
             return False, f"file not found: {path}"
-        text = Path(dest).read_text(errors="replace")
+        text = Path(hit).read_text(errors="replace")
         if expect in text:
             return True, "ok"
         return False, f"snippet not in {path}"

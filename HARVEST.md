@@ -191,6 +191,28 @@ rest create files via bash heredocs / `process` and need an **execution
 sandbox** to verify (out of scope for the static replay). The pass-rate is a
 trackable metric — re-run after any `derive_task` change.
 
+### Exec replay (`verify-exec`, opt-in, guarded)
+
+`python -m src.cli verify-exec` (`src/verify_exec.py`) goes one step
+further: after the static replay it ALSO runs the recorded
+`bash`/`terminal`/`execute_code` tool calls in an **isolated temp dir**
+(cwd = throwaway dir, deleted after; per-command timeout). A denylist
+refuses to run destructive or network-egress patterns (`rm -rf`, `sudo`,
+`dd`, `mkfs`, `git push`, `curl`, `wget`, `ssh`, `scp`, `pip`/`npm`/
+`apt`, `/media` writes, …) — those tasks are reported as `blocked`
+rather than executed. It is CPU-only (no GPU) and never touches
+`datasets/`.
+
+**Honest ceiling:** on the live 80-task corpus, `verify-exec` does NOT
+raise the pass-rate above 61%. The remaining 31 tasks create their
+files at **absolute / remote paths** (`/home/.../fleet.py`, `ssh`/
+`docker`/`curl`) which a cwd-isolated replay cannot relocate into the
+check workspace. Reaching 100% needs a real **container sandbox** that
+bind-mounts the original project directories (so absolute writes land
+inside the sandbox) — deliberately out of scope here. The guarded
+executor is still useful for future harvests whose tasks use relative
+shell/python file creation.
+
 Later, when the GPU is free, an LLM-based classifier (or a small fine-tuned
 tagger) can replace the heuristics for finer buckets. The heuristic pass is
 the right first iteration and is fully CPU-safe.
