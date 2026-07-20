@@ -8,10 +8,12 @@ from src.bench import (
     ModelDriver,
     Task,
     ToolEnv,
+    bench_suite,
     build_auto_bench,
     load_tasks,
     run_task,
 )
+from src.parsers import _SEP_CHARS
 
 
 def _write(path: str, text: str) -> None:
@@ -98,3 +100,72 @@ def test_run_task_end_to_end_with_fake_driver(tmp_path: Path) -> None:
     res = run_task(driver, task, "fake", "fake", sandbox_root=tmp_path)
     assert res.success, res.transcript
     assert res.completed
+
+
+# ── runner smoke tests (CPU, dummy driver — prove the tool loop
+#    + sandbox + verifier are wired end-to-end without a real model) ──
+_CALL = ('<tool_call name="write" call_id="c1">'
+        '{"filePath": "answer.txt", "content": "hello"}'
+        + _SEP_CHARS)  # RefinedToolCallV5 separator terminates the call
+
+
+class _DummyDriver(ModelDriver):
+    """Returns one tool call, then a plain completion (no call)."""
+
+    def __init__(self):
+        self.n = 0
+
+    def generate(self, messages, max_new_tokens=512):
+        self.n += 1
+        return _CALL if self.n == 1 else "Task complete."
+
+
+def test_runner_smoke_pass(tmp_path: Path) -> None:
+    task = Task(id="t1", prompt="write answer.txt with hello", kind="exec",
+                checks=[{"kind": "file_contains", "path": "answer.txt",
+                         "expect": "hello"}])
+    root = tmp_path / "sandbox"
+    res = run_task(_DummyDriver(), task, "dummy", "self", sandbox_root=root)
+    assert res.success, res.error or res.transcript
+    assert res.checks_passed == 1 and res.checks_total == 1
+    assert (root / "answer.txt").read_text() == "hello"
+
+
+def test_runner_smoke_fail(tmp_path: Path) -> None:
+    task = Task(id="t2", prompt="p", kind="exec",
+                checks=[{"kind": "file_contains", "path": "answer.txt",
+                         "expect": "GOODBYE"}])
+    root = tmp_path / "sandbox"
+    res = run_task(_DummyDriver(), task, "dummy", "self", sandbox_root=root)
+    assert not res.success
+    assert res.checks_passed == 0 and res.checks_total == 1
+
+
+def test_runner_blocks_destructive_cmd(tmp_path: Path) -> None:
+    call = ('<tool_call name="bash" call_id="c1">'
+            '{"command": "rm -rf /"}'
+            + _SEP_CHARS)  # RefinedToolCallV5 separator terminates the call
+
+    class _Bad(ModelDriver):
+        def __init__(self):
+            self.n = 0
+
+        def generate(self, messages, max_new_tokens=512):
+            self.n += 1
+            return call if self.n == 1 else "done"
+
+    task = Task(id="t3", prompt="p", kind="exec",
+                checks=[{"kind": "file_contains", "path": "x", "expect": "y"}])
+    root = tmp_path / "sandbox"
+    res = run_task(_Bad(), task, "dummy", "self", sandbox_root=root)
+    blob = " ".join(str(m) for m in res.transcript)
+    assert "blocked" in blob.lower(), blob[:500]
+
+
+def test_bench_suite_runs(tmp_path: Path) -> None:
+    task = Task(id="t1", prompt="p", kind="exec",
+                checks=[{"kind": "file_contains", "path": "answer.txt",
+                         "expect": "hello"}])
+    results = bench_suite(_DummyDriver(), [task], "dummy", "self")
+    assert len(results) == 1
+    assert results[0].success
