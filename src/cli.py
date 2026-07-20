@@ -205,6 +205,23 @@ def main(argv: list[str]) -> int:
                   f"(unsupported_checks={s['unsupported_checks']})")
             print(f"[verify-exec] report -> {out}")
             return 0
+        if cmd == "validate-classifier":
+            # build a hand-label sheet for the heuristic classifier
+            from src.validate_classifier import build_sheet
+            cleaned = (_parse_str_flag(argv, "--cleaned")
+                        or cfg.path("cleaned_dir"))
+            failures = (_parse_str_flag(argv, "--failures")
+                         or os.path.join(cfg.path("analysis_dir"), "failures.jsonl"))
+            out = (_parse_str_flag(argv, "--out")
+                    or os.path.join(cfg.path("analysis_dir"), "label-sheet.jsonl"))
+            n_fail = _parse_int_flag(argv, "--n-fail") or 15
+            n_ok = _parse_int_flag(argv, "--n-ok") or 15
+            n = build_sheet(cleaned, failures, out, n_fail=n_fail, n_ok=n_ok)
+            print(f"[validate-classifier] wrote {n} label-sheet rows -> {out}")
+            print("  hand-label each row's true_bucket / true_is_error / "
+                  "true_difficulty,")
+            print(f"  then: python -m src.validate_classifier score {out}")
+            return 0
         if cmd == "train":
             from src.train import main as run
             dry = "--dry-run" in argv
