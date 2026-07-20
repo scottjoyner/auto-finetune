@@ -29,13 +29,13 @@ def test_view_pulls_first_user_and_actions() -> None:
 def test_score_computes_per_bucket_and_error(tmp_path: Path) -> None:
     rows = [
         {"session_id": "a", "pred_bucket": "debug", "true_bucket": "debug",
-         "pred_is_error": True, "true_is_error": True,
+         "pred_is_error": True, "true_is_error": True, "true_cmd_error": True,
          "pred_difficulty": "hard", "true_difficulty": "hard"},
         {"session_id": "b", "pred_bucket": "debug", "true_bucket": "reasoning",
-         "pred_is_error": True, "true_is_error": False,
+         "pred_is_error": True, "true_is_error": False, "true_cmd_error": True,
          "pred_difficulty": "easy", "true_difficulty": "easy"},
         {"session_id": "c", "pred_bucket": "reasoning", "true_bucket": "reasoning",
-         "pred_is_error": False, "true_is_error": False,
+         "pred_is_error": False, "true_is_error": False, "true_cmd_error": False,
          "pred_difficulty": "easy", "true_difficulty": "easy"},
     ]
     p = tmp_path / "sheet.jsonl"
@@ -43,9 +43,16 @@ def test_score_computes_per_bucket_and_error(tmp_path: Path) -> None:
     m = score(str(p))
     assert m["n_labeled"] == 3
     assert m["bucket_accuracy"] == approx(2 / 3, abs=1e-2)
-    assert m["error_precision"] == approx(1 / 2)       # tp=1, fp=1
-    assert m["error_recall"] == 1.0                      # tp=1, fn=0
-    assert m["error_matrix"]["tn"] == 1
+    # command-error axis: a=tp, b=tp (recovered cmd error), c=tn
+    #   -> precision 1.0, recall 1.0, tn 1
+    assert m["cmd_error"]["precision"] == approx(1.0)
+    assert m["cmd_error"]["recall"] == approx(1.0)
+    assert m["cmd_error"]["tn"] == 1
+    # session-failure axis: a=tp, b=fp (recovered), c=tn
+    #   -> precision 0.5, recall 1.0, tn 1
+    assert m["session_failure"]["precision"] == approx(1 / 2)
+    assert m["session_failure"]["recall"] == approx(1.0)
+    assert m["session_failure"]["tn"] == 1
     assert m["difficulty_accuracy"] == 1.0
 
 

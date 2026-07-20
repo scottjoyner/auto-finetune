@@ -137,6 +137,9 @@ def score(sheet_path: str) -> dict:
                             "recall": round(rec, 2),
                             "support": bucket_true[b]}
 
+    def _truthy(v) -> bool:
+        return str(v).strip().lower() in ("true", "1", "yes", "t")
+
     def _err_axis(rows, pred_key, true_key):
         """Confusion matrix for one (pred, true) error axis.
 
@@ -144,14 +147,16 @@ def score(sheet_path: str) -> dict:
         (so the two axes can be scored independently as the sheet grows).
         ``pred`` is always ``pred_is_error`` (the command-level signal
         ``has_error``); the axes differ only in what truth they are
-        checked against.
+        checked against. Truth is compared as a string ("true"/"false"
+        travel through JSON), so a bare ``bool("false")`` (which is
+        True) is NOT used.
         """
         tp = fp = fn = tn = 0
         for r in rows:
             if true_key not in r or r[true_key] in ("", None):
                 continue
-            p = bool(r[pred_key])
-            t = bool(r[true_key])
+            p = _truthy(r[pred_key])
+            t = _truthy(r[true_key])
             if t and p:
                 tp += 1
             elif t and not p:
@@ -197,7 +202,4 @@ def _print_report(m: dict) -> None:
     print(f"SESSION-failure : precision={s['precision']} recall={s['recall']} "
           f"(tp={s['tp']} fp={s['fp']} fn={s['fn']} tn={s['tn']})  "
           f"[pred=has_error, mis-scoped]")
-    e = m["error_matrix"]
-    print(f"error detection  : precision={m['error_precision']} recall={m['error_recall']} "
-          f"(tp={e['tp']} fp={e['fp']} fn={e['fn']} tn={e['tn']})")
     print(f"difficulty acc   : {m['difficulty_accuracy']}")

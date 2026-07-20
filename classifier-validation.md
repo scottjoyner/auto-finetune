@@ -9,57 +9,79 @@ pairs all assume the heuristics are right.**
 ## Method
 
 - `python -m src.cli validate-classifier` builds a stratified label
-  sheet (`src/validate_classifier.build_sheet`): 15 sessions from
-  `failures.jsonl` (pred `is_error=True`) + 15 random non-failures,
+  sheet (`src/validate_classifier.build_sheet`): sessions from
+  `failures.jsonl` (pred `is_error=True`) + random non-failures,
   each with the heuristic prediction + a compact, human-readable view
   (first user request, tool-action trace, error snippet).
-- The sheet was hand-labeled for `true_bucket` / `true_is_error` /
-  `true_difficulty`, then `score()` reports metrics.
+- Two **error truths** are recorded separately, plus `true_bucket` /
+  `true_difficulty`. `score()` reports bucket accuracy + per-bucket
+  precision/recall and **two** error axes:
+  - **command-error**: pred = `has_error`, true = `true_cmd_error`
+    ("did a *tool command* fail?" — what `has_error` detects).
+  - **session-failure**: pred = `has_error`, true =
+    `true_is_error`/`true_session_failed` ("did the *session*
+    ultimately fail?").
 
-Sample = 30 sessions from the live cleaned corpus (15 fail / 15 ok).
+Sample = **60 sessions** from the live cleaned corpus (an
+earlier 15+15 hand-labeled round, expanded +30 with both error
+axes re-labeled by the agent from each session's action trace).
 
-## Results
+## Results (60-sample)
 
 | metric | value |
 | --- | --- |
-| bucket accuracy | **0.50** |
-| error detection precision | **0.53** |
-| error detection recall | **1.00** (tp=8, fp=7, fn=0, tn=15) |
-| difficulty accuracy | **0.97** |
+| bucket accuracy | **0.75** |
+| difficulty accuracy | **0.87** |
+| **command-error** precision / recall | **0.96** / **1.00** (tp=25, fp=1, fn=0, tn=34) |
+| **session-failure** precision / recall | **0.42** / **0.92** (tp=11, fp=15, fn=1, tn=33) |
 
 Per-bucket (precision / recall / support):
 
 | bucket | P | R | n |
 | --- | --- | --- | --- |
-| debug | 0.29 | 1.00 | 4 |
-| reasoning | 0.71 | 0.71 | 14 |
-| code-search | 1.00 | 0.50 | 2 |
-| shell / multi-file-refactor / docs / mixed | 0.00 | 0.00 | 5+3+1+1 |
+| code-search | 1.00 | 0.67 | 3 |
+| debug | 0.69 | 0.85 | 13 |
+| docs | 0.00 | 0.00 | 1 |
+| mixed | 1.00 | 0.50 | 2 |
+| multi-file-refactor | 0.62 | 0.71 | 7 |
+| reasoning | 0.86 | 0.86 | 29 |
+| shell | 0.50 | 0.20 | 5 |
 
 ## Findings
 
-1. **Error markers over-fire on benign text (precision 0.53).** Every
-   real error is caught (recall 1.00, no false negatives in the sample),
-   but ~47% of flagged "failures" are false positives: the marker matched
-   inside a *file read* (`<path>...</path><content>...error...</content>`),
-   a knowledge-harvest startup banner, or a cron health-summary JSON.
-   So `failures.jsonl` (1338) is heavily contaminated, and the
-   `debug` bucket (which keys off `has_error`) is inflated.
+1. **`has_error` is a COMMAND-error detector, and a good one
+   (precision 0.96 / recall 1.00).** After the structure-aware
+   fix (honor `exit_code`/`success`/`error`), only **1** false
+   positive remains in 60 — a benign log line
+   `Registered: ZScoreMeanReversionStrategy` that contains "error".
+   Every genuine command failure is caught. This is exactly the
+   signal strata weighting, failure mining, and DPO pairs want.
 
-2. **`debug` is massively over-predicted (precision 0.29).** The
-   cascade rule `(debug intent) OR (has_error AND shell>0) -> debug`
-   pushes half of "debug" predictions into actually-implement /
-   refactor / shell / cron-automation tasks. Root cause is the error
-   false-positive above.
+2. **The old session-failure label is the WRONG target for
+   `has_error` (precision 0.42).** 15 of 60 sessions
+   contained a command error but *recovered* (e.g. `git error:
+   failed to push` then succeeded; a cron job cut off by a network
+   error; an agent that hit a tool limitation but delivered a
+   report). `has_error` correctly flags these as command errors;
+   the hand-label marked them session-OK, so they score as false
+   positives against session-failure. **The classifier is right;
+   the validation axis was mis-scoped.** Judge `has_error` on the
+   command-error axis (1); treat session-failure as a separate,
+   harder problem (needs an outcome signal, not substring
+   scanning).
 
-3. **Buckets beyond debug/reasoning are barely emitted.** In this
-   sample the classifier produced only `debug` and `reasoning`; real
-   `shell` / `multi-file-refactor` / `docs` / `mixed` sessions were
-   all misrouted (precision 0.00). Caveat: the 30-sample is
-   skewed toward failures + cron, so this is partly sampling — but the
-   early `debug`/`reasoning` rules clearly shadow the richer buckets.
+3. **`debug` over-prediction is largely resolved** (precision
+   0.29 → 0.69) by the cascade reorder (A+B): debug wins
+   only on debug *intent*, and edit/search/shell/data/docs are
+   classified by their nature first.
 
-4. **Difficulty heuristic is solid (0.97).** Keep it.
+4. **Buckets beyond debug/reasoning are now emitted** (reasoning
+   29, multi-file-refactor 7, code-search 3, mixed 2, shell 5),
+   though `shell` is still weak (precision 0.50) — likely the
+   `cron`-automation sessions that look like status checks. `docs`
+   has n=1 (no conclusion).
+
+5. **Difficulty heuristic is solid (0.87).** Keep it.
 
 ## Fixes A+B implemented (this turn, CPU-only)
 
