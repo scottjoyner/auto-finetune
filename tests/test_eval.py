@@ -295,3 +295,52 @@ def test_merge_adapter(monkeypatch, tmp_path):
     res = M.merge_adapter(str(tmp_path / "toolcall-v5-3b-ssd"), "base", str(out), rocm=False)
     assert res == str(out)
     assert out.exists()
+
+
+def test_compare_probes_and_format(tmp_path, monkeypatch):
+    import os
+    from src import eval as EV
+
+    class PR:
+        def __init__(self, adapter, passed, total, n):
+            self.adapter = adapter
+            self.checks_passed = passed
+            self.checks_total = total
+            self.n_probes = n
+            self._rate = passed / total if total else 0.0
+        @property
+        def check_rate(self):
+            return self._rate
+        def as_dict(self):
+            return {"adapter": self.adapter, "check_rate": self._rate}
+
+    (tmp_path / "toolcall-v5-3b-ssd").mkdir(parents=True)
+    (tmp_path / "toolcall-v5-3b-ssd" / "adapter_config.json").write_text("{}")
+    (tmp_path / "toolcall-v5-3b-nas5-main").mkdir(parents=True)
+    (tmp_path / "toolcall-v5-3b-nas5-main" / "adapter_config.json").write_text("{}")
+    (tmp_path / "probe.jsonl").write_text(
+        json.dumps({"messages": [{"role": "user", "content": "q"}],
+                    "checks": [{"kind": "substring", "expect": "q"}]}) + "\n")
+
+    def fake_grade(adapter_path, base_model, probe_path, rocm=False,
+                   max_seq=8192, gen_max_tokens=512, label=None):
+        if adapter_path == "base":
+            return PR("base", 1, 4, 4)
+        name = os.path.basename(adapter_path)
+        if "ssd" in name:
+            return PR(name, 3, 4, 4)
+        return PR(name, 2, 4, 4)
+
+    monkeypatch.setattr(EV, "grade_probe", fake_grade)
+    monkeypatch.setattr(EV, "grade_probe_baseline",
+                        lambda *a, **k: fake_grade("base", *a, **k))
+
+    results = EV.compare_probes(str(tmp_path), "base", "probe.jsonl",
+                                ["ssd", "nas5-main"], rocm=False)
+    # base + 2 finished adapters
+    assert len(results) == 3
+    assert results[0].adapter == "base"
+    # skipped labels with no adapter_config.json are omitted
+    md = EV.format_probe_comparison(results)
+    assert "base" in md and "ssd" in md and "nas5-main" in md
+    assert "75.0%" in md  # ssd 3/4

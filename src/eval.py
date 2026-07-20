@@ -470,6 +470,44 @@ def grade_probe_baseline(base_model: str, probe_path: str, rocm: bool = False,
     return res
 
 
+def compare_probes(
+    out_base: str,
+    base_model: str,
+    probe_path: str,
+    labels: list[str],
+    rocm: bool = False,
+    label: "str | None" = None,
+) -> list[ProbeResult]:
+    """Run the curated probe across the base model AND every finished adapter,
+    side-by-side. Returns a list of ProbeResult (base first, then per-label).
+
+    Useful for a single consolidated "who beats base, and by how much" view
+    across all buckets at once. Requires GPU generation for every model, so run
+    only when training is idle. `label` scopes the probe set per bucket.
+    """
+    results: list[ProbeResult] = []
+    results.append(grade_probe_baseline(base_model, probe_path, rocm=rocm, label=label))
+    for lab in labels:
+        adapter = os.path.join(out_base, f"toolcall-v5-3b-{lab}")
+        if not os.path.exists(os.path.join(adapter, "adapter_config.json")):
+            continue
+        results.append(grade_probe(adapter, base_model, probe_path, rocm=rocm, label=label))
+    return results
+
+
+def format_probe_comparison(results: list[ProbeResult]) -> str:
+    """Render a side-by-side probe check-rate table (base vs adapters)."""
+    lines = ["## Curated probe — base vs adapters (check rate)",
+             "",
+             "| model | probes | checks passed | check rate |",
+             "| --- | ---: | ---: | ---: |"]
+    for r in results:
+        name = "base" if r.adapter == "base" else os.path.basename(r.adapter).replace("toolcall-v5-3b-", "")
+        rate = f"{r.check_rate*100:.1f}%"
+        lines.append(f"| {name} | {r.n_probes} | {r.checks_passed}/{r.checks_total} | {rate} |")
+    return "\n".join(lines)
+
+
 def write_report(
     results: list[EvalResult],
     probe_base: "ProbeResult | None" = None,

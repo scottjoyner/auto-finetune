@@ -219,6 +219,22 @@ def main(argv: list[str]) -> int:
             a = grade_probe(adapter, base, probe_path, rocm=_detect_rocm(), label=label)
             print(json.dumps({"baseline": b.as_dict(), "adapter": a.as_dict()}, indent=2))
             return 0
+        if cmd == "compare":
+            from src.eval import compare_probes, format_probe_comparison
+            from src.train import _detect_rocm
+            base = cfg.get("train", "model_name", default="Qwen/Qwen2.5-7B-Instruct")
+            out_base = "/media/scott/data/finetune-staging/outputs/checkpoints"
+            probe_path = os.path.join(os.path.dirname(__file__), "..", "eval", "probe.jsonl")
+            labels = [x for x in ("ssd", "nas5-main", "nas5-20260717", "opencode-all",
+                                   "opencode-portfolio", "hermes-reasoning", "combined")]
+            # optional scope: --label=X runs only that bucket's probes (vs base)
+            scope = label
+            print(f"[compare] running curated probes across base + finished adapters"
+                  f"{(' (scope=' + scope + ')') if scope else ''} ...")
+            results = compare_probes(out_base, base, probe_path, labels,
+                                     rocm=_detect_rocm(), label=scope)
+            print(format_probe_comparison(results))
+            return 0
         if cmd == "all":
             from src.extract_opencode import main as run_extract
             from src.extract_hermes import main as run_hermes
@@ -236,7 +252,7 @@ def main(argv: list[str]) -> int:
         print(f"[error] {e}")
         return 2
     print(__doc__)
-    print("Commands: extract | hermes | clean | format | combine | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | all")
+    print("Commands: extract | hermes | clean | format | combine | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | all")
     print("Flags:    --source=hermes|opencode  --label=<name>  --all-split  --dry-run  --max-examples=<n>  --frac=<held-out-frac>  --loss-only  --report  --metric=<loss|tool_exact>")
     return 0
 

@@ -147,6 +147,9 @@ assert "tool_call" in gen.lower() or "bash" in gen.lower(), "merged model did no
 print("VALIDATION_OK")
 PY
 
+log "=== 6/6 side-by-side probe across ALL finished adapters ==="
+"$V/python" -m src.cli compare || log "compare returned non-zero"
+
 log "=== final report ==="
 "$V/python" -m src.cli report --label="$WINNER" || log "report returned non-zero"
 
