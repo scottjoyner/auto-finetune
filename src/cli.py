@@ -235,6 +235,49 @@ def main(argv: list[str]) -> int:
                                      rocm=_detect_rocm(), label=scope)
             print(format_probe_comparison(results))
             return 0
+        if cmd == "bench":
+            from src.bench import (load_tasks, make_driver, bench_suite,
+                                   format_bench_results)
+            from src.train import _detect_rocm
+            # runner selection
+            runner = _parse_str_flag(argv, "--runner") or "self"
+            tasks_path = (_parse_str_flag(argv, "--tasks")
+                          or os.path.join(os.path.dirname(__file__), "..",
+                                         "eval", "tasks", "sample.jsonl"))
+            tasks = load_tasks(tasks_path)
+            # which model to drive
+            model_arg = _parse_str_flag(argv, "--model")
+            if runner == "self":
+                if not model_arg:
+                    print("[error] bench --runner=self requires --model=<local HF dir>")
+                    return 2
+                driver = make_driver("self", model_path=model_arg,
+                                     rocm=_detect_rocm())
+                model_name = model_arg
+            elif runner == "api":
+                base_url = _parse_str_flag(argv, "--base-url")
+                model = model_arg or _parse_str_flag(argv, "--api-model")
+                if (not base_url or not model) and "--fleet" in argv:
+                    from src.fleet import pick_model
+                    hint = _parse_str_flag(argv, "--fleet-hint")
+                    picked = pick_model(hint)
+                    if picked is None:
+                        print("[error] bench --fleet found no online large model in endpoints.json")
+                        return 2
+                    base_url, model = picked["base_url"], picked["model"]
+                    print(f"[bench] fleet picked: {model} @ {base_url}")
+                if not (base_url and model):
+                    print("[error] bench --runner=api needs --base-url + --api-model (or --fleet)")
+                    return 2
+                driver = make_driver("api", base_url=base_url, model=model)
+                model_name = model
+            else:
+                driver = make_driver(runner, model_path=model_arg)
+                model_name = model_arg or runner
+            print(f"[bench] runner={runner} model={model_name} tasks={len(tasks)}")
+            results = bench_suite(driver, tasks, model_name, runner)
+            print(format_bench_results(results))
+            return 0
         if cmd == "all":
             from src.extract_opencode import main as run_extract
             from src.extract_hermes import main as run_hermes
@@ -252,7 +295,7 @@ def main(argv: list[str]) -> int:
         print(f"[error] {e}")
         return 2
     print(__doc__)
-    print("Commands: extract | hermes | clean | format | combine | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | all")
+    print("Commands: extract | hermes | clean | format | combine | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | all")
     print("Flags:    --source=hermes|opencode  --label=<name>  --all-split  --dry-run  --max-examples=<n>  --frac=<held-out-frac>  --loss-only  --report  --metric=<loss|tool_exact>")
     return 0
 
