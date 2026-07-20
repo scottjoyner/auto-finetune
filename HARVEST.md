@@ -216,3 +216,57 @@ shell/python file creation.
 Later, when the GPU is free, an LLM-based classifier (or a small fine-tuned
 tagger) can replace the heuristics for finer buckets. The heuristic pass is
 the right first iteration and is fully CPU-safe.
+
+### Turn the verifiable tasks into a real benchmark (`bench-build`)
+
+This is the payoff of the whole harvest: a **"did the task actually get
+done?"** benchmark set derived from real operator sessions, consumable by
+the agentic bench harness (`src/bench.py`).
+
+`python -m src.cli bench-build` (`src.bench.build_auto_bench`) reads
+`analyze`'s `auto-tasks.jsonl` and (when present) `verify-report.jsonl`,
+and writes **only the statically-verifiable subset** (tasks whose verify
+`ok` is `True`, i.e. the 49/80 that create a relative file we can check)
+into `eval/tasks/auto-verified.jsonl` in `bench.Task` format:
+
+```bash
+python -m src.cli bench-build \
+  --tasks=/media/scott/data/finetune-staging/data/analysis/auto-tasks.jsonl \
+  --verify-report=/media/scott/data/finetune-staging/data/analysis/verify-report.jsonl \
+  --out=eval/tasks/auto-verified.jsonl
+# -> [bench-build] wrote 49 verifiable tasks -> eval/tasks/auto-verified.jsonl
+```
+
+The bench harness drives a **model** through a real multi-turn tool loop in
+a throwaway sandbox (root = temp dir, deleted after) and then verifies the
+outcome with the same `file_contains` checks. Crucially, the sandbox's
+`bash` tool now reuses the **same denylist as `verify-exec`** (refuses
+`rm -rf`, `sudo`, `dd`, `ssh`, `curl`, `/media`, …) so grading a model's
+*own* shell commands is guarded, not just the operator's history.
+
+Run it across any model/runner (CPU or GPU) once a model is free:
+
+```bash
+# a local HF checkpoint (base / finetune / merged), CPU or ROCm
+python -m src.cli bench --runner=self --model=/path/to/ckpt \
+  --tasks=eval/tasks/auto-verified.jsonl
+
+# or a fleet / lmstudio reference via the OpenAI-compatible api
+python -m src.cli bench --runner=api --fleet \
+  --tasks=eval/tasks/auto-verified.jsonl
+
+# or a full matrix (local-refs | lmstudio | fleet | fast | all)
+python -m src.cli bench-matrix --preset=fast \
+  --tasks=eval/tasks/auto-verified.jsonl --report
+```
+
+**Why this is the real "done?" signal:** `verify`/`verify-exec` grade the
+*recorded operator solution*. `bench` grades *any model you point at it* on
+the same tasks — exactly the capability claim of the tool-caller LoRA. The
+gold ceiling is 49/49 (these tasks are verifiable by construction); a 3B
+finetune scoring well above a base model on this set is the deployment bar.
+
+**Run when:** these are model-inference ops (GPU or a CPU model). Building
+the set + the harness hardening here are CPU-only and safe to do while
+training runs; only the actual `bench`/`bench-matrix` runs need a model.
+

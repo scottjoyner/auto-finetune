@@ -341,6 +341,24 @@ def main(argv: list[str]) -> int:
                                      rocm=_detect_rocm(), label=scope)
             print(format_probe_comparison(results))
             return 0
+        if cmd == "bench-build":
+            # package statically-verifiable mined tasks into a bench.Task set
+            from src.bench import build_auto_bench
+            analysis_dir = cfg.path("analysis_dir")
+            at = (_parse_str_flag(argv, "--tasks")
+                   or os.path.join(analysis_dir, "auto-tasks.jsonl"))
+            vr = (_parse_str_flag(argv, "--verify-report")
+                   or os.path.join(analysis_dir, "verify-report.jsonl"))
+            out = (_parse_str_flag(argv, "--out")
+                   or os.path.join(os.path.dirname(__file__), "..", "eval",
+                                  "tasks", "auto-verified.jsonl"))
+            if not os.path.exists(at):
+                print(f"[error] auto-tasks not found: {at} "
+                      f"(run `analyze` first)")
+                return 2
+            n = build_auto_bench(at, vr if os.path.exists(vr) else None, out)
+            print(f"[bench-build] wrote {n} verifiable tasks -> {out}")
+            return 0
         if cmd == "bench":
             # register the local-chat (standard HF model) runner
             import src.drivers_localchat  # noqa: F401  (self-registers)

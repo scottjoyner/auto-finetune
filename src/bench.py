@@ -172,6 +172,18 @@ class ToolEnv:
     def _bash(self, cmd: str) -> str:
         if not cmd:
             return "ERROR: empty command"
+        # Safety: refuse destructive / network-egress commands. Bench grades a
+        # MODEL's bash, so this is the real guard (not just the recorded
+        # operator's own history that verify-exec replays). Reuses the exact
+        # denylist from src.verify_exec so both stay in lockstep.
+        try:
+            from src.verify_exec import _command_safe
+        except Exception:  # noqa: BLE001
+            _command_safe = None
+        if _command_safe is not None:
+            safe, why = _command_safe(cmd)
+            if not safe:
+                return f"ERROR: blocked command ({why})"
         r = subprocess.run(cmd, shell=True, cwd=str(self.root),
                            capture_output=True, text=True, timeout=120)
         out = (r.stdout or "") + (r.stderr or "")
@@ -216,15 +228,20 @@ class Task:
     tools: list = field(default_factory=lambda: ["bash", "read", "write", "edit", "list"])
     max_turns: int = 8
     replay_context: list = field(default_factory=list)  # optional prior messages
+    bucket: str = ""             # analysis bucket (debug/reasoning/...) if known
+    difficulty: str = ""         # analysis difficulty if known
+    source: str = ""             # where the task was mined from
 
     @classmethod
     def from_dict(cls, d: dict) -> "Task":
         return cls(
             id=d["id"], prompt=d["prompt"], kind=d.get("kind", "exec"),
             checks=d.get("checks", []), tools=d.get("tools",
-                     ["bash", "read", "write", "edit", "list"]),
+                      ["bash", "read", "write", "edit", "list"]),
             max_turns=d.get("max_turns", 8),
             replay_context=d.get("replay_context", []),
+            bucket=d.get("bucket", ""), difficulty=d.get("difficulty", ""),
+            source=d.get("source", ""),
         )
 
 
@@ -241,6 +258,69 @@ def load_tasks(path: str) -> list[Task]:
             if line:
                 tasks.append(Task.from_dict(json.loads(line)))
     return tasks
+
+
+def build_auto_bench(auto_tasks_path: str, verify_report_path: Optional[str] = None,
+                     out_path: Optional[str] = None, only_verified: bool = True) -> int:
+    """Package statically-verifiable mined tasks into a bench.Task jsonl.
+
+    Reads analyze's ``auto-tasks.jsonl`` (keys: task_id, instruction, kind,
+    checks, source, bucket, difficulty, auto) and emits bench-format ``exec``
+    tasks (id, kind, prompt, checks[, bucket, difficulty, source]) that
+    ``load_tasks`` + the bench harness consume directly. This is the
+    "did the task actually get done?" benchmark set derived from real operator
+    sessions.
+
+    If ``verify_report_path`` is given, restrict to tasks whose verify ``ok``
+    is True — the genuinely statically-verifiable subset (the real benchmark).
+    Tasks whose only checks are absolute-path (can't be reproduced in a fresh
+    sandbox) are dropped regardless. Returns the number of tasks written.
+    """
+    ok_ids = None
+    if verify_report_path and os.path.exists(verify_report_path):
+        ok_ids = set()
+        with open(verify_report_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                d = json.loads(line)
+                if d.get("ok"):
+                    ok_ids.add(d.get("task_id"))
+    tasks = []
+    with open(auto_tasks_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            d = json.loads(line)
+            tid = d.get("task_id") or d.get("id")
+            checks = d.get("checks") or []
+            if not tid or not checks:
+                continue
+            fc = [c for c in checks if c.get("kind") == "file_contains"
+                  and c.get("path") and not os.path.isabs(c.get("path", ""))]
+            if not fc:
+                continue
+            if only_verified and ok_ids is not None and tid not in ok_ids:
+                continue
+            tasks.append({
+                "id": tid,
+                "kind": "exec",
+                "prompt": d.get("instruction") or d.get("prompt") or "",
+                "checks": fc,
+                "bucket": d.get("bucket", ""),
+                "difficulty": d.get("difficulty", ""),
+                "source": d.get("source", ""),
+                "max_turns": 8,
+            })
+    out = out_path or os.path.join(os.path.dirname(__file__), "..",
+                                    "eval", "tasks", "auto-verified.jsonl")
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "w") as f:
+        for t in tasks:
+            f.write(json.dumps(t) + "\n")
+    return len(tasks)
 
 
 # ── model drivers (pluggable) ───────────────────────────────────────────────────
