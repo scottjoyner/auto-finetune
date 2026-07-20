@@ -160,6 +160,28 @@ def main(argv: list[str]) -> int:
                   f"(unsupported_checks={s['unsupported_checks']})")
             print(f"[verify] report -> {out}")
             return 0
+        if cmd == "mine-repairs":
+            # mine in-session self-repairs from failures -> contrastive pairs
+            from src.contrast import mine_repairs
+            cleaned = (_parse_str_flag(argv, "--cleaned")
+                       or cfg.path("cleaned_dir"))
+            failures = (_parse_str_flag(argv, "--failures")
+                        or os.path.join(cfg.path("analysis_dir"), "failures.jsonl"))
+            out = (_parse_str_flag(argv, "--out")
+                    or os.path.join(cfg.path("analysis_dir"), "repairs.jsonl"))
+            if not os.path.exists(failures):
+                print(f"[error] failures.jsonl not found: {failures} "
+                      f"(run `analyze` first)")
+                return 2
+            n, tax = mine_repairs(cleaned, failures, out)
+            print(f"[mine-repairs] {n} contrastive repair pairs -> {out}")
+            print(f"  repaired (in-session self-fix): {tax['repaired']}")
+            print(f"  failures w/o a file-target error: {tax['no_target']}")
+            bm = sorted(tax["by_marker"].items(), key=lambda x: -x[1])[:5]
+            bt = sorted(tax["by_tool"].items(), key=lambda x: -x[1])[:5]
+            print(f"  top error markers: {dict(bm)}")
+            print(f"  top error tools:    {dict(bt)}")
+            return 0
         if cmd == "verify-exec":
             from src.verify import summarize
             from src.verify_exec import verify_all_exec

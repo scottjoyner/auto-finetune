@@ -270,3 +270,48 @@ finetune scoring well above a base model on this set is the deployment bar.
 the set + the harness hardening here are CPU-only and safe to do while
 training runs; only the actual `bench`/`bench-matrix` runs need a model.
 
+### Mine failures into contrastive repair pairs (`mine-repairs`)
+
+`analyze` also writes `failures.jsonl` (the 1338 sessions that ended in
+error). Those are free training signal: a model that *avoids* the failing
+move and *makes* the successful one is a more robust tool-caller.
+
+`python -m src.cli mine-repairs` (`src.contrast.mine_repairs`) walks each
+failure, reconstructs its (call -> result) timeline (the cleaned records
+store only the call; the result is the next message's text), and looks for an
+**in-session self-repair** — an error step on a target file followed, later
+in the *same* session, by a successful step on that same target. That pair
+is emitted as a DPO-style record:
+
+```jsonc
+{"session": "...", "bucket": "debug", "error_tool": "write_file",
+ "target": "fleet.py", "error_marker": "error:",
+ "prompt_messages": [ /* convo up to, but excluding, the erroneous call */ ],
+ "rejected_call": {"name": "write_file", "arguments": {...}},
+ "chosen_call":  {"name": "edit",       "arguments": {...}}}
+```
+
+```bash
+python -m src.cli mine-repairs \
+  --cleaned=/media/scott/data/finetune-staging/data/cleaned \
+  --failures=/media/scott/data/finetune-staging/data/analysis/failures.jsonl \
+  --out=/media/scott/data/finetune-staging/data/analysis/repairs.jsonl
+# -> 27 contrastive repair pairs (on a 1338-failure corpus)
+```
+
+It also prints a **failure taxonomy** (which markers / tools / buckets fail
+most) so we know where the model needs the most help.
+
+**Honest scope:** only **file-targeted** tools (write/edit/patch/…) are
+matchable across steps, so terminal/debug failures with no file target fall
+into `no_target` rather than producing a weak pair. On the live corpus that
+is 1319/1338 failures — the 27 pairs are the genuinely self-correcting
+ones. Cross-session alignment (pair a failure with a *different* session that
+solved the same task) would raise the count but needs intent embeddings
+(GPU/API) and is deliberately out of scope here. The 27 are a clean seed
+for a future DPO pass; `train` is currently SFT-only, so wire a preference
+stage (or turn `chosen_call` into an SFT "repair" example) before using
+them.
+
+**Run when:** CPU-only and safe to run while training runs.
+
