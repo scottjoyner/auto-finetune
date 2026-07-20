@@ -11,3 +11,10 @@ data/datasets/
 
 # Training outputs
 outputs/
+
+# test/coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+# bench-matrix report (generated)
+eval/bench-matrix.md

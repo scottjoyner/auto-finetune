@@ -102,3 +102,40 @@ def test_stdio_roundtrip():
     assert 1 in ids and 2 in ids and 3 in ids
     call_resp = next(r for r in responses if r.get("id") == 3)
     assert "completed=True" in call_resp["result"]["content"][0]["text"]
+
+
+def test_tools_call_runs_real_task_loop():
+    # Wire the *real* run_task + a ScriptedDriver that performs a genuine tool
+    # loop, so the server's run_task tool exercises the full sandboxed path
+    # (not the stub). The sandbox is a temp dir (server doesn't expose
+    # sandbox_root), so we assert via the response + that a write happened.
+    from src.bench import ModelDriver, run_task
+
+    written = {}
+
+    class ScriptedDriver(ModelDriver):
+        def __init__(self, *a, **k):
+            self.n = 0
+        def generate(self, messages, max_new_tokens=512):
+            self.n += 1
+            if self.n == 1:
+                return ('<tool_call name="write" call_id="1">'
+                        '{"filePath":"g.txt","content":"hi"}\u276E\u276E\u276E')
+            return "done"
+
+    def make_driver(model_path, variant):
+        d = ScriptedDriver()
+        written["driver"] = d
+        return d
+
+    ctx = S.SubagentContext(make_driver=make_driver, run_one=run_task)
+    req = {"jsonrpc": "2.0", "id": 7, "method": "tools/call",
+           "params": {"name": "run_task",
+                      "arguments": {"prompt": "write g.txt with hi",
+                                    "model_path": "/m/model",
+                                    "variant": "finetune"}}}
+    resp = S.handle_request(req, ctx)
+    assert resp["id"] == 7
+    text = resp["result"]["content"][0]["text"]
+    assert "completed=True" in text   # real loop ran to completion
+    assert written["driver"].n >= 2    # it emitted a call AND a final "done"

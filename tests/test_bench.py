@@ -254,3 +254,61 @@ def test_run_task_uses_wrap_result_for_subagent(tmp_path):
     # the recovery/error path is exercised when args are None
     assert res.checks_passed == 2
 
+
+def test_run_task_error_recovery_feedbacks_message(tmp_path):
+    # When a tool call has unparseable args (args is None), the harness feeds a
+    # structured ERROR back; a self-correcting model can then re-emit valid JSON.
+    # We assert the loop surfaces the error and that a follow-up valid call works.
+    class RecoveringDriver(B.ModelDriver):
+        def __init__(self):
+            self.calls = 0
+        def generate(self, messages, max_new_tokens=512):
+            self.calls += 1
+            if self.calls == 1:
+                # malformed: no valid JSON args -> parse yields args=None
+                return '<tool_call name="write" call_id="1">{bad json}\u276E\u276E\u276E'
+            if self.calls == 2:
+                # recover with a valid call
+                return ('<tool_call name="write" call_id="2">'
+                        '{"filePath":"g.txt","content":"hi"}\u276E\u276E\u276E')
+            return "done"
+    task = B.Task.from_dict(json.loads(
+        '{"id":"t10","prompt":"x",'
+        '"checks":[{"kind":"file_exists","path":"g.txt"},'
+        '{"kind":"file_contains","path":"g.txt","expect":"hi"}]}'))
+    res = B.run_task(RecoveringDriver(), task, "m", "self", sandbox_root=tmp_path)
+    assert res.success, res.transcript
+    # the ERROR recovery message must have been sent back to the model
+    tool_msgs = [t for t in res.transcript if t.get("role") == "tool"]
+    assert any("ERROR" in (t.get("content") or "") for t in tool_msgs)
+    assert res.turns == 3  # malformed + recovered + done
+
+
+def test_verify_command_output_failure_detail(tmp_path):
+    # command_output expect missing -> failed, but detail explains
+    p, t, d = B.verify_task(tmp_path, [
+        {"kind": "command_output", "cmd": "echo yes", "expect": "NOPE"},
+        {"kind": "command_exit", "cmd": "false", "expect_code": 0},
+    ])
+    assert (p, t) == (0, 2)
+    assert any("command_output" in x["detail"] for x in d)
+    assert any("command_exit" in x["detail"] for x in d)
+
+
+def test_run_task_replay_context_prepended(tmp_path):
+    # replay tasks prepend replay_context as prior messages; ensure the loop
+    # still runs and verifies the end-state.
+    driver = FakeDriver([
+        ('<tool_call name="write" call_id="1">'
+         '{"filePath":"g.txt","content":"hi"}\u276E\u276E\u276E'),
+        "done",
+    ])
+    task = B.Task.from_dict(json.loads(
+        '{"id":"t11","kind":"replay","prompt":"continue",'
+        '"replay_context":[{"role":"user","content":"prior context"}],'
+        '"checks":[{"kind":"file_exists","path":"g.txt"}]}'))
+    res = B.run_task(driver, task, "m", "self", sandbox_root=tmp_path)
+    assert res.success
+    # first assistant turn message should follow the replay context
+    assert res.transcript[0]["role"] == "assistant"
+

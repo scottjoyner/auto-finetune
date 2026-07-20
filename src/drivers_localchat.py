@@ -138,9 +138,13 @@ def parse_native_tool_calls(text: str) -> list[dict]:
         if name is None and "function" in obj:
             fn = obj["function"]
             name = fn.get("name")
-            args = fn.get("parameters") or fn.get("arguments")
+            args = fn.get("parameters")
+            if args is None:
+                args = fn.get("arguments")
         else:
-            args = obj.get("arguments") or obj.get("parameters")
+            args = obj.get("arguments")
+            if args is None:
+                args = obj.get("parameters")
         if name:
             calls.append({"name": name, "args": args})
     return calls
