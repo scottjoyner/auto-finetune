@@ -6,8 +6,8 @@ and the run-to-completion loop.
 """
 from __future__ import annotations
 
-import json
 import importlib
+import json
 from pathlib import Path
 
 from src import bench as B
@@ -149,7 +149,7 @@ def test_format_bench_results():
 
 
 def test_cli_bench_runs_fake(monkeypatch):
-    import sys, importlib
+    import importlib
     cli = importlib.import_module("src.cli")
     B2 = importlib.import_module("src.bench")
 

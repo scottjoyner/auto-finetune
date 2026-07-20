@@ -1,15 +1,22 @@
 """Tests for src.train (backend selection, dataset loading, dry-run)."""
 from __future__ import annotations
 
+import copy
 import json
 
 import pytest
 
-from src.config import Config, _DEFAULTS
-from conftest import make_cfg
-import copy
-from src.train import (_detect_cuda, _detect_rocm, _resolve_backend, _to_messages,
-                       load_dataset, validate_dataset, TrainError, _render_sample_texts)
+from src.config import _DEFAULTS, Config
+from src.train import (
+    TrainError,
+    _detect_cuda,
+    _detect_rocm,
+    _render_sample_texts,
+    _resolve_backend,
+    _to_messages,
+    load_dataset,
+    validate_dataset,
+)
 
 
 def _cfg(**train_overrides):
@@ -156,7 +163,8 @@ def test_dry_run_writes_nothing_but_validates(tmp_path, capsys):
     monkeypatch_tok = FakeTok
 
     # Patch transformers import used inside dry-run
-    import sys, types
+    import sys
+    import types
     fake_tf = types.ModuleType("transformers")
     fake_tf.AutoTokenizer = FakeTok
     saved = sys.modules.get("transformers")

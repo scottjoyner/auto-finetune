@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import json
 
-from src.eval import parse_tool_calls, score_tool_calls, build_held_out
-
+from src.eval import build_held_out, parse_tool_calls, score_tool_calls
 
 SEP = "\\u276E\\u276E\\u276E"
 
@@ -126,8 +125,9 @@ def test_evaluate_all_and_report(monkeypatch, tmp_path):
 def test_loss_only_skips_generation(monkeypatch, tmp_path):
     """When loss_only=True the model.generate path is not exercised (no GPU
     contention with training)."""
-    import src.eval as E
     import torch
+
+    import src.eval as E
 
     held = tmp_path / "held.jsonl"
     held.write_text(json.dumps({"messages": [{"role": "user", "content": "q"},
@@ -160,7 +160,7 @@ def test_loss_only_skips_generation(monkeypatch, tmp_path):
 
 
 def test_check_evidence():
-    from src.eval import _check_evidence, parse_tool_calls
+    from src.eval import _check_evidence
     # a generated assistant turn that read the expected file and grepped
     gen = ('Let me read /home/scott/git/portfolio-management/run_production.py. '
            '<tool_call name="read" call_id="x"> {"filePath": "/home/scott/git/portfolio-management/run_production.py"} '
@@ -212,7 +212,7 @@ def test_load_probe_set_label_filter(tmp_path):
 
 
 def test_best_adapter_and_report(tmp_path):
-    from src.eval import EvalResult, ToolCallScore, write_report, best_adapter
+    from src.eval import EvalResult, ToolCallScore, best_adapter, write_report
     base = EvalResult(label="base", adapter="base", loss=3.0, n_held_out=5)
     a1 = EvalResult(label="ssd", adapter="ssd", loss=1.2, n_held_out=5)
     a2 = EvalResult(label="nas5", adapter="nas5", loss=0.9, n_held_out=5)
@@ -232,8 +232,8 @@ def test_best_adapter_and_report(tmp_path):
 
 
 def test_sanity_check_adapters(monkeypatch, tmp_path):
-    from src.eval import sanity_check_adapters
     import src.eval as E
+    from src.eval import sanity_check_adapters
     (tmp_path / "toolcall-v5-3b-ssd").mkdir()
     (tmp_path / "toolcall-v5-3b-ssd" / "adapter_config.json").write_text("{}")
     # no adapter_config for nas5 -> "missing"
@@ -263,7 +263,6 @@ def test_sanity_check_adapters(monkeypatch, tmp_path):
 def test_merge_adapter(monkeypatch, tmp_path):
     """merge_adapter should fuse the LoRA into base and save a standalone model.
     GPU-free via stubbed transformers/peft."""
-    import torch
     import src.merge as M
 
     (tmp_path / "toolcall-v5-3b-ssd").mkdir()
@@ -282,6 +281,7 @@ def test_merge_adapter(monkeypatch, tmp_path):
         pass
 
     import sys
+
     import peft as _peft
     _tf = sys.modules["transformers"]
     monkeypatch.setattr(_tf, "AutoModelForCausalLM",
@@ -299,6 +299,7 @@ def test_merge_adapter(monkeypatch, tmp_path):
 
 def test_compare_probes_and_format(tmp_path, monkeypatch):
     import os
+
     from src import eval as EV
 
     class PR:

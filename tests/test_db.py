@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import apsw
-import pytest
 
 from src.db import CorruptDB
 

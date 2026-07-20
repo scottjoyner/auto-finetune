@@ -23,10 +23,10 @@ Design notes:
 """
 from __future__ import annotations
 
-import json
 from typing import Optional
 
 from src.bench import ModelDriver
+from src.parsers import parse_native_tool_calls  # shared native-format parser
 
 _TOOL_SCHEMAS = {
     "bash": {
@@ -98,56 +98,6 @@ def _tool_schemas(names: list[str]) -> list[dict]:
     return [_TOOL_SCHEMAS[n] for n in names if n in _TOOL_SCHEMAS]
 
 
-def _balanced_brace_spans(text: str) -> list[tuple[int, int]]:
-    """Return (start, end) spans of every balanced {...} block in text."""
-    spans = []
-    depth = 0
-    start = None
-    for i, ch in enumerate(text):
-        if ch == "{":
-            if depth == 0:
-                start = i
-            depth += 1
-        elif ch == "}":
-            if depth > 0:
-                depth -= 1
-                if depth == 0 and start is not None:
-                    spans.append((start, i + 1))
-                    start = None
-    return spans
-
-
-def parse_native_tool_calls(text: str) -> list[dict]:
-    """Extract {"name", "args"} from a model's native function-call JSON.
-
-    Handles both shapes:
-      {"name": "bash", "arguments": {...}}   and
-      {"function": {"name": "bash", "parameters": {...}}}
-    Returns [] if nothing parseable is found.
-    """
-    calls = []
-    for s, e in _balanced_brace_spans(text):
-        raw = text[s:e]
-        if '"name"' not in raw and '"function"' not in raw:
-            continue
-        try:
-            obj = json.loads(raw)
-        except Exception:
-            continue
-        name = obj.get("name")
-        if name is None and "function" in obj:
-            fn = obj["function"]
-            name = fn.get("name")
-            args = fn.get("parameters")
-            if args is None:
-                args = fn.get("arguments")
-        else:
-            args = obj.get("arguments")
-            if args is None:
-                args = obj.get("parameters")
-        if name:
-            calls.append({"name": name, "args": args})
-    return calls
 
 
 class LocalChatDriver(ModelDriver):

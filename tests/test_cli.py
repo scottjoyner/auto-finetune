@@ -1,15 +1,12 @@
 """Tests for src.cli dispatch."""
 from __future__ import annotations
 
-import sys
 import copy
+import sys
 import types
 from pathlib import Path
 
-import pytest
-
 from src.cli import main as cli_main
-from src.train import TrainError
 
 
 def test_cli_help():
@@ -82,7 +79,7 @@ def test_cli_train_dry_run(tmp_path, monkeypatch):
 
 def test_cli_train_passes_label(monkeypatch):
     import src.cli as cli
-    from src.config import Config, _DEFAULTS
+    from src.config import _DEFAULTS, Config
 
     raw = copy.deepcopy(_DEFAULTS)
     cfg = Config(raw=raw)
@@ -106,7 +103,7 @@ def test_cli_train_passes_label(monkeypatch):
 
 def test_cli_clean_and_format(make_opencode_db, tmp_path, monkeypatch):
     import src.cli as cli
-    from src.config import Config, _DEFAULTS
+    from src.config import _DEFAULTS, Config
     raw = copy.deepcopy(_DEFAULTS)
     raw["sources"]["opencode"]["db_path"] = make_opencode_db()
     raw["paths"] = {"raw_dir": str(tmp_path / "raw"),
@@ -121,7 +118,7 @@ def test_cli_clean_and_format(make_opencode_db, tmp_path, monkeypatch):
 
 def test_cli_hermes_disabled(make_opencode_db, tmp_path, monkeypatch):
     import src.cli as cli
-    from src.config import Config, _DEFAULTS
+    from src.config import _DEFAULTS, Config
     raw = copy.deepcopy(_DEFAULTS)
     raw["paths"] = {"raw_dir": str(tmp_path / "raw"),
                     "cleaned_dir": str(tmp_path / "cleaned"),
@@ -133,7 +130,7 @@ def test_cli_hermes_disabled(make_opencode_db, tmp_path, monkeypatch):
 
 def test_cli_all(make_opencode_db, tmp_path, monkeypatch):
     import src.cli as cli
-    from src.config import Config, _DEFAULTS
+    from src.config import _DEFAULTS, Config
     raw = copy.deepcopy(_DEFAULTS)
     raw["sources"]["opencode"]["db_path"] = make_opencode_db()
     raw["paths"] = {"raw_dir": str(tmp_path / "raw"),
@@ -148,8 +145,8 @@ def test_cli_all(make_opencode_db, tmp_path, monkeypatch):
 def test_cli_eval_split_writes_heldout(tmp_path, monkeypatch):
     # eval-split calls build_held_out on the dataset dir: pure data, no model.
     import src.cli as cli
-    from src.config import Config, _DEFAULTS
     import src.eval as E
+    from src.config import _DEFAULTS, Config
     ds = tmp_path / "datasets"
     ds.mkdir()
     ds.joinpath("train.jsonl").write_text(

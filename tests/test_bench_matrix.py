@@ -1,14 +1,13 @@
 """Tests for the bench-matrix orchestration (multiple specs over one suite)."""
 from __future__ import annotations
 
-import json
-import pytest
-import torch
 from pathlib import Path
 
+import pytest
+import torch
+
 from src import drivers_localchat as D
-from src.bench import (load_tasks, bench_matrix, format_bench_matrix,
-                       register_runner, make_driver)
+from src.bench import bench_matrix, format_bench_matrix, load_tasks, register_runner
 
 
 class _FakeTok:
@@ -49,7 +48,8 @@ def test_bench_matrix_runs_all_specs():
     # tasks without file checks (command_exit) pass for the fake
     for r in matrix["m1"]["results"]:
         if r.task_id in ("exec-count-files", "exec-python-version",
-                         "replay-git-status", "exec-shell-pipe", "replay-find-py"):
+                         "replay-git-status", "exec-shell-pipe", "replay-find-py",
+                         "exec-pipe-wc"):
             assert r.success, r.task_id
         else:
             assert not r.success, r.task_id

@@ -1,12 +1,18 @@
 """Tests for src.format_dataset."""
 from __future__ import annotations
 
-from src.config import Config, _DEFAULTS, _DEFAULTS as _D
 from conftest import make_cfg
-import copy
-from src.format_dataset import (_format_window, _render_message, _render_part,
-                                _window_messages, main, to_alpaca, to_chatml,
-                                to_sharegpt)
+
+from src.format_dataset import (
+    _format_window,
+    _render_message,
+    _render_part,
+    _window_messages,
+    main,
+    to_alpaca,
+    to_chatml,
+    to_sharegpt,
+)
 
 
 def _msg(role, parts):

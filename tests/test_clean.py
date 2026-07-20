@@ -3,10 +3,16 @@ from __future__ import annotations
 
 import copy
 
-from src.clean import (_conv_hash, _redact_obj, clean_message, clean_session,
-                       redact, _SECRET_PATTERNS)
-from src.config import Config, _DEFAULTS
 from conftest import make_cfg
+
+from src.clean import (
+    _conv_hash,
+    _redact_obj,
+    clean_message,
+    clean_session,
+    redact,
+)
+from src.config import _DEFAULTS, Config
 
 
 def _cfg(**overrides):

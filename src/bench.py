@@ -37,52 +37,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-# ── tool_call parsing (tolerant of both the real U+276E char and the literal
-#    backslash-escaped "\u276E\u276E\u276E" seen in the serialized datasets) ──
-_SEP_CHARS = "\u276E\u276E\u276E"          # real separator the model emits
-_SEP_LITERAL = "\\u276E\\u276E\\u276E"     # escaped form in JSON-saved data
-_TOOL_CALL_RE = re.compile(
-    r"<tool_call\s+name=\"([^\"]+)\"\s*(?:call_id=\"[^\"]*\")?>(.*?)(?:"
-    + re.escape(_SEP_CHARS) + "|" + re.escape(_SEP_LITERAL) + ")",
-    re.DOTALL,
+from src.parsers import (  # call-format parser + separators (RefinedToolCallV5 dialect)
+    _SEP_CHARS,
+    _SEP_LITERAL,
+    parse_tool_calls,
 )
+
 _TOOL_RESULT_RE = re.compile(r"<tool_result>(.*?)</tool_result>", re.DOTALL)
 
-# Canonical format the BASE RefinedToolCallV5 model emits (per its chat
-# template): <tool_call>\n{"name": "...", "arguments": {...}}\n</tool_call>
-# and results come back as <tool_response>...</tool_response>. The finetunes
-# were trained on the simpler dataset format above, so the optimized harness
-# must understand BOTH and feed results back in the right shape.
-_CANON_CALL_RE = re.compile(
-    r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
-_CANON_RESP_RE = re.compile(r"<tool_response>(.*?)</tool_response>", re.DOTALL)
 
-
-def parse_tool_calls(text: str) -> list[dict]:
-    """Extract {"name", "args"} tool calls from an assistant message.
-
-    Handles both the dataset format (`<tool_call name=..>json<sep>`) and the
-    base model's canonical format (`<tool_call>{"name":..,"arguments":..}</tool_call>`).
-    The args key is normalized to "args" either way.
-    """
-    calls: list[dict] = []
-    # dataset / finetune format first
-    for m in _TOOL_CALL_RE.finditer(text):
-        raw = m.group(2).strip()
-        calls.append({"name": m.group(1), "args": _safe_json(raw)})
-    if calls:
-        return calls
-    # canonical base format
-    for m in _CANON_CALL_RE.finditer(text):
-        try:
-            obj = json.loads(m.group(1))
-        except Exception:
-            continue
-        name = obj.get("name")
-        args = obj.get("arguments", obj.get("args"))
-        if name:
-            calls.append({"name": name, "args": args})
-    return calls
 
 
 def format_tool_result(result: str, variant: str = "finetune") -> str:
@@ -104,14 +67,6 @@ def _strip(s: str) -> str:
     return s.strip()
 
 
-def _safe_json(raw: str) -> Optional[dict]:
-    try:
-        return json.loads(raw)
-    except Exception:
-        try:
-            return json.loads(raw.strip().strip("`").strip())
-        except Exception:
-            return None
 
 
 # ── verifiers ──────────────────────────────────────────────────────────────────

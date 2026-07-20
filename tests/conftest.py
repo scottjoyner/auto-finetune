@@ -13,8 +13,9 @@ SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
 if SRC not in sys.path:
     sys.path.insert(0, SRC)
 
-from src.config import Config, _DEFAULTS  # noqa: E402
 import copy
+
+from src.config import _DEFAULTS, Config  # noqa: E402
 
 
 def make_cfg(**overrides):

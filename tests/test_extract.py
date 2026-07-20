@@ -1,13 +1,15 @@
 """Tests for src.extract_opencode and src.extract_hermes."""
 from __future__ import annotations
 
+import copy
 import json
 
-from src.config import Config, _DEFAULTS, _DEFAULTS as _D
 from conftest import make_cfg
-import copy
-from src.extract_opencode import (_build_part, _safe_json, extract_db, main)
-from src.extract_hermes import _adapt_record, main as hermes_main
+
+from src.config import _DEFAULTS, Config
+from src.extract_hermes import _adapt_record
+from src.extract_hermes import main as hermes_main
+from src.extract_opencode import _build_part, _safe_json, extract_db, main
 
 
 def test_safe_json():

@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import json
+
 import torch
-from pathlib import Path
 
 from src import drivers_localchat as D
-from src.bench import run_task, Task, register_runner, make_driver
+from src.bench import Task, make_driver, register_runner, run_task
 
 
 class _FakeTok:
