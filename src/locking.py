@@ -178,6 +178,15 @@ def legacy_training_processes() -> list[dict]:
     return found
 
 
+def unmanaged_training_processes(lock_directory: str,
+                                 trainers: list[dict] | None = None) -> list[dict]:
+    """Return only trainers that do not own a canonical runtime lease."""
+    candidates = legacy_training_processes() if trainers is None else trainers
+    leased_pids = {int(record["pid"]) for record in active_owner_records(lock_directory)
+                   if record.get("pid") is not None}
+    return [trainer for trainer in candidates if int(trainer["pid"]) not in leased_pids]
+
+
 def active_owner_records(lock_directory: str, resource: str | None = None) -> list[dict]:
     base = Path(lock_directory) / "owners"
     paths = list((base / resource).glob("*.json")) if resource else list(base.glob("*/*.json"))
