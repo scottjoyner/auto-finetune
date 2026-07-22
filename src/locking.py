@@ -145,7 +145,8 @@ def command_resources(cmd: str, label: str | None = None) -> list[ResourceReques
         return [ResourceRequest("datasets", shared=True), ResourceRequest("gpu"),
                 ResourceRequest(checkpoint)]
     if cmd in {"eval", "eval-all", "best", "sanity", "merge", "quantize",
-               "bench", "bench-compare", "bench-matrix"}:
+               "report", "probe", "compare", "bench", "bench-compare",
+               "bench-matrix"}:
         return [ResourceRequest("datasets", shared=True), ResourceRequest("gpu")]
     if cmd in {"scheduler-run", "scheduler-loop"}:
         return [ResourceRequest("pipeline")]

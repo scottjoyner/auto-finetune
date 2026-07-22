@@ -332,6 +332,18 @@ class ModelDriver:
         raise NotImplementedError
 
 
+def validate_benchmark_model_path(model_path: str) -> str:
+    """Reject a PEFT-only directory; benchmark drivers need standalone weights."""
+    path = Path(model_path)
+    if (path / "adapter_config.json").is_file():
+        raise ValueError(
+            f"raw PEFT adapter cannot be benchmarked directly: {model_path}; "
+            "run `python -m src.cli merge --label=<label>` and pass the merged "
+            "standalone model directory"
+        )
+    return model_path
+
+
 class LocalDriver(ModelDriver):
     """Drive a local HF checkpoint with a <tool_call> loop (self-contained)."""
 
@@ -566,11 +578,15 @@ def make_driver(runner: str, **kw) -> ModelDriver:
     'hermes'   -> hermes-agent harness (kw: hermes_dir)  [wired by register_runner]
     """
     if runner in RUNNERS:
+        if runner == "local-chat" and kw.get("model_path"):
+            validate_benchmark_model_path(kw["model_path"])
         return RUNNERS[runner](**kw)
     if runner == "self":
-        return LocalDriver(kw["model_path"], rocm=kw.get("rocm", False))
+        path = validate_benchmark_model_path(kw["model_path"])
+        return LocalDriver(path, rocm=kw.get("rocm", False))
     if runner == "subagent":
-        return OptimizedDriver(kw["model_path"], rocm=kw.get("rocm", False),
+        path = validate_benchmark_model_path(kw["model_path"])
+        return OptimizedDriver(path, rocm=kw.get("rocm", False),
                                variant=kw.get("variant", "auto"))
     if runner == "api":
         return ApiDriver(kw["base_url"], kw["model"], api_key=kw.get("api_key", ""))
