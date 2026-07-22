@@ -99,7 +99,15 @@ These are separate planes:
 - SQLite session stores are the trace-training source.
 - Neo4j is the durable second-brain/index surface.
 - Markdown docs remain real source files; index them with `kg_index_docs`, then resolve through `kg_read_doc` before answering.
-- Do not duplicate every raw trace into documentation. Import/reconcile Hermes sessions into KG with `kg_import_sessions`; use the auto-finetune extractor for model data.
+- Import/reconcile Hermes sessions into KG on demand; use the auto-finetune extractor separately for model data.
+
+```bash
+# Dry-run is the default. Add --write only after reviewing counts.
+hermes knowledge-graph import-sessions --db /home/scott/.hermes/state.db --since-ts <unix-seconds>
+hermes knowledge-graph import-sessions --db /home/scott/.hermes/state.db --since-ts <unix-seconds> --write --no-embed
+```
+
+`--no-embed` preserves graph structure when the embedding endpoint is unavailable. The knowledge-graph provider requires the `knowledge-graph` optional dependency (`neo4j`); on xwing it is installed in the Hermes venv. New installs should include `hermes-agent[knowledge-graph]`.
 - Installed Hermes skills live on the SSD-backed shared Hermes home, so all agents see the same skill after `/reload-skills` or a new session.
 - The repository copy of this skill documents the code version. When behavior changes, patch both the repo copy and the installed skill in one change.
 
