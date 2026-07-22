@@ -37,3 +37,19 @@ def test_audit_no_leak_distinct():
     bench = [{"task_id": "y", "instruction": "delete the temp cache folder"}]
     res = audit_leakage(train, bench)
     assert res["n_hits"] == 0
+
+
+def test_audit_supports_bench_id_prompt_schema_and_unique_hit_rate():
+    train = [_train("create alpha configuration with port 9000"),
+             _train("create beta configuration with port 9001")]
+    bench = [
+        {"id": "a", "prompt": "create alpha configuration with port 9000"},
+        {"id": "b", "prompt": "create beta configuration with port 9001"},
+        {"id": "c", "prompt": "a genuinely unrelated benchmark instruction"},
+    ]
+    res = audit_leakage(train, bench)
+    assert [h["bench_task_id"] for h in res["hits"]] == ["a", "b"]
+    assert [h["instruction"] for h in res["hits"]] == [bench[0]["prompt"], bench[1]["prompt"]]
+    assert res["n_hits"] == 2
+    assert res["hit_rate"] == 2 / 3
+    assert res["status"] == "contaminated"

@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import json
 
-from src.eval import build_held_out, parse_tool_calls, score_tool_calls
+from src.eval import (build_disjoint_partition, build_held_out, parse_tool_calls,
+                      score_tool_calls)
 
 SEP = "\\u276E\\u276E\\u276E"
 
@@ -80,6 +81,39 @@ def test_build_held_out(tmp_path):
     out2 = build_held_out(str(d), "ssd", frac=0.1, seed=1)
     h2 = [json.loads(l) for l in out2.read_text().splitlines() if l.strip()]
     assert [json.dumps(r) for r in held] == [json.dumps(r) for r in h2]
+
+
+def test_disjoint_partition_is_deterministic_and_does_not_mutate_source(tmp_path):
+    src = tmp_path / "train.focused.jsonl"
+    rows = [{"id": i, "messages": [{"role": "user", "content": f"q{i}"}]}
+            for i in range(20)]
+    rows.append(rows[3].copy())  # duplicate content must remain on one side
+    original = "\n".join(json.dumps(r) for r in rows) + "\n"
+    src.write_text(original)
+    first = build_disjoint_partition(src, tmp_path / "run-a", frac=0.2, seed=7)
+    second = build_disjoint_partition(src, tmp_path / "run-b", frac=0.2, seed=7)
+
+    assert src.read_text() == original
+    assert first.train_path.read_bytes() == second.train_path.read_bytes()
+    assert first.eval_path.read_bytes() == second.eval_path.read_bytes()
+    train = {json.dumps(r, sort_keys=True) for r in first.train_rows}
+    held = {json.dumps(r, sort_keys=True) for r in first.eval_rows}
+    assert train.isdisjoint(held)
+    assert first.source_sha256
+    assert first.contamination["status"] == "clean"
+
+
+def test_evaluate_baseline_propagates_loss_only(monkeypatch):
+    import src.eval as E
+    seen = {}
+
+    def fake(*args, **kwargs):
+        seen.update(kwargs)
+        return E.EvalResult(label="x", adapter="base")
+
+    monkeypatch.setattr(E, "evaluate", fake)
+    E.evaluate_baseline("base", "held.jsonl", loss_only=True)
+    assert seen["loss_only"] is True
 
 
 def test_evaluate_all_and_report(monkeypatch, tmp_path):
