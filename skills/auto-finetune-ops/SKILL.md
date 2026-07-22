@@ -63,6 +63,9 @@ live SQLite (read-only) -> raw per-session JSON -> redacted cleaned JSON
 - Redaction must remain enabled.
 - Drift planning fails closed if any configured live source cannot be inspected.
 - Harvest baselines store each source's total count atomically, never an aggregate delta.
+- Promote a source watermark only from the exact immutable plan that was successfully extracted and published. If historical promotion identity is missing, retain the conservative all-new result rather than inventing a baseline.
+- Generate the next run's train/held-out partition before training with `eval-split`; never derive a purported holdout after an adapter trained on the full source.
+- Leakage audits must understand both task-format and chat-format rows. A non-empty benchmark with zero evaluable rows is `not_evaluable`, not `clean`.
 
 ## Commands
 
