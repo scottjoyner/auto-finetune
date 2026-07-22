@@ -42,7 +42,13 @@ def _train_text(ex: dict) -> str:
 
 
 def _bench_instruction(ex: dict) -> str:
-    return _norm(ex.get("instruction") or ex.get("prompt") or "")
+    explicit = ex.get("instruction") or ex.get("prompt")
+    if explicit:
+        return _norm(explicit)
+    # Held-out training-format corpora use chat ``messages`` rather than the
+    # mined-task instruction/prompt schema. Flatten the complete example so an
+    # exact or contained training row cannot be mislabeled clean.
+    return _train_text(ex)
 
 
 def _bench_id(ex: dict, index: int) -> str | int:
@@ -83,13 +89,15 @@ def audit_leakage(train_rows: list[dict], bench_rows: list[dict],
                 hit_bench.add(bench_id)
                 break
     rate = len(hit_bench) / len(bench_rows) if bench_rows else 0.0
+    status = ("not_evaluable" if bench_rows and eligible == 0 else
+              "contaminated" if hits else "clean")
     return {
         "n_train": len(train_rows),
         "n_bench": len(bench_rows),
         "n_eligible": eligible,
         "n_hits": len(hits),
         "hit_rate": rate,
-        "status": "contaminated" if hits else "clean",
+        "status": status,
         "hits": hits,
     }
 
