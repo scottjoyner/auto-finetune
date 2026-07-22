@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import Any
 
 from src.config import Config
-from src.locking import atomic_write_json, legacy_training_processes
+from src.locking import (atomic_write_json, lock_dir,
+                         unmanaged_training_processes)
 
 
 SCHEDULER_STATE_FILE = "scheduler-state.json"
@@ -130,7 +131,7 @@ class Scheduler:
         harvest_results["clean"] = "ok"
 
         selected = [s for s in plan.sources if s.name in plan.batch_labels]
-        record_harvest(self.cfg, selected)
+        record_harvest(self.cfg, selected, plan_id=plan.plan_id)
 
         return True, harvest_results
 
@@ -237,7 +238,7 @@ class Scheduler:
         if source_errors:
             return RunResult(False, "planning", plan.reason, time.time() - start)
         if plan.should_train:
-            legacy = legacy_training_processes()
+            legacy = unmanaged_training_processes(lock_dir(self.cfg))
             if legacy:
                 return RunResult(
                     False, "busy",
