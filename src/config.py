@@ -63,7 +63,8 @@ _DEFAULTS = {
               "learning_rate": 2e-4, "num_train_epochs": 3, "per_device_train_batch_size": 2,
               "gradient_accumulation_steps": 8, "warmup_ratio": 0.03, "weight_decay": 0.01,
               "output_dir": "outputs/checkpoints", "hub_model_id": "", "push_to_hub": False},
-    "paths": {"raw_dir": "data/raw", "cleaned_dir": "data/cleaned", "dataset_dir": "data/datasets"},
+    "paths": {"raw_dir": "data/raw", "cleaned_dir": "data/cleaned",
+              "dataset_dir": "data/datasets", "lock_dir": "data/locks"},
 }
 
 

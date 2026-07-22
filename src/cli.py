@@ -82,9 +82,9 @@ def _local_ref_specs() -> list[dict]:
     return specs
 
 
-def main(argv: list[str]) -> int:
+def _dispatch(argv: list[str], cfg=None) -> int:
     cmd = argv[1] if len(argv) > 1 else "help"
-    cfg = load()
+    cfg = cfg or load()
     source = _parse_source(argv)
     label = _parse_label(argv)
     project = _parse_str_flag(argv, "project")
@@ -93,14 +93,20 @@ def main(argv: list[str]) -> int:
         if cmd == "extract":
             from src.extract_opencode import main as run
             cfg.ensure_dirs()
-            return run(cfg, label=label, project=project)
+            count = run(cfg, label=label, project=project)
+            print(f"[extract] wrote {count} sessions")
+            return 0
         if cmd == "hermes":
             from src.extract_hermes import main as run
             cfg.ensure_dirs()
-            return run(cfg)
+            count = run(cfg)
+            print(f"[hermes] wrote {count} sessions")
+            return 0
         if cmd == "clean":
             from src.clean import main as run
-            return run(cfg, label=label, keep_reasoning=keep_reasoning)
+            count = run(cfg, label=label, keep_reasoning=keep_reasoning)
+            print(f"[clean] wrote {count} sessions")
+            return 0
         if cmd == "format":
             from src.format_dataset import main as run
             # --all-split: produce hermes-only, opencode-only, and merged
@@ -108,8 +114,11 @@ def main(argv: list[str]) -> int:
                 n = 0
                 for s in ("hermes", "opencode", None):
                     n += run(cfg, source=s, label=label)
-                return n
-            return run(cfg, source=source, label=label)
+                print(f"[format] wrote {n} examples")
+                return 0
+            count = run(cfg, source=source, label=label)
+            print(f"[format] wrote {count} examples")
+            return 0
         if cmd == "combine":
             from src.format_dataset import combine as run
             run(cfg)
@@ -691,6 +700,7 @@ def main(argv: list[str]) -> int:
     print("Analyze:  analyze [--out=<dir>]   strata [--out=<dir>] [--bucket-map=<json>] [--balance] [--cap=<n>]")
     print("CPU:      dedup [--threshold=0.85]  profile [--out=<dir>]  pretokenize [--model=<path>] [--max-length=2048]")
     print("Harvest:  harvest-status  harvest-plan [--min-new=50]")
+    print("Coord:    coordination-status  (shared runtime lease owners)")
     print("Deploy:   deploy --label=<name> --nodes=<n1,n2,...> [--quorum=N]")
     print("          deploy-status  multi-deploy-status  discover-nodes")
     print("          rollback --label=<name> [--nodes=<n1,...>]")
@@ -708,6 +718,38 @@ def main(argv: list[str]) -> int:
     print("Bench:    --runner=self|subagent|api|hermes|local-chat  --model=<dir>  --tasks=<jsonl>  --fleet [--fleet-hint=]  --base-url=  --api-model=")
     print("Bench-matrix: --specs=<json-list> | --preset=local-refs|local|lmstudio|fleet|fast|all   --tasks=<jsonl>  --report")
     return 0
+
+
+def main(argv: list[str]) -> int:
+    """Dispatch a command under canonical cross-worktree resource leases."""
+    cmd = argv[1] if len(argv) > 1 else "help"
+    cfg = load()
+    label = _parse_label(argv)
+    from src.locking import (ResourceBusy, active_owner_records, command_leases,
+                             command_resources, legacy_training_processes, lock_dir)
+
+    if cmd == "coordination-status":
+        owners = active_owner_records(lock_dir(cfg))
+        legacy = legacy_training_processes()
+        print(f"[coordination-status] lock_dir={lock_dir(cfg)}")
+        print(json.dumps({"owners": owners, "legacy_trainers": legacy}, indent=2))
+        return 0
+
+    resources = command_resources(cmd, label)
+    names = {request.name for request in resources}
+    # The active trainer predates lease support. Fail closed for any command that
+    # could mutate its dataset or contend for its GPU during this migration.
+    if "gpu" in names or any(r.name == "datasets" and not r.shared for r in resources):
+        legacy = legacy_training_processes()
+        if legacy:
+            print(f"[busy] legacy unleased training process active: {legacy}")
+            return 75
+    try:
+        with command_leases(cfg, cmd, label):
+            return _dispatch(argv, cfg=cfg)
+    except ResourceBusy as exc:
+        print(f"[busy] {exc}")
+        return 75
 
 
 if __name__ == "__main__":
