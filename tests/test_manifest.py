@@ -39,7 +39,7 @@ def test_manifest_records_required_provenance_and_contamination(tmp_path):
         assert manifest["inputs"][group]
         assert manifest["inputs"][group][0]["sha256"]
     assert manifest["trainer"]["states"][0]["data"]["global_step"] == 12
-    assert manifest["trainer"]["logs"] == [{"loss": 1.2}]
+    assert manifest["trainer"]["log_history"] == [{"loss": 1.2}]
     assert manifest["evaluation"]["contamination"]["status"] == "contaminated"
     assert "revision" in manifest["git"] and "status" in manifest["git"]
     assert manifest["command"]["argv"] == ["cli", "manifest"]
