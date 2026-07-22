@@ -78,7 +78,7 @@ def test_record_harvest_uses_each_source_total_atomically(tmp_path):
     sources = get_source_stats(cfg)
     record_harvest(cfg, sources)
     state = json.loads((tmp_path / "analysis" / "harvest-state.json").read_text())
-    assert state["schema_version"] == 2
+    assert state["schema_version"] == 3
     assert state["sources"]["opencode"]["total_at_harvest"] == 2
     assert state["sources"]["hermes"]["total_at_harvest"] == 2
     assert all(s.new_sessions == 0 for s in get_source_stats(cfg))
@@ -149,8 +149,9 @@ def test_promotion_and_source_watermarks_are_one_atomic_state_write(tmp_path, mo
 def test_runtime_limit_splits_sources_and_defers_oversized_source(tmp_path):
     # At the test config's estimate, 300 sessions are ~5.4h and 500 are ~9.0h.
     opencode, hermes = _databases(tmp_path, 300, 500)
-    plan = plan_harvest(_cfg(tmp_path, opencode, hermes), min_new_sessions=1,
-                        max_batch_hours=8)
+    cfg = _cfg(tmp_path, opencode, hermes)
+    cfg.raw["scheduler"] = {"max_batch_hours": 8}
+    plan = plan_harvest(cfg, min_new_sessions=1)
 
     assert plan.should_harvest and plan.should_train
     assert plan.batch_labels == ["opencode"]
