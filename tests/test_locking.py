@@ -66,6 +66,16 @@ def test_training_uses_shared_dataset_and_exclusive_gpu_checkpoint():
     assert not reqs["checkpoint-hermes-reasoning"].shared
 
 
+@pytest.mark.parametrize("command", [
+    "eval", "eval-all", "report", "merge", "probe", "compare", "sanity",
+    "bench", "bench-compare", "bench-matrix",
+])
+def test_model_loading_commands_require_exclusive_gpu_lease(command):
+    reqs = {r.name: r for r in command_resources(command, "focused")}
+    assert "gpu" in reqs
+    assert not reqs["gpu"].shared
+
+
 def test_worktree_path_does_not_change_lock_identity():
     reqs_a = [r.name for r in command_resources("format", "ssd")]
     old = os.getcwd()

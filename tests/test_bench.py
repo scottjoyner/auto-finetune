@@ -196,3 +196,18 @@ def test_compare_suites_delta() -> None:
     assert comp["delta_check_rate"] == pytest.approx(2 / 5, abs=1e-3)
     assert "delta=" in format_bench_comparison(comp)
     assert "bench-compare:" in format_bench_comparison(comp)
+
+
+def test_raw_adapter_directory_is_rejected_for_benchmark(tmp_path):
+    from src.bench import validate_benchmark_model_path
+
+    adapter = tmp_path / "adapter"
+    adapter.mkdir()
+    (adapter / "adapter_config.json").write_text("{}")
+    with pytest.raises(ValueError, match="merge"):
+        validate_benchmark_model_path(str(adapter))
+
+    merged = tmp_path / "merged"
+    merged.mkdir()
+    (merged / "config.json").write_text("{}")
+    assert validate_benchmark_model_path(str(merged)) == str(merged)
