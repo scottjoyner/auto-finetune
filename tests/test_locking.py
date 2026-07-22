@@ -7,7 +7,8 @@ import tempfile
 
 import pytest
 
-from src.locking import Lease, LeaseSet, ResourceBusy, ResourceRequest, command_resources
+from src.locking import (Lease, LeaseSet, ResourceBusy, ResourceRequest,
+                         command_resources, unmanaged_training_processes)
 
 
 def _hold(lock_dir: str, resource: str, ready, release) -> None:
@@ -75,3 +76,13 @@ def test_worktree_path_does_not_change_lock_identity():
         finally:
             os.chdir(old)
     assert reqs_a == reqs_b == ["datasets"]
+
+
+def test_lease_owning_trainer_is_not_reported_as_unmanaged(tmp_path, monkeypatch):
+    trainers = [{"pid": 1234, "command": "python -m src.cli train --label=ssd"},
+                {"pid": 5678, "command": "python -m src.cli train --label=old"}]
+    monkeypatch.setattr("src.locking.active_owner_records", lambda lock_dir: [
+        {"pid": 1234, "resource": "gpu", "command": "src.cli train"},
+    ])
+
+    assert unmanaged_training_processes(str(tmp_path), trainers=trainers) == [trainers[1]]
