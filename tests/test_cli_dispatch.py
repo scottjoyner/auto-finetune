@@ -82,6 +82,39 @@ def test_bench_matrix_fleet_empty(cfg, monkeypatch):
     assert cli.main(["cli", "bench-matrix", "--preset=fleet"]) == 2
 
 
+def test_eval_dispatch_propagates_loss_only_to_base_and_adapter(cfg, tmp_path, monkeypatch):
+    import src.eval as ev
+    held = tmp_path / "held.jsonl"
+    held.write_text('{"messages": []}\n')
+    calls = []
+
+    class Result:
+        def as_dict(self):
+            return {}
+
+    def fake_base(*args, **kwargs):
+        calls.append(("base", kwargs))
+        return Result()
+
+    def fake_eval(*args, **kwargs):
+        calls.append(("adapter", kwargs))
+        return Result()
+
+    monkeypatch.setattr(ev, "evaluate_baseline", fake_base)
+    monkeypatch.setattr(ev, "evaluate", fake_eval)
+    assert cli._dispatch(["cli", "eval", "--label=x", "--loss-only",
+                          f"--held={held}", "--adapter=/tmp/a"], cfg=cfg) == 0
+    assert [call[1]["loss_only"] for call in calls] == [True, True]
+
+
+def test_manifest_dispatch_writes_requested_path(cfg, tmp_path):
+    out = tmp_path / "manifest.json"
+    assert cli._dispatch(["cli", "manifest", f"--out={out}"], cfg=cfg) == 0
+    payload = json.loads(out.read_text())
+    assert payload["schema_version"] == 1
+    assert payload["evaluation"]["contamination"]["status"] == "not_checked"
+
+
 def test_combine_dispatch(cfg):
     assert cli.main(["cli", "combine"]) == 0
 
