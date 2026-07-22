@@ -144,34 +144,29 @@ def test_cli_all(make_opencode_db, tmp_path, monkeypatch):
     assert (tmp_path / "datasets" / "train.jsonl").exists()
 
 
-def test_cli_eval_split_writes_heldout(tmp_path, monkeypatch):
-    # eval-split calls build_held_out on the dataset dir: pure data, no model.
+def test_cli_eval_split_writes_disjoint_future_run(tmp_path, monkeypatch):
     import src.cli as cli
-    import src.eval as E
     from src.config import _DEFAULTS, Config
     ds = tmp_path / "datasets"
     ds.mkdir()
-    ds.joinpath("train.jsonl").write_text(
-        "\n".join(f'{{"messages":[{{"role":"user","content":"q{i}"}}]}}' for i in range(10)))
-    eval_dir = tmp_path / "eval"
-    eval_dir.mkdir()
-
-    def fake_build_held_out(dset, label, frac=0.1):
-        # mirror the CLI's output location
-        out = Path(dset).parent / "eval" / f"held-out-{label}.jsonl"
-        out.write_text("x")
-        return out
-
-    monkeypatch.setattr(E, "build_held_out", fake_build_held_out)
+    source = ds / "train.ssd.jsonl"
+    original = "\n".join(
+        f'{{"messages":[{{"role":"user","content":"q{i}"}}]}}' for i in range(10)
+    ) + "\n"
+    source.write_text(original)
     raw = copy.deepcopy(_DEFAULTS)
     raw["paths"] = {"raw_dir": str(tmp_path / "raw"),
                     "cleaned_dir": str(tmp_path / "cleaned"),
-                    "dataset_dir": str(ds)}
+                    "dataset_dir": str(ds), "lock_dir": str(tmp_path / "locks")}
     cfg = Config(raw=raw)
-    monkeypatch.setattr(cli, "load", lambda *a, **k: cfg)
-    rc = cli_main(["cli", "eval-split", "--label=ssd", "--frac=0.2"])
+    out = tmp_path / "future"
+    rc = cli._dispatch(["cli", "eval-split", "--label=ssd", "--frac=0.2",
+                        f"--out={out}"], cfg=cfg)
     assert rc == 0
-    assert (eval_dir / "held-out-ssd.jsonl").exists()
+    assert source.read_text() == original
+    assert (out / "datasets" / "train.ssd.jsonl").exists()
+    assert (out / "eval" / "held-out-ssd.jsonl").exists()
+    assert (out / "partition.json").exists()
 
 
 def _fake_driver_class():

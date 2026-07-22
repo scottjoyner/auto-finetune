@@ -45,6 +45,11 @@ def _parse_str_flag(argv: list[str], name: str) -> str | None:
     return None
 
 
+def _parse_str_flags(argv: list[str], name: str) -> list[str]:
+    """Extract every repeated --name=<value> argument, preserving order."""
+    return [a.split("=", 1)[1] for a in argv if a.startswith(f"{name}=")]
+
+
 def _has_flag(argv: list[str], name: str) -> bool:
     """True if --name appears in argv."""
     return any(a == name for a in argv)
@@ -73,12 +78,14 @@ def _local_ref_specs() -> list[dict]:
     if base_local:
         specs.append({"name": "qwen2.5-7b", "runner": "local-chat",
                       "model_path": base_local})
+        # Benchmark drivers require standalone weights. Include only completed
+        # merged outputs, never raw PEFT adapter directories.
         for lb in ("ssd", "nas5-main", "nas5-20260717", "opencode-all",
                    "opencode-portfolio", "hermes-reasoning", "combined"):
-            ap = os.path.join(out_base, f"toolcall-v5-3b-{lb}")
-            if os.path.exists(os.path.join(ap, "adapter_config.json")):
+            merged = os.path.join(out_base, f"toolcall-v5-3b-{lb}-merged")
+            if os.path.exists(os.path.join(merged, "config.json")):
                 specs.append({"name": f"ft-{lb}", "runner": "subagent",
-                              "model_path": ap, "variant": "auto"})
+                              "model_path": merged, "variant": "auto"})
     return specs
 
 
@@ -341,12 +348,22 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             from src.verify_gap import main as run
             return run(cfg, argv)
         if cmd == "eval-split":
-            from src.eval import build_held_out
+            from src.eval import build_disjoint_partition
             frac = float(_parse_str_flag(argv, "--frac") or "0.1")
+            seed = _parse_int_flag(argv, "--seed") or 42
             if not label:
                 print("[error] eval-split requires --label=<name>")
                 return 2
-            build_held_out(cfg.path("dataset_dir"), label, frac=frac)
+            source_path = (_parse_str_flag(argv, "--source-path")
+                           or os.path.join(cfg.path("dataset_dir"), f"train.{label}.jsonl"))
+            out = (_parse_str_flag(argv, "--out")
+                   or os.path.join(Path(cfg.path("dataset_dir")).parent,
+                                   "future-runs", f"{label}-seed{seed}"))
+            result = build_disjoint_partition(source_path, out, frac=frac,
+                                              seed=seed, label=label)
+            print(f"[eval-split] source unchanged: {result.source_path}")
+            print(f"[eval-split] future train: {result.train_path}")
+            print(f"[eval-split] held-out eval: {result.eval_path}")
             return 0
         if cmd == "eval":
             from src.eval import evaluate, evaluate_baseline
@@ -356,16 +373,23 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             from src.train import _detect_rocm
             dset = cfg.path("dataset_dir")
             out_base = "/media/scott/data/finetune-staging/outputs/checkpoints"
-            adapter = os.environ.get("TRAIN_OUTPUT_DIR") or os.path.join(out_base, f"toolcall-v5-3b-{label}")
-            held = Path(dset).parent / "eval" / f"held-out-{label}.jsonl"
+            adapter = (_parse_str_flag(argv, "--adapter") or os.environ.get("TRAIN_OUTPUT_DIR")
+                       or os.path.join(out_base, f"toolcall-v5-3b-{label}"))
+            held_arg = _parse_str_flag(argv, "--held")
+            held = (Path(held_arg) if held_arg else
+                    Path(dset).parent / "eval" / f"held-out-{label}.jsonl")
             if not held.exists():
-                print(f"[eval] no held-out split at {held}; run `eval-split --label={label}` first")
+                print(f"[eval] no held-out split at {held}; run `eval-split --label={label}` "
+                      "and pass its future-run path with --held=<path>")
                 return 2
             base = cfg.get("train", "model_name", default="Qwen/Qwen2.5-7B-Instruct")
+            loss_only = "--loss-only" in argv
             print(f"[eval] baseline (base model) on {label}...")
-            b = evaluate_baseline(base, str(held), rocm=_detect_rocm())
+            b = evaluate_baseline(base, str(held), rocm=_detect_rocm(),
+                                  loss_only=loss_only)
             print(f"[eval] adapter {adapter} on {label}...")
-            a = evaluate(adapter, base, str(held), rocm=_detect_rocm())
+            a = evaluate(adapter, base, str(held), rocm=_detect_rocm(),
+                         loss_only=loss_only)
             print(json.dumps({"baseline": b.as_dict(), "adapter": a.as_dict()}, indent=2))
             return 0
         if cmd == "bench-compare":
@@ -678,6 +702,29 @@ def _dispatch(argv: list[str], cfg=None) -> int:
                 Path(rep).write_text(format_bench_matrix(matrix))
                 print(f"[bench-matrix] written -> {rep}")
             return 0
+        if cmd == "manifest":
+            from src.manifest import build_manifest, write_manifest
+            out = _parse_str_flag(argv, "--out")
+            if not out:
+                print("[error] manifest requires --out=<new manifest.json path>")
+                return 2
+            root = Path(__file__).resolve().parent.parent
+            manifest = build_manifest(
+                repo_root=root,
+                datasets=_parse_str_flags(argv, "--dataset"),
+                models=_parse_str_flags(argv, "--model"),
+                artifacts=_parse_str_flags(argv, "--artifact"),
+                config_paths=_parse_str_flags(argv, "--config"),
+                trainer_state_paths=_parse_str_flags(argv, "--trainer-state"),
+                trainer_log_paths=_parse_str_flags(argv, "--trainer-log"),
+                train_path=_parse_str_flag(argv, "--train"),
+                bench_path=_parse_str_flag(argv, "--bench"),
+                argv=argv,
+            )
+            target = write_manifest(out, manifest)
+            status = manifest["evaluation"]["contamination"]["status"]
+            print(f"[manifest] atomically wrote {target} (eval contamination: {status})")
+            return 0
         if cmd == "all":
             from src.clean import main as run_clean
             from src.extract_hermes import main as run_hermes
@@ -691,7 +738,7 @@ def _dispatch(argv: list[str], cfg=None) -> int:
                 run_format(cfg, source=s)
             print("[all] extraction -> cleaning -> formatting complete. Run `train` on a GPU machine.")
             return 0
-    except TrainError as e:
+    except (TrainError, ValueError) as e:
         print(f"[error] {e}")
         return 2
     print(__doc__)
