@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections import defaultdict
+
 
 
 def _norm(text: str) -> str:
@@ -45,6 +45,14 @@ def _bench_instruction(ex: dict) -> str:
     return _norm(ex.get("instruction") or ex.get("prompt") or "")
 
 
+def _bench_id(ex: dict, index: int) -> str | int:
+    """Accept both mined-task (task_id/instruction) and suite (id/prompt)."""
+    value = ex.get("task_id")
+    if value is None:
+        value = ex.get("id")
+    return value if value is not None else index
+
+
 def audit_leakage(train_rows: list[dict], bench_rows: list[dict],
                   min_len: int = 12) -> dict:
     """Return content-overlap hits between train mix and benchmark tasks.
@@ -56,25 +64,32 @@ def audit_leakage(train_rows: list[dict], bench_rows: list[dict],
     train_texts = [(_train_text(r), r.get("task_id") or i)
                    for i, r in enumerate(train_rows)]
     hits: list[dict] = []
-    per_bench: dict[str, int] = defaultdict(int)
-    for b in bench_rows:
+    hit_bench: set[str | int] = set()
+    eligible = 0
+    for index, b in enumerate(bench_rows):
         bi = _bench_instruction(b)
         if len(bi) < min_len:
             continue
+        eligible += 1
+        bench_id = _bench_id(b, index)
+        instruction = b.get("instruction") or b.get("prompt") or ""
         for ttext, tid in train_texts:
             if bi and bi in ttext:
                 hits.append({
-                    "bench_task_id": b.get("task_id"),
+                    "bench_task_id": bench_id,
                     "train_ref": tid,
-                    "instruction": b.get("instruction"),
+                    "instruction": instruction,
                 })
-                per_bench[b.get("task_id")] = per_bench.get(b.get("task_id"), 0) + 1
+                hit_bench.add(bench_id)
                 break
+    rate = len(hit_bench) / len(bench_rows) if bench_rows else 0.0
     return {
         "n_train": len(train_rows),
         "n_bench": len(bench_rows),
+        "n_eligible": eligible,
         "n_hits": len(hits),
-        "hit_rate": round(len(per_bench) / len(bench_rows), 3) if bench_rows else 0.0,
+        "hit_rate": rate,
+        "status": "contaminated" if hits else "clean",
         "hits": hits,
     }
 
