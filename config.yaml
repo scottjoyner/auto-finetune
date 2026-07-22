@@ -3,10 +3,14 @@ name: auto-finetune
 # ── Data sources ────────────────────────────────────────────────────────────
 sources:
   opencode:
-    # Live/current opencode session store on SSD.
-    db_path: /media/scott/SSD_4TB/opencode/opencode.db
-    # Older / broken snapshots on NAS5. Each gets its own checkpoint.
+    # Live OpenCode writer on xwing. The 24.7 GiB SSD copy is an archive, not
+    # the database updated by the currently running OpenCode session.
+    db_path: /home/scott/.local/share/opencode/opencode.db
+    # Archives/snapshots. Each gets its own immutable extraction label.
     extra_dbs:
+      - path: /media/scott/SSD_4TB/opencode/opencode.db
+        enabled: true
+        label: ssd-archive
       - path: /media/scott/NAS5/opencode/opencode.db
         enabled: true
         label: nas5-main
@@ -23,7 +27,9 @@ sources:
     # Hermes canonical session store is the SQLite state.db (system of record),
     # optionally enriched from the live Neo4j knowledge graph. Handled by a
     # dedicated extractor (src/extract_hermes.py), not a JSON export dir.
-    state_db: /media/scott/SSD_4TB/hermes-home/.hermes/state.db
+    # The active default-profile Hermes process writes this local DB. The SSD
+    # hermes-home copy is a synchronization target and may lag the live writer.
+    state_db: /home/scott/.hermes/state.db
     # Optional Neo4j enrichment for sessions/nodes not yet in state.db.
     neo4j:
       enabled: false
@@ -127,3 +133,7 @@ paths:
   cleaned_dir: /media/scott/data/finetune-staging/data/cleaned
   dataset_dir: /media/scott/data/finetune-staging/data/datasets
   analysis_dir: /media/scott/data/finetune-staging/data/analysis
+  # Canonical cross-worktree/process leases. Every Hermes/OpenCode worktree
+  # resolves to this same directory, so source isolation cannot bypass runtime
+  # coordination for datasets, GPU use, checkpoints, or deployment.
+  lock_dir: /media/scott/data/finetune-staging/locks

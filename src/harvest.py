@@ -1,41 +1,31 @@
-"""Data drift detection and batch planning for auto-harvesting.
-
-Monitors session databases for new data, estimates when enough new sessions
-have accumulated to justify a training run, and plans batches.
-
-Usage:
-    python -m src.cli harvest-status
-    python -m src.cli harvest-plan [--min-new=50]
-"""
+"""Fail-closed drift detection and batch planning for trace harvesting."""
 from __future__ import annotations
 
-import json
 import os
 import sqlite3
 import time
-from dataclasses import dataclass, asdict
-from pathlib import Path
-from typing import Any
+from dataclasses import asdict, dataclass
+from typing import Iterable
 
 from src.config import Config
+from src.locking import atomic_write_json
 
 
 @dataclass
 class SourceStats:
-    """Stats for a single data source."""
     name: str
     db_path: str
     total_sessions: int
-    last_modified: float  # epoch
+    last_modified: float
     db_size_bytes: int
-    new_sessions: int  # since last harvest
-    last_harvest: float  # epoch of last harvest
+    new_sessions: int
+    last_harvest: float
     days_since_harvest: float
+    error: str | None = None
 
 
 @dataclass
 class HarvestPlan:
-    """Plan for the next harvest/training cycle."""
     should_harvest: bool
     should_train: bool
     sources: list[SourceStats]
@@ -45,188 +35,163 @@ class HarvestPlan:
     reason: str
 
 
-def _get_sqlite_stats(db_path: str) -> dict:
-    """Get session count and last modified time from a SQLite DB."""
+def _file_stats(path: str) -> tuple[float, int]:
+    candidates = [path, f"{path}-wal"]
+    mtimes = [os.path.getmtime(p) for p in candidates if os.path.exists(p)]
+    return (max(mtimes) if mtimes else 0, os.path.getsize(path) if os.path.exists(path) else 0)
+
+
+def _get_opencode_stats(db_path: str) -> dict:
+    """Read OpenCode's singular ``session`` table through corruption tolerance."""
     if not os.path.exists(db_path):
-        return {"total": 0, "last_modified": 0, "size": 0}
-
+        return {"total": 0, "last_modified": 0, "size": 0,
+                "error": f"configured OpenCode DB missing: {db_path}"}
+    db = None
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-        cursor = conn.cursor()
+        from src.db import CorruptDB
+        db = CorruptDB(db_path)
+        if not db.table_exists("session"):
+            raise RuntimeError("OpenCode table 'session' is missing")
+        total = db.count("session")
+        modified, size = _file_stats(db_path)
+        return {"total": total, "last_modified": modified, "size": size}
+    except Exception as exc:
+        modified, size = _file_stats(db_path)
+        return {"total": 0, "last_modified": modified, "size": size, "error": str(exc)}
+    finally:
+        if db is not None:
+            db.close()
 
-        # Count sessions
-        cursor.execute("SELECT COUNT(*) FROM sessions")
-        total = cursor.fetchone()[0]
 
-        # Last modification
-        cursor.execute("SELECT MAX(created_at) FROM sessions")
-        last_ts = cursor.fetchone()[0] or 0
-
-        conn.close()
-
-        return {
-            "total": total,
-            "last_modified": last_ts,
-            "size": os.path.getsize(db_path),
-        }
-    except Exception as e:
-        return {"total": 0, "last_modified": 0, "size": 0, "error": str(e)}
+def _get_hermes_stats(db_path: str) -> dict:
+    """Read Hermes's ``sessions`` table using its actual timestamp columns."""
+    if not os.path.exists(db_path):
+        return {"total": 0, "last_modified": 0, "size": 0,
+                "error": f"configured Hermes DB missing: {db_path}"}
+    try:
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=60)
+        try:
+            total, last_ts = con.execute(
+                "SELECT COUNT(*), MAX(COALESCE(ended_at, started_at)) FROM sessions"
+            ).fetchone()
+        finally:
+            con.close()
+        modified, size = _file_stats(db_path)
+        # Timestamp shape varies between older/newer Hermes stores; filesystem
+        # mtime is only diagnostic, while the session count drives idempotence.
+        return {"total": int(total), "last_modified": modified or float(last_ts or 0),
+                "size": size}
+    except Exception as exc:
+        modified, size = _file_stats(db_path)
+        return {"total": 0, "last_modified": modified, "size": size, "error": str(exc)}
 
 
 def _load_harvest_state(state_path: str) -> dict:
-    """Load the last harvest state."""
-    if os.path.exists(state_path):
-        with open(state_path) as f:
-            return json.load(f)
-    return {}
+    if not os.path.exists(state_path):
+        return {"schema_version": 1, "sources": {}}
+    import json
+    with open(state_path) as handle:
+        raw = json.load(handle)
+    # Upgrade the original flat {source: {...}} shape in memory.
+    if "sources" not in raw:
+        raw = {"schema_version": 1,
+               "sources": {k: v for k, v in raw.items() if isinstance(v, dict)}}
+    return raw
 
 
-def _save_harvest_state(state_path: str, state: dict):
-    """Save harvest state."""
-    os.makedirs(os.path.dirname(state_path), exist_ok=True)
-    with open(state_path, "w") as f:
-        json.dump(state, f, indent=2)
-
-
-def get_source_stats(cfg: Config) -> list[SourceStats]:
-    """Get stats for all configured data sources."""
-    state_path = os.path.join(cfg.path("analysis_dir"), "harvest-state.json")
-    state = _load_harvest_state(state_path)
-    now = time.time()
-
-    sources = []
-
-    # Opencode source
-    opencode_db = cfg.get("sources", "opencode", "db_path", default="")
-    if opencode_db and os.path.exists(opencode_db):
-        stats = _get_sqlite_stats(opencode_db)
-        last_harvest = state.get("opencode", {}).get("last_harvest", 0)
-        sessions_since = state.get("opencode", {}).get("total_at_harvest", 0)
-
-        sources.append(SourceStats(
-            name="opencode",
-            db_path=opencode_db,
-            total_sessions=stats["total"],
-            last_modified=stats["last_modified"],
-            db_size_bytes=stats["size"],
-            new_sessions=max(0, stats["total"] - sessions_since),
-            last_harvest=last_harvest,
-            days_since_harvest=(now - last_harvest) / 86400 if last_harvest else 999,
-        ))
-
-    # Hermes source
-    hermes_db = cfg.get("sources", "hermes", "state_db", default="")
-    if hermes_db and os.path.exists(hermes_db):
-        stats = _get_sqlite_stats(hermes_db)
-        last_harvest = state.get("hermes", {}).get("last_harvest", 0)
-        sessions_since = state.get("hermes", {}).get("total_at_harvest", 0)
-
-        sources.append(SourceStats(
-            name="hermes",
-            db_path=hermes_db,
-            total_sessions=stats["total"],
-            last_modified=stats["last_modified"],
-            db_size_bytes=stats["size"],
-            new_sessions=max(0, stats["total"] - sessions_since),
-            last_harvest=last_harvest,
-            days_since_harvest=(now - last_harvest) / 86400 if last_harvest else 999,
-        ))
-
-    return sources
-
-
-def plan_harvest(
-    cfg: Config,
-    min_new_sessions: int = 50,
-    min_days: float = 1.0,
-    max_batch_hours: float = 8.0,
-) -> HarvestPlan:
-    """Plan the next harvest/training cycle.
-
-    Args:
-        cfg: Configuration
-        min_new_sessions: Minimum new sessions to trigger training
-        min_days: Minimum days since last harvest
-        max_batch_hours: Maximum estimated training time per batch
-
-    Returns:
-        HarvestPlan with recommendations
-    """
-    sources = get_source_stats(cfg)
-    total_new = sum(s.new_sessions for s in sources)
-
-    # Decision logic
-    reasons = []
-    should_harvest = False
-    should_train = False
-    batch_labels = []
-
-    for s in sources:
-        if s.new_sessions >= min_new_sessions:
-            should_harvest = True
-            reasons.append(f"{s.name}: {s.new_sessions} new sessions")
-            batch_labels.append(s.name)
-        elif s.days_since_harvest >= min_days:
-            should_harvest = True
-            reasons.append(f"{s.name}: {s.days_since_harvest:.1f} days since harvest")
-
-    if total_new >= min_new_sessions:
-        should_train = True
-        reasons.append(f"{total_new} total new sessions >= {min_new_sessions}")
-
-    # Estimate training time (rough: ~65 sec/step, ~50 steps/epoch, 2 epochs)
-    steps_per_epoch = 50
-    epochs = cfg.get("train", "num_train_epochs", default=2)
-    sec_per_step = 65
-    est_seconds = total_new * 0.01 * steps_per_epoch * epochs * sec_per_step  # rough scaling
-    est_hours = est_seconds / 3600
-
-    if est_hours > max_batch_hours:
-        reasons.append(f"estimated {est_hours:.1f}h > {max_batch_hours}h limit")
-
-    if not reasons:
-        reasons.append("no new data or enough time hasn't passed")
-
-    return HarvestPlan(
-        should_harvest=should_harvest,
-        should_train=should_train,
-        sources=sources,
-        total_new=total_new,
-        estimated_train_hours=est_hours,
-        batch_labels=batch_labels,
-        reason="; ".join(reasons),
+def _source_stat(name: str, path: str, snapshot: dict, state: dict, now: float) -> SourceStats:
+    saved = state.get("sources", {}).get(name, {})
+    last_harvest = float(saved.get("last_harvest", 0) or 0)
+    baseline = int(saved.get("total_at_harvest", 0) or 0)
+    total = int(snapshot.get("total", 0) or 0)
+    return SourceStats(
+        name=name,
+        db_path=path,
+        total_sessions=total,
+        last_modified=float(snapshot.get("last_modified", 0) or 0),
+        db_size_bytes=int(snapshot.get("size", 0) or 0),
+        new_sessions=max(0, total - baseline),
+        last_harvest=last_harvest,
+        days_since_harvest=(now - last_harvest) / 86400 if last_harvest else 999,
+        error=snapshot.get("error"),
     )
 
 
-def record_harvest(cfg: Config, label: str, sessions_harvested: int):
-    """Record a harvest completion."""
+def get_source_stats(cfg: Config) -> list[SourceStats]:
     state_path = os.path.join(cfg.path("analysis_dir"), "harvest-state.json")
     state = _load_harvest_state(state_path)
+    now = time.time()
+    sources: list[SourceStats] = []
 
-    state[label] = {
-        "last_harvest": time.time(),
-        "total_at_harvest": sessions_harvested,
-        "sessions_harvested": sessions_harvested,
-    }
+    opencode_db = cfg.get("sources", "opencode", "db_path", default="")
+    if opencode_db:
+        sources.append(_source_stat("opencode", opencode_db,
+                                    _get_opencode_stats(opencode_db), state, now))
 
-    _save_harvest_state(state_path, state)
+    hermes_db = cfg.get("sources", "hermes", "state_db", default="")
+    if hermes_db and cfg.get("sources", "hermes", "enabled", default=True):
+        sources.append(_source_stat("hermes", hermes_db,
+                                    _get_hermes_stats(hermes_db), state, now))
+    return sources
+
+
+def plan_harvest(cfg: Config, min_new_sessions: int = 50,
+                 min_days: float = 1.0, max_batch_hours: float = 8.0) -> HarvestPlan:
+    if min_new_sessions <= 0:
+        raise ValueError("min_new_sessions must be positive")
+    sources = get_source_stats(cfg)
+    errors = [f"{s.name}: {s.error}" for s in sources if s.error]
+    if errors:
+        return HarvestPlan(False, False, sources, 0, 0, [],
+                           "source inspection failed (fail closed): " + "; ".join(errors))
+
+    total_new = sum(s.new_sessions for s in sources)
+    aggregate_trigger = total_new >= min_new_sessions
+    targets = [s.name for s in sources if s.new_sessions > 0 and
+               (aggregate_trigger or s.new_sessions >= min_new_sessions or
+                s.days_since_harvest >= min_days)]
+    should_harvest = bool(targets)
+    should_train = aggregate_trigger and bool(targets)
+    reasons = [f"{s.name}: {s.new_sessions} new sessions" for s in sources if s.name in targets]
+    if aggregate_trigger:
+        reasons.append(f"{total_new} total new sessions >= {min_new_sessions}")
+
+    epochs = float(cfg.get("train", "num_train_epochs", default=2) or 2)
+    est_hours = total_new * 0.01 * 50 * epochs * 65 / 3600
+    if est_hours > max_batch_hours:
+        reasons.append(f"estimated {est_hours:.1f}h > {max_batch_hours}h limit")
+    if not reasons:
+        reasons.append("no new data reached the count/time trigger")
+    return HarvestPlan(should_harvest, should_train, sources, total_new,
+                       est_hours, targets, "; ".join(reasons))
+
+
+def record_harvest(cfg: Config, sources: Iterable[SourceStats]) -> None:
+    """Atomically advance every successfully extracted source baseline once."""
+    state_path = os.path.join(cfg.path("analysis_dir"), "harvest-state.json")
+    state = _load_harvest_state(state_path)
+    state["schema_version"] = 2
+    state.setdefault("sources", {})
+    now = time.time()
+    for source in sources:
+        state["sources"][source.name] = {
+            "last_harvest": now,
+            "total_at_harvest": source.total_sessions,
+            "sessions_harvested": source.new_sessions,
+        }
+    atomic_write_json(state_path, state)
 
 
 def main(cfg: Config) -> int:
-    """Show harvest status."""
-    sources = get_source_stats(cfg)
     plan = plan_harvest(cfg)
-
     print("[harvest-status]")
-    for s in sources:
-        print(f"  {s.name}: {s.total_sessions} sessions, "
-              f"{s.new_sessions} new since last harvest, "
-              f"{s.days_since_harvest:.1f} days ago")
-
+    for source in plan.sources:
+        suffix = f", ERROR={source.error}" if source.error else ""
+        print(f"  {source.name}: {source.total_sessions} sessions, "
+              f"{source.new_sessions} new, {source.days_since_harvest:.1f} days{suffix}")
     print(f"\n[harvest-plan] should_harvest={plan.should_harvest} "
           f"should_train={plan.should_train}")
     print(f"  total_new={plan.total_new}, est={plan.estimated_train_hours:.1f}h")
     print(f"  batch={plan.batch_labels}")
     print(f"  reason: {plan.reason}")
-
-    return 0
+    return 0 if not any(source.error for source in plan.sources) else 1

@@ -23,6 +23,7 @@ import sqlite3
 from typing import Any
 
 from src.config import Config
+from src.locking import atomic_write_json
 
 
 def _adapt_record(rec: dict) -> dict | None:
@@ -76,8 +77,7 @@ def _read_dir(h: dict, raw_dir: str) -> int:
             if adapted is None:
                 continue
             sid = adapted["session_id"] or fn
-            with open(os.path.join(raw_dir, f"hermes_{sid}.json"), "w") as f:
-                json.dump(adapted, f)
+            atomic_write_json(os.path.join(raw_dir, f"hermes_{sid}.json"), adapted)
             written += 1
     print(f"[hermes] read {written} sessions from dir {d}")
     return written
@@ -124,7 +124,9 @@ def _tool_calls_to_parts(tool_calls_raw: Any) -> list[dict]:
 
 def extract_state_db(cfg: Config, db_path: str, out_dir: str) -> int:
     print(f"[hermes] opening {db_path}")
-    con = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+    # Do not use immutable=1 for the live WAL database: immutable readers can
+    # miss newly committed WAL rows. mode=ro preserves source safety.
+    con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=60)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
 
@@ -226,8 +228,7 @@ def extract_state_db(cfg: Config, db_path: str, out_dir: str) -> int:
             "time_updated": srow["ended_at"] or srow["started_at"] or 0,
             "messages": messages,
         }
-        with open(os.path.join(out_dir, f"hermes_{sid}.json"), "w") as f:
-            json.dump(rec, f)
+        atomic_write_json(os.path.join(out_dir, f"hermes_{sid}.json"), rec)
         written += 1
         if written % 200 == 0:
             print(f"[hermes] {written} sessions written")
@@ -306,8 +307,7 @@ def enrich_from_neo4j(cfg: Config, out_dir: str) -> int:
                        "agent": "neo4j", "model": "", "project_id": "",
                        "directory": "", "time_created": 0, "time_updated": 0,
                        "messages": messages}
-                with open(os.path.join(out_dir, f"hermes_{sid}.json"), "w") as f:
-                    json.dump(rec, f)
+                atomic_write_json(os.path.join(out_dir, f"hermes_{sid}.json"), rec)
                 written += 1
     finally:
         driver.close()

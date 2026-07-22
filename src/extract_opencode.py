@@ -31,6 +31,7 @@ import os
 from typing import Any
 
 from src.config import Config
+from src.locking import atomic_write_json
 from src.db import CorruptDB
 
 
@@ -149,8 +150,7 @@ def extract_db(cfg: Config, db_path: str, out_dir: str, progress_every: int = 10
             "messages": ordered,
         }
         out_path = os.path.join(out_dir, f"{sid}.json")
-        with open(out_path, "w") as f:
-            json.dump(rec, f)
+        atomic_write_json(out_path, rec)
         written += 1
         if written % progress_every == 0:
             print(f"[extract] {written} sessions written")
@@ -237,8 +237,7 @@ def _extract_db_filtered(cfg: Config, db_path: str, out_dir: str, project: str) 
             rec = json.load(f)
         d = rec.get("directory", "") or ""
         if project in d:
-            with open(os.path.join(out_dir, fn), "w") as f:
-                json.dump(rec, f)
+            atomic_write_json(os.path.join(out_dir, fn), rec)
             kept += 1
         os.remove(os.path.join(tmp, fn))
     os.rmdir(tmp)

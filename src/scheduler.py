@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from src.config import Config
+from src.locking import atomic_write_json, legacy_training_processes
 
 
 SCHEDULER_STATE_FILE = "scheduler-state.json"
@@ -75,15 +76,15 @@ class Scheduler:
         )
 
     def _save_state(self):
-        os.makedirs(os.path.dirname(self.state_path), exist_ok=True)
-        with open(self.state_path, "w") as f:
-            json.dump(asdict(self.state), f, indent=2)
+        atomic_write_json(self.state_path, asdict(self.state))
 
-    def _run_cmd(self, cmd: list[str], timeout: int = 3600) -> tuple[int, str]:
+    def _run_cmd(self, cmd: list[str], timeout: int = 3600,
+                 extra_env: dict[str, str] | None = None) -> tuple[int, str]:
         """Run a command and return (returncode, output)."""
         try:
             env = os.environ.copy()
             env["PYTHONPATH"] = self.repo
+            env.update(extra_env or {})
             result = subprocess.run(
                 cmd, capture_output=True, text=True,
                 timeout=timeout, cwd=self.repo, env=env,
@@ -95,11 +96,9 @@ class Scheduler:
         except Exception as e:
             return 1, str(e)
 
-    def harvest(self) -> tuple[bool, dict]:
+    def harvest(self, plan) -> tuple[bool, dict]:
         """Run the harvest phase: extract + clean new data."""
-        from src.harvest import plan_harvest, record_harvest
-
-        plan = plan_harvest(self.cfg)
+        from src.harvest import record_harvest
 
         if not plan.should_harvest:
             return True, {"skipped": True, "reason": plan.reason}
@@ -112,7 +111,11 @@ class Scheduler:
             if label == "hermes":
                 cmd = [self.venv_python, "-m", "src.cli", "hermes"]
             else:
-                cmd = [self.venv_python, "-m", "src.cli", f"extract --label={label}"]
+                # The configured live OpenCode source is named opencode; its raw
+                # and dataset label is the established "ssd" label.
+                extract_label = "ssd" if label == "opencode" else label
+                cmd = [self.venv_python, "-m", "src.cli", "extract",
+                       f"--label={extract_label}"]
 
             rc, output = self._run_cmd(cmd, timeout=1800)
             if rc != 0:
@@ -126,20 +129,13 @@ class Scheduler:
             return False, {"error": f"clean failed: {output[-500:]}"}
         harvest_results["clean"] = "ok"
 
-        # Record harvest
-        for label in plan.batch_labels:
-            record_harvest(self.cfg, label, plan.total_new)
+        selected = [s for s in plan.sources if s.name in plan.batch_labels]
+        record_harvest(self.cfg, selected)
 
         return True, harvest_results
 
-    def train(self, labels: list[str] | None = None) -> tuple[bool, dict]:
+    def train(self, labels: list[str]) -> tuple[bool, dict]:
         """Run the training phase on queued datasets."""
-        from src.harvest import plan_harvest
-
-        if labels is None:
-            plan = plan_harvest(self.cfg)
-            labels = plan.batch_labels
-
         if not labels:
             return True, {"skipped": True, "reason": "no labels to train"}
 
@@ -148,16 +144,28 @@ class Scheduler:
 
         # Format datasets (safe while no training running)
         for label in labels:
-            cmd = [self.venv_python, "-m", "src.cli", f"format --label={label}"]
+            if label == "hermes":
+                cmd = [self.venv_python, "-m", "src.cli", "format", "--source=hermes"]
+            else:
+                dataset_label = "ssd" if label == "opencode" else label
+                cmd = [self.venv_python, "-m", "src.cli", "format",
+                       f"--label={dataset_label}"]
             rc, output = self._run_cmd(cmd, timeout=1800)
             if rc != 0:
-                print(f"[scheduler] WARNING: format failed for {label}")
+                return False, {"error": f"format failed for {label}: {output[-500:]}"}
 
         # Train each label sequentially
         for label in labels:
             print(f"[scheduler] training {label}...")
-            cmd = [self.venv_python, "-m", "src.cli", f"train --label={label}"]
-            rc, output = self._run_cmd(cmd, timeout=28800)  # 8h timeout
+            dataset_label = "hermes" if label == "hermes" else ("ssd" if label == "opencode" else label)
+            flag = f"--source={dataset_label}" if label == "hermes" else f"--label={dataset_label}"
+            cmd = [self.venv_python, "-m", "src.cli", "train", flag]
+            configured = self.cfg.get("train", "output_dir", default="outputs/checkpoints")
+            output_root = os.path.dirname(str(configured))
+            output_dir = os.path.join(output_root, f"toolcall-v5-3b-{dataset_label}")
+            timeout = int(self.cfg.get("scheduler", "train_timeout_seconds", default=86400) or 86400)
+            rc, output = self._run_cmd(
+                cmd, timeout=timeout, extra_env={"TRAIN_OUTPUT_DIR": output_dir})
             if rc != 0:
                 return False, {"error": f"train failed for {label}: {output[-500:]}"}
             train_results[f"train_{label}"] = "ok"
@@ -191,7 +199,7 @@ class Scheduler:
         print(f"[scheduler] winner: {winner}")
 
         # Merge
-        cmd = [self.venv_python, "-m", "src.cli", f"merge --label={winner}"]
+        cmd = [self.venv_python, "-m", "src.cli", "merge", f"--label={winner}"]
         rc, output = self._run_cmd(cmd, timeout=3600)
         if rc != 0:
             return False, winner, {"error": f"merge failed: {output[-500:]}"}
@@ -214,12 +222,10 @@ class Scheduler:
     def run_once(self, dry_run: bool = False) -> RunResult:
         """Run one complete cycle of the pipeline."""
         start = time.time()
-        self.state.current_phase = "harvesting"
-        self._save_state()
+        from src.harvest import plan_harvest
+        plan = plan_harvest(self.cfg)
 
         if dry_run:
-            from src.harvest import plan_harvest
-            plan = plan_harvest(self.cfg)
             return RunResult(
                 success=True, phase="dry-run",
                 message=f"would harvest: {plan.should_harvest}, train: {plan.should_train}",
@@ -227,10 +233,28 @@ class Scheduler:
                 harvest_stats={"plan": plan.reason},
             )
 
+        source_errors = [s.error for s in plan.sources if s.error]
+        if source_errors:
+            return RunResult(False, "planning", plan.reason, time.time() - start)
+        if plan.should_train:
+            legacy = legacy_training_processes()
+            if legacy:
+                return RunResult(
+                    False, "busy",
+                    f"legacy unleased trainer active; refusing dataset/GPU phases: {legacy}",
+                    time.time() - start,
+                )
+        if not plan.should_harvest:
+            return RunResult(True, "skipped", plan.reason, time.time() - start,
+                             harvest_stats={"skipped": True, "plan": plan.reason})
+
+        self.state.current_phase = "harvesting"
+        self._save_state()
+
         try:
             # Phase 1: Harvest
             print("[scheduler] === HARVEST ===")
-            ok, harvest_stats = self.harvest()
+            ok, harvest_stats = self.harvest(plan)
             if not ok:
                 self.state.current_phase = "idle"
                 self.state.runs_failed += 1
@@ -243,11 +267,25 @@ class Scheduler:
                     harvest_stats=harvest_stats,
                 )
 
-            # Phase 2: Train
+            self.state.last_harvest = time.time()
+            if not plan.should_train:
+                self.state.current_phase = "idle"
+                self.state.last_run = time.time()
+                self.state.runs_completed += 1
+                self.state.last_error = None
+                self._save_state()
+                return RunResult(
+                    success=True, phase="harvested",
+                    message="new traces harvested; training threshold not reached",
+                    duration_seconds=time.time() - start,
+                    harvest_stats=harvest_stats,
+                )
+
+            # Phase 2: Train using the immutable plan from before baseline update.
             self.state.current_phase = "training"
             self._save_state()
             print("[scheduler] === TRAIN ===")
-            ok, train_stats = self.train()
+            ok, train_stats = self.train(plan.batch_labels)
             if not ok:
                 self.state.current_phase = "idle"
                 self.state.runs_failed += 1
@@ -284,10 +322,24 @@ class Scheduler:
             print("[scheduler] === DEPLOY ===")
             ok, deploy_stats = self.deploy(winner)
 
+            if not ok:
+                self.state.current_phase = "idle"
+                self.state.last_run = time.time()
+                self.state.runs_failed += 1
+                self.state.last_error = str(deploy_stats.get("message") or "deploy failed")
+                self._save_state()
+                return RunResult(
+                    success=False, phase="deploy",
+                    message=self.state.last_error,
+                    duration_seconds=time.time() - start,
+                    harvest_stats=harvest_stats,
+                    train_stats=train_stats,
+                    deploy_stats=deploy_stats,
+                )
+
             # Update state
             self.state.current_phase = "idle"
             self.state.last_run = time.time()
-            self.state.last_harvest = time.time()
             self.state.last_train = time.time()
             self.state.last_deploy = time.time()
             self.state.runs_completed += 1
