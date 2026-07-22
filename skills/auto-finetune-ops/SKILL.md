@@ -108,6 +108,15 @@ hermes knowledge-graph import-sessions --db /home/scott/.hermes/state.db --since
 ```
 
 `--no-embed` preserves graph structure when the embedding endpoint is unavailable. The knowledge-graph provider requires the `knowledge-graph` optional dependency (`neo4j`); on xwing it is installed in the Hermes venv. New installs should include `hermes-agent[knowledge-graph]`.
+
+On xwing, route KG embeddings through the shared fleet registry instead of depending on local LM Studio:
+
+```bash
+hermes config set knowledge_graph.embeddings.registry_path /media/scott/SSD_4TB/hermes-home/auto-ingest/embedding_endpoints.json
+hermes config set knowledge_graph.embeddings.timeout 5
+```
+
+The client tries registry endpoints in priority order and pins the first working endpoint for that process. This keeps semantic indexing off xwing's training GPU and survives an individual endpoint failure.
 - Installed Hermes skills live on the SSD-backed shared Hermes home, so all agents see the same skill after `/reload-skills` or a new session.
 - The repository copy of this skill documents the code version. When behavior changes, patch both the repo copy and the installed skill in one change.
 
