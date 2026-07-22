@@ -13,9 +13,11 @@ on the training data.
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import os
 import re
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -117,29 +119,122 @@ def score_tool_calls(pred_text: str, gold_text: str) -> ToolCallScore:
     return sc
 
 
-# ── held-out split builder ─────────────────────────────────────────────────────
-def build_held_out(dataset_dir: str, label: str, frac: float = 0.1, seed: int = 42) -> Path:
-    """Carve a deterministic held-out split from train.<label>.jsonl.
+# ── future-run train/eval partition builder ───────────────────────────────────
+def _canonical_row(row: dict) -> str:
+    return json.dumps(row, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
-    Writes eval/held-out-<label>.jsonl (same messages schema) and returns its
-    path. Idempotent: re-running overwrites with the identical split.
+
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _atomic_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp",
+                                    dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, path)
+    finally:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass
+
+
+@dataclass
+class PartitionResult:
+    source_path: Path
+    train_path: Path
+    eval_path: Path
+    train_rows: list[dict]
+    eval_rows: list[dict]
+    source_sha256: str
+    seed: int
+    requested_fraction: float
+
+    @property
+    def contamination(self) -> dict:
+        train_keys = {_canonical_row(row) for row in self.train_rows}
+        eval_keys = {_canonical_row(row) for row in self.eval_rows}
+        overlap = train_keys & eval_keys
+        return {"status": "contaminated" if overlap else "clean",
+                "overlap_count": len(overlap)}
+
+
+def build_disjoint_partition(source_path: str | Path, out_dir: str | Path,
+                             frac: float = 0.1, seed: int = 42,
+                             label: str | None = None) -> PartitionResult:
+    """Write a deterministic, duplicate-safe train/eval pair for a future run.
+
+    The source is read-only. Identical canonical rows are grouped before seeded
+    selection, so duplicates can never land on opposite sides of the boundary.
+    Both outputs preserve source order and are replaced atomically.
+    """
+    src = Path(source_path)
+    if not src.is_file():
+        raise FileNotFoundError(f"dataset not found: {src}")
+    if not 0.0 < frac < 1.0:
+        raise ValueError("held-out fraction must be between 0 and 1")
+    raw = src.read_bytes()
+    rows = [json.loads(line) for line in raw.decode().splitlines() if line.strip()]
+    groups: dict[str, list[int]] = {}
+    for index, row in enumerate(rows):
+        groups.setdefault(_canonical_row(row), []).append(index)
+    if len(groups) < 2:
+        raise ValueError("need at least two distinct examples for a disjoint partition")
+
+    # Sorting by a seeded digest is deterministic across Python versions and
+    # independent of dictionary/hash randomization.
+    ranked = sorted(groups, key=lambda key: hashlib.sha256(
+        f"{seed}\0{key}".encode()).hexdigest())
+    target = max(1, int(len(rows) * frac))
+    held_indexes: set[int] = set()
+    for key in ranked[:-1]:  # always leave at least one distinct group in train
+        if len(held_indexes) >= target:
+            break
+        held_indexes.update(groups[key])
+    train_rows = [row for i, row in enumerate(rows) if i not in held_indexes]
+    eval_rows = [row for i, row in enumerate(rows) if i in held_indexes]
+
+    inferred = src.stem.removeprefix("train.") or "dataset"
+    label = label or inferred
+    root = Path(out_dir)
+    train_path = root / "datasets" / f"train.{label}.jsonl"
+    eval_path = root / "eval" / f"held-out-{label}.jsonl"
+    encode = lambda values: "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in values)
+    _atomic_text(train_path, encode(train_rows))
+    _atomic_text(eval_path, encode(eval_rows))
+    result = PartitionResult(src, train_path, eval_path, train_rows, eval_rows,
+                             _sha256_bytes(raw), seed, frac)
+    from src.locking import atomic_write_json
+    atomic_write_json(root / "partition.json", {
+        "source": str(src.resolve()), "source_sha256": result.source_sha256,
+        "seed": seed, "requested_fraction": frac, "n_source": len(rows),
+        "n_train": len(train_rows), "n_eval": len(eval_rows),
+        "train_path": str(train_path), "eval_path": str(eval_path),
+        "contamination": result.contamination,
+    })
+    return result
+
+
+def build_held_out(dataset_dir: str, label: str, frac: float = 0.1,
+                   seed: int = 42, out_dir: str | None = None) -> Path:
+    """Compatibility wrapper that now creates a disjoint future-run pair.
+
+    Unlike the former implementation, this never writes a held-out copy while
+    leaving the same rows in the run's training file.
     """
     src = Path(dataset_dir) / f"train.{label}.jsonl"
-    if not src.exists():
-        raise FileNotFoundError(f"dataset not found: {src}")
-    out_dir = Path(dataset_dir).parent / "eval"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / f"held-out-{label}.jsonl"
-
-    import random
-    rng = random.Random(seed)
-    rows = [json.loads(line) for line in src.read_text().splitlines() if line.strip()]
-    rng.shuffle(rows)
-    n = max(1, int(len(rows) * frac))
-    held = rows[:n]
-    out.write_text("\n".join(json.dumps(r) for r in held) + "\n")
-    print(f"[eval] held-out split for '{label}': {n}/{len(rows)} -> {out}")
-    return out
+    root = Path(out_dir) if out_dir else (Path(dataset_dir).parent / "future-runs" /
+                                          f"{label}-seed{seed}")
+    result = build_disjoint_partition(src, root, frac=frac, seed=seed, label=label)
+    print(f"[eval] future-run partition for '{label}': "
+          f"train={len(result.train_rows)} eval={len(result.eval_rows)} -> {root}")
+    return result.eval_path
 
 
 # ── model loading + loss ───────────────────────────────────────────────────────
@@ -282,10 +377,12 @@ def evaluate(
 
 
 def evaluate_baseline(
-    base_model: str, held_out_path: str, rocm: bool = False, max_seq: int = 8192
+    base_model: str, held_out_path: str, rocm: bool = False, max_seq: int = 8192,
+    loss_only: bool = False,
 ) -> EvalResult:
     """Loss + tool-call eval of the un-finetuned base model (control)."""
-    res = evaluate(base_model, base_model, held_out_path, rocm=rocm, max_seq=max_seq)
+    res = evaluate(base_model, base_model, held_out_path, rocm=rocm,
+                   max_seq=max_seq, loss_only=loss_only)
     res.adapter = "base"
     return res
 
@@ -335,7 +432,8 @@ def evaluate_all(
             )
         # attach the baseline (base model) for this label for comparison
         results.append(
-            evaluate_baseline(base_model, str(held), rocm=rocm, max_seq=max_seq)
+            evaluate_baseline(base_model, str(held), rocm=rocm, max_seq=max_seq,
+                              loss_only=loss_only)
         )
     return results
 
