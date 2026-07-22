@@ -721,3 +721,70 @@ def format_bench_matrix(matrix: dict) -> str:
             cells.append("✓" if (r and r.success) else ("✗" if r else "—"))
         lines.append(f"| {tid} | " + " | ".join(cells) + " |")
     return "\n".join(lines)
+
+
+def _aggregate(results: list[TaskResult]) -> dict:
+    """Roll a suite's TaskResults into headline metrics."""
+    n = len(results)
+    passed = sum(1 for r in results if r.success)
+    checks_total = sum(r.checks_total for r in results)
+    checks_passed = sum(r.checks_passed for r in results)
+    return {
+        "tasks": n,
+        "passed": passed,
+        "pass_rate": round(passed / n, 3) if n else 0.0,
+        "checks_total": checks_total,
+        "checks_passed": checks_passed,
+        "check_rate": round(checks_passed / checks_total, 3)
+                        if checks_total else 0.0,
+    }
+
+
+def compare_suites(base_results: list[TaskResult],
+                   adapter_results: list[TaskResult],
+                   base_name: str, adapter_name: str) -> dict:
+    """Delta of adapter vs base over the SAME task suite (CPU-safe).
+
+    Takes already-run result lists so the comparison math is unit-
+    testable without loading any model; `bench_compare` wraps it
+    with `bench_suite` over two `ModelDriver`s.
+    """
+    b = _aggregate(base_results)
+    a = _aggregate(adapter_results)
+    return {
+        "base_name": base_name,
+        "adapter_name": adapter_name,
+        "base": b,
+        "adapter": a,
+        "delta_pass_rate": round(a["pass_rate"] - b["pass_rate"], 3),
+        "delta_check_rate": round(a["check_rate"] - b["check_rate"], 3),
+    }
+
+
+def bench_compare(base_driver: ModelDriver, adapter_driver: ModelDriver,
+                   tasks: list[Task], base_name: str,
+                   adapter_name: str, gen_max_tokens: int = 512) -> dict:
+    """Run the held-out suite on base then adapter; return the delta.
+
+    Both drivers must implement ``generate(messages) -> str`` (the
+    ``ModelDriver`` interface). Pure CPU until a driver actually
+    loads a GPU model, so the harness is testable with a dummy
+    driver and ready the moment a trained adapter exists.
+    """
+    base = bench_suite(base_driver, tasks, base_name, "compare-base",
+                        gen_max_tokens=gen_max_tokens)
+    adapter = bench_suite(adapter_driver, tasks, adapter_name,
+                            "compare-adapter", gen_max_tokens=gen_max_tokens)
+    return compare_suites(base, adapter, base_name, adapter_name)
+
+
+def format_bench_comparison(c: dict) -> str:
+    b, a = c["base"], c["adapter"]
+    return "\n".join([
+        f"bench-compare: {c['base_name']}  vs  {c['adapter_name']}",
+        f"  tasks            : base={b['tasks']}  adapter={a['tasks']}",
+        f"  task pass-rate  : base={b['pass_rate']}  adapter={a['pass_rate']}  "
+        f"delta={c['delta_pass_rate']:+}",
+        f"  check pass-rate : base={b['check_rate']}  adapter={a['check_rate']}  "
+        f"delta={c['delta_check_rate']:+}",
+    ])

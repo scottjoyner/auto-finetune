@@ -126,3 +126,4 @@ paths:
   raw_dir: /media/scott/data/finetune-staging/data/raw
   cleaned_dir: /media/scott/data/finetune-staging/data/cleaned
   dataset_dir: /media/scott/data/finetune-staging/data/datasets
+  analysis_dir: /media/scott/data/finetune-staging/data/analysis

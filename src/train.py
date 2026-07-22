@@ -98,7 +98,8 @@ def _build_texts(dataset: list[dict], tokenizer, max_seq: int) -> list[str]:
 
 
 # ── Unsloth (CUDA) backend ────────────────────────────────────────────────────
-def _train_unsloth(cfg: Config, data: list[dict]) -> int:
+def _train_unsloth(cfg: Config, data: list[dict],
+                   tokenized_ds=None) -> int:
     from datasets import Dataset
     from trl import SFTTrainer
     from unsloth import FastLanguageModel
@@ -120,22 +121,32 @@ def _train_unsloth(cfg: Config, data: list[dict]) -> int:
         use_gradient_checkpointing="unsloth",
         random_state=3407,
     )
-    texts = _build_texts(data, tokenizer, t.get("max_seq_length", 8192))
-    ds = Dataset.from_dict({"text": texts})
-
-    trainer = SFTTrainer(
-        model=model,
-        args=_training_args(t, model, rocm=_detect_rocm()),
-        train_dataset=ds,
-        processing_class=tokenizer,
-    )
+    if tokenized_ds is not None:
+        print(f"[train] using pre-tokenized dataset ({len(tokenized_ds)} rows)")
+        trainer = SFTTrainer(
+            model=model,
+            args=_training_args(t, model, rocm=_detect_rocm()),
+            train_dataset=tokenized_ds,
+            processing_class=tokenizer,
+            tokenized=True,
+        )
+    else:
+        texts = _build_texts(data, tokenizer, t.get("max_seq_length", 8192))
+        ds = Dataset.from_dict({"text": texts})
+        trainer = SFTTrainer(
+            model=model,
+            args=_training_args(t, model, rocm=_detect_rocm()),
+            train_dataset=ds,
+            processing_class=tokenizer,
+        )
     trainer.train()
     _save(model, tokenizer, t)
     return 0
 
 
 # ── PEFT (CUDA + ROCm) backend ────────────────────────────────────────────────
-def _train_peft(cfg: Config, data: list[dict]) -> int:
+def _train_peft(cfg: Config, data: list[dict],
+                 tokenized_ds=None) -> int:
     import torch
     from datasets import Dataset
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
@@ -164,7 +175,7 @@ def _train_peft(cfg: Config, data: list[dict]) -> int:
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch.bfloat16 if _detect_rocm() else torch.float16,
+        dtype=torch.bfloat16 if _detect_rocm() else torch.float16,
         attn_implementation="sdpa",
         quantization_config=quant_config,
         # device_map="auto" wedges the ROCm runtime on this gfx1151 iGPU after a
@@ -190,15 +201,25 @@ def _train_peft(cfg: Config, data: list[dict]) -> int:
     model = get_peft_model(model, lora)
     model.print_trainable_parameters()
 
-    texts = _build_texts(data, tokenizer, max_seq)
-    ds = Dataset.from_dict({"text": texts})
+    if tokenized_ds is not None:
+        print(f"[train] using pre-tokenized dataset ({len(tokenized_ds)} rows)")
+        trainer = SFTTrainer(
+            model=model,
+            args=_training_args(t, model, rocm=_detect_rocm()),
+            train_dataset=tokenized_ds,
+            processing_class=tokenizer,
+            tokenized=True,
+        )
+    else:
+        texts = _build_texts(data, tokenizer, max_seq)
+        ds = Dataset.from_dict({"text": texts})
 
-    trainer = SFTTrainer(
-        model=model,
-        args=_training_args(t, model, rocm=_detect_rocm()),
-        train_dataset=ds,
-        processing_class=tokenizer,
-    )
+        trainer = SFTTrainer(
+            model=model,
+            args=_training_args(t, model, rocm=_detect_rocm()),
+            train_dataset=ds,
+            processing_class=tokenizer,
+        )
     trainer.train()
     _save(model, tokenizer, t)
     return 0
@@ -270,8 +291,9 @@ def _output_dir(t: dict) -> str:
     return t.get("output_dir", "outputs/checkpoints")
 
 
-def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: str | None = None, max_examples: int | None = None) -> int:
+def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: str | None = None, max_examples: int | None = None, tokenized_dir: str | None = None) -> int:
     dataset_dir = os.environ.get("TRAIN_DATASET_DIR") or cfg.path("dataset_dir")
+    tokenized_dir = tokenized_dir or os.environ.get("TRAIN_TOKENIZED_DIR")
     fn_parts = ["train"]
     if label:
         fn_parts.append(label)
@@ -284,6 +306,12 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
         print(f"[train] --max-examples={max_examples}: using first {len(data)} examples")
     print(f"[train] {len(data)} examples loaded from {data_path}")
 
+    tokenized_ds = None
+    if tokenized_dir:
+        from src.binarize import load_tokenized
+        tokenized_ds = load_tokenized(tokenized_dir)
+        print(f"[train] pre-tokenized dataset loaded from {tokenized_dir}")
+
     backend = _resolve_backend(cfg)
     print(f"[train] backend = {backend}  (cuda={_detect_cuda()}, rocm={_detect_rocm()})")
 
@@ -295,10 +323,14 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
             from transformers import AutoTokenizer
             tok_name = cfg.get("train", "model_name", default="Qwen/Qwen2.5-7B-Instruct")
             tok = AutoTokenizer.from_pretrained(tok_name)
-            sample = _render_sample_texts(
-                data, tok, cfg.get("train", "max_seq_length", default=8192)
-            )
-            print(f"[train] rendered {len(sample)} sample texts; first len={len(sample[0])} chars")
+            if tokenized_ds is not None:
+                print(f"[train] tokenized dataset rows={len(tokenized_ds)}; "
+                      f"first input_ids len={len(tokenized_ds[0]['input_ids'])}")
+            else:
+                sample = _render_sample_texts(
+                    data, tok, cfg.get("train", "max_seq_length", default=8192)
+                )
+                print(f"[train] rendered {len(sample)} sample texts; first len={len(sample[0])} chars")
             print("[train] dry-run OK — install a GPU/ROCm torch build to actually train")
         except Exception as e:
             print(f"[train] dry-run tokenizer check failed: {e}")
@@ -306,11 +338,11 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
 
     if backend == "unsloth":
         try:
-            return _train_unsloth(cfg, data)
+            return _train_unsloth(cfg, data, tokenized_ds=tokenized_ds)
         except ImportError as e:
             print(f"[train] unsloth unavailable ({e}); falling back to peft")
-            return _train_peft(cfg, data)
-    return _train_peft(cfg, data)
+            return _train_peft(cfg, data, tokenized_ds=tokenized_ds)
+    return _train_peft(cfg, data, tokenized_ds=tokenized_ds)
 
 
 if __name__ == "__main__":

@@ -109,67 +109,87 @@ def _iter_steps(rec: dict) -> list[dict]:
 
 
 def mine_repairs(cleaned_dir: str, failures_path: str,
-                  out_path: str, include_commands: bool = False) -> tuple[int, dict]:
-    """Mine in-session self-repairs from failures into DPO-style pairs.
+                  out_path: str, include_commands: bool = False,
+                  all_sessions: bool = False) -> tuple[int, dict]:
+    """Mine in-session self-repairs into DPO-style pairs.
 
     Returns ``(n_pairs, taxonomy)``. Writes one JSON object per pair to
     ``out_path``.
 
-    By default only file-target self-repairs are emitted (the highest
-    signal). With ``include_commands=True`` shell-tool self-repairs are
-    also mined: an errored command followed (later, same session) by a
-    *successful* call to the same tool with different arguments.
+    By default only file-target self-repairs from the *failure* sessions
+    are emitted (the highest signal). With ``include_commands=True``
+    shell-tool self-repairs are also mined. With ``all_sessions=True`` the
+    miner scans *every* cleaned session (not just final-failure ones) for an
+    in-session error->success repair, which grows the pair count with
+    genuine self-corrections that happened before the session ultimately
+    recovered (or failed elsewhere). ``bucket`` is taken from the failure
+    record when available, else left empty.
     """
     sessions = load_session_map(cleaned_dir)
     pairs: list[dict] = []
     tax: dict = {"by_marker": Counter(), "by_tool": Counter(),
                  "by_bucket": Counter(), "no_target": 0, "repaired": 0}
 
-    with open(failures_path) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            d = json.loads(line)
-            sid = d.get("session_id")
-            bucket = d.get("bucket", "")
-            rec = sessions.get(sid)
-            if rec is None:
-                continue
-            steps = _iter_steps(rec)
-            # error steps that have a matchable key (file target, or a
-            # shell tool when include_commands is set)
-            err_idx = [k for k, s in enumerate(steps)
-                       if _is_error(s["result"]) and _match_key(s, include_commands)]
-            if not err_idx:
-                tax["no_target"] += 1
-                continue
-            for k in err_idx:
-                key_k = _match_key(steps[k], include_commands)
-                marked = next((m for m in _ERROR_MARKERS
-                               if m in (steps[k]["result"] or "").lower()), None)
-                tax["by_marker"][marked] += 1
-                tax["by_tool"][steps[k]["tool"]] += 1
-                tax["by_bucket"][bucket] += 1
-                # later step with the SAME key, different args, no error -> fix
-                for j in range(k + 1, len(steps)):
-                    if (_match_key(steps[j], include_commands) == key_k
-                            and steps[j]["input"] != steps[k]["input"]
-                            and not _is_error(steps[j]["result"])):
-                        pairs.append({
-                            "session": sid,
-                            "bucket": bucket,
-                            "error_tool": steps[k]["tool"],
-                            "target": steps[k]["target"],
-                            "error_marker": marked,
-                            "prompt_messages": rec["messages"][:steps[k]["idx"]],
-                            "rejected_call": {"name": steps[k]["tool"],
-                                              "arguments": steps[k]["input"]},
-                            "chosen_call": {"name": steps[j]["tool"],
-                                            "arguments": steps[j]["input"]},
-                        })
-                        tax["repaired"] += 1
-                        break
+    if all_sessions:
+        fail_map: dict = {}
+        if os.path.exists(failures_path):
+            with open(failures_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    d = json.loads(line)
+                    fail_map[d.get("session_id")] = d
+        items = [(sid, fail_map.get(sid, {}).get("bucket", ""))
+                 for sid in sessions]
+    else:
+        with open(failures_path) as f:
+            items = []
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                d = json.loads(line)
+                items.append((d.get("session_id"), d.get("bucket", "")))
+
+    for sid, bucket in items:
+        rec = sessions.get(sid)
+        if rec is None:
+            continue
+        steps = _iter_steps(rec)
+        # error steps that have a matchable key (file target, or a
+        # shell tool when include_commands is set)
+        err_idx = [k for k, s in enumerate(steps)
+                   if _is_error(s["result"]) and _match_key(s, include_commands)]
+        if not err_idx:
+            tax["no_target"] += 1
+            continue
+        for k in err_idx:
+            key_k = _match_key(steps[k], include_commands)
+            marked = next((m for m in _ERROR_MARKERS
+                           if m in (steps[k]["result"] or "").lower()), None)
+            tax["by_marker"][marked] += 1
+            tax["by_tool"][steps[k]["tool"]] += 1
+            tax["by_bucket"][bucket] += 1
+            # later step with the SAME key, different args, no error -> fix
+            for j in range(k + 1, len(steps)):
+                if (_match_key(steps[j], include_commands) == key_k
+                        and steps[j]["input"] != steps[k]["input"]
+                        and not _is_error(steps[j]["result"])):
+                    pairs.append({
+                        "session": sid,
+                        "bucket": bucket,
+                        "error_tool": steps[k]["tool"],
+                        "target": steps[k]["target"],
+                        "error_marker": marked,
+                        "prompt_messages": rec["messages"][:steps[k]["idx"]],
+                        "rejected_call": {"name": steps[k]["tool"],
+                                          "arguments": steps[k]["input"]},
+                        "chosen_call": {"name": steps[j]["tool"],
+                                        "arguments": steps[j]["input"]},
+                    })
+                    tax["repaired"] += 1
+                    break
 
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w") as f:

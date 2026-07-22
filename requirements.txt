@@ -2,6 +2,10 @@
 apsw>=3.45
 pyyaml>=6.0
 
+# CPU-heavy: deduplication, profiling, pre-tokenization
+pyarrow>=14.0.0
+datasets>=2.14.0
+
 # Training backend 1 — CUDA only, fastest:
 # unsloth
 # (install on a CUDA machine: pip install unsloth)

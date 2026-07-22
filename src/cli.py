@@ -181,8 +181,10 @@ def main(argv: list[str]) -> int:
                       f"(run `analyze` first)")
                 return 2
             include_cmds = "--include-commands" in argv
+            all_sessions = "--all-sessions" in argv
             n, tax = mine_repairs(cleaned, failures, out,
-                                   include_commands=include_cmds)
+                                   include_commands=include_cmds,
+                                   all_sessions=all_sessions)
             print(f"[mine-repairs] {n} contrastive repair pairs -> {out}")
             print(f"  repaired (in-session self-fix): {tax['repaired']}")
             print(f"  failures w/o a file-target error: {tax['no_target']}")
@@ -256,6 +258,79 @@ def main(argv: list[str]) -> int:
             dry = "--dry-run" in argv
             max_ex = _parse_int_flag(argv, "--max-examples")
             return run(cfg, dry_run=dry, source=source, label=label, max_examples=max_ex)
+        if cmd == "dedup":
+            from src.dedup import main as run
+            threshold = float(_parse_str_flag(argv, "--threshold") or "0.85")
+            return run(cfg, label=label, threshold=threshold)
+        if cmd == "profile":
+            from src.profile import main as run
+            out = _parse_str_flag(argv, "--out")
+            return run(cfg, label=label, out_dir=out)
+        if cmd == "pretokenize":
+            from src.pretokenize import main as run
+            model = _parse_str_flag(argv, "--model")
+            max_length = _parse_int_flag(argv, "--max-length") or 2048
+            return run(cfg, label=label, model=model, max_length=max_length)
+        if cmd == "harvest-status":
+            from src.harvest import main as run
+            return run(cfg)
+        if cmd == "harvest-plan":
+            from src.harvest import plan_harvest
+            min_new = _parse_int_flag(argv, "--min-new") or 50
+            plan = plan_harvest(cfg, min_new_sessions=min_new)
+            print(f"[harvest-plan] should_harvest={plan.should_harvest} should_train={plan.should_train}")
+            print(f"  total_new={plan.total_new}, batch={plan.batch_labels}")
+            print(f"  reason: {plan.reason}")
+            return 0
+        if cmd in ("deploy", "deploy-status", "rollback", "multi-deploy-status", "discover-nodes"):
+            from src.deploy import main as run
+            return run(cfg, argv)
+        if cmd == "registry-list":
+            from src.registry import main as run
+            return run(cfg, ["registry-list"] + argv[2:])
+        if cmd == "registry-add":
+            from src.registry import main as run
+            return run(cfg, ["registry-add"] + argv[2:])
+        if cmd == "scheduler-status":
+            from src.scheduler import main as run
+            return run(cfg, ["scheduler-status"] + argv[2:])
+        if cmd == "scheduler-run":
+            from src.scheduler import main as run
+            return run(cfg, ["scheduler-run"] + argv[2:])
+        if cmd == "scheduler-loop":
+            from src.scheduler import main as run
+            return run(cfg, ["scheduler-loop"] + argv[2:])
+        if cmd in ("notify", "notify-history"):
+            from src.notify import main as run
+            return run(cfg, argv)
+        if cmd in ("metrics-record", "metrics-compare", "metrics-regression",
+                   "metrics-history", "metrics-summary"):
+            from src.metrics import main as run
+            return run(cfg, argv)
+        if cmd in ("quantize", "quantize-status"):
+            from src.quantize import main as run
+            return run(cfg, argv)
+        if cmd in ("auto-balance", "auto-balance-status"):
+            from src.auto_balance import main as run
+            cap = _parse_int_flag(argv, "--cap") or 500
+            out = _parse_str_flag(argv, "--out")
+            return run(cfg, label=label, cap=cap, out_dir=out)
+        if cmd in ("dataset-version-create", "dataset-version-list",
+                   "dataset-version-diff", "dataset-version-restore"):
+            from src.dataset_version import main as run
+            return run(cfg, argv)
+        if cmd in ("cost-record", "cost-summary", "cost-history"):
+            from src.cost import main as run
+            return run(cfg, argv)
+        if cmd == "binarize":
+            from src.binarize import main as run
+            return run(cfg, argv)
+        if cmd == "audit":
+            from src.audit import main as run
+            return run(cfg, argv)
+        if cmd == "verify-gap":
+            from src.verify_gap import main as run
+            return run(cfg, argv)
         if cmd == "eval-split":
             from src.eval import build_held_out
             frac = float(_parse_str_flag(argv, "--frac") or "0.1")
@@ -283,6 +358,24 @@ def main(argv: list[str]) -> int:
             print(f"[eval] adapter {adapter} on {label}...")
             a = evaluate(adapter, base, str(held), rocm=_detect_rocm())
             print(json.dumps({"baseline": b.as_dict(), "adapter": a.as_dict()}, indent=2))
+            return 0
+        if cmd == "bench-compare":
+            from src.bench import bench_compare, format_bench_comparison, load_tasks, make_driver
+            from src.train import _detect_rocm
+            base = _parse_str_flag(argv, "--base")
+            adapter = _parse_str_flag(argv, "--adapter")
+            if not (base and adapter):
+                print("[error] bench-compare needs --base=<dir> --adapter=<dir>")
+                return 2
+            tasks_path = (_parse_str_flag(argv, "--tasks")
+                          or os.path.join(os.path.dirname(__file__), "..",
+                                          "eval", "tasks", "auto-verified.jsonl"))
+            tasks = load_tasks(tasks_path)
+            rocm = _detect_rocm()
+            bd = make_driver("local-chat", model_path=base, rocm=rocm)
+            ad = make_driver("subagent", model_path=adapter)
+            comp = bench_compare(bd, ad, tasks, base, adapter)
+            print(format_bench_comparison(comp))
             return 0
         if cmd == "eval-all":
             from src.eval import evaluate_all, format_report, write_report
@@ -593,9 +686,25 @@ def main(argv: list[str]) -> int:
         print(f"[error] {e}")
         return 2
     print(__doc__)
-    print("Commands: extract | hermes | clean | format | combine | analyze | strata | verify | verify-exec | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | all")
+    print("Commands: extract | hermes | clean | format | combine | analyze | strata | verify | verify-exec | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | dedup | profile | pretokenize | all")
     print("Flags:    --source=hermes|opencode  --label=<name>  --all-split  --dry-run  --max-examples=<n>  --frac=<held-out-frac>  --loss-only  --report  --metric=<loss|tool_exact>")
     print("Analyze:  analyze [--out=<dir>]   strata [--out=<dir>] [--bucket-map=<json>] [--balance] [--cap=<n>]")
+    print("CPU:      dedup [--threshold=0.85]  profile [--out=<dir>]  pretokenize [--model=<path>] [--max-length=2048]")
+    print("Harvest:  harvest-status  harvest-plan [--min-new=50]")
+    print("Deploy:   deploy --label=<name> --nodes=<n1,n2,...> [--quorum=N]")
+    print("          deploy-status  multi-deploy-status  discover-nodes")
+    print("          rollback --label=<name> [--nodes=<n1,...>]")
+    print("Registry: registry-list [--label=<name>]  registry-add --label=<name> --checkpoint=<path>")
+    print("Scheduler: scheduler-status  scheduler-run [--dry-run]  scheduler-loop [--interval=3600]")
+    print("Notify:   notify --event=<name> --message=<text>  notify-history [--limit=N]")
+    print("Metrics:  metrics-record --label=<name> [--loss=<f>] [--eval-loss=<f>]")
+    print("          metrics-compare --label=<name>  metrics-regression --label=<name>")
+    print("          metrics-history [--label=<name>]  metrics-summary [--label=<name>]")
+    print("Quantize: quantize --label=<name> [--bits=4] [--method=gptq|awq]  quantize-status")
+    print("Balance:  auto-balance [--cap=500] [--out=<dir>]")
+    print("Dataset:  dataset-version-create --label=<name>  dataset-version-list")
+    print("          dataset-version-diff --v1=<id> --v2=<id>  dataset-version-restore --v2=<id>")
+    print("Cost:     cost-record --label=<name> --hours=<h>  cost-summary  cost-history")
     print("Bench:    --runner=self|subagent|api|hermes|local-chat  --model=<dir>  --tasks=<jsonl>  --fleet [--fleet-hint=]  --base-url=  --api-model=")
     print("Bench-matrix: --specs=<json-list> | --preset=local-refs|local|lmstudio|fleet|fast|all   --tasks=<jsonl>  --report")
     return 0

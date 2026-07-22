@@ -320,3 +320,171 @@ example) before using them.
 
 **Run when:** CPU-only and safe to run while training runs.
 
+### Grow the repair pairs (`--all-sessions`)
+
+`mine-repairs --all-sessions` scans **every** cleaned session (not just
+final-failure ones) for an in-session error→success self-repair, which
+adds genuine corrections that happened before the session ultimately
+recovered. On the live corpus this lifts the pair count from **605 → 702**
+(file-targeted + command self-repairs). `bucket` defaults to `` for
+non-failure sessions. Rebuild the DPO mix afterward:
+
+```bash
+python -m src.cli mine-repairs --all-sessions --include-commands \
+  --out=/media/scott/data/finetune-staging/data/analysis/repairs.jsonl
+python -c "from src.repair_mix import build_dpo_mix; \
+  build_dpo_mix('/media/scott/data/finetune-staging/data/analysis/repairs.jsonl', \
+                 '/media/scott/data/finetune-staging/launch/repairs/repairs.dpo.jsonl')"
+```
+
+### Diagnose the benchmark ceiling (`verify-gap`)
+
+`analyze` mines 80 auto-tasks; `verify` can only statically replay
+file writes, so exactly 31 tasks can never pass (the 61.3% ceiling).
+`verify-gap` (`src/verify_gap.py`) categorizes **why** each failing
+task fails, from `verify-report.jsonl`:
+
+```bash
+python -m src.cli verify-gap
+# -> 26 file_not_materialized (absolute/remote path not replayed)
+# ->  5 snippet_missing       (file present, expected snippet absent)
+```
+
+`file_not_materialized` = the expected file was created at an absolute or
+remote path the sandbox can't relocate; `snippet_missing` = a likely
+check-extraction bug. **Extending past the ceiling** needs either a
+container sandbox that bind-mounts the original dirs (so absolute writes
+land inside it) or new safe check kinds — that verifier work is left for
+a dedicated pass (it trades on execution safety).
+
+### Leakage audit (`audit`)
+
+Confirms no benchmark task's instruction appears as a substring of any
+training example (content-level leakage beyond the session hold-out):
+
+```bash
+python -m src.cli audit
+# -> [audit] train=10000 bench=49 hits=0  (no leakage)
+```
+
+### Near-duplicate detection (`dedup`)
+
+`python -m src.cli dedup` (`src/dedup.py`) uses MinHash + LSH to find
+near-duplicate sessions that differ only in whitespace, formatting, or
+minor edits. This is CPU-only and safe to run while training.
+
+```bash
+python -m src.cli dedup --threshold=0.85
+# [dedup] 2500 sessions, threshold=0.85
+# [dedup] removed 180 exact session_id duplicates
+# [dedup] kept 2320 sessions, removed 45 near-duplicates
+```
+
+The threshold controls similarity (0.0-1.0):
+- `0.95` = very strict (only near-identical)
+- `0.85` = default (good balance)
+- `0.75` = loose (catches more variants)
+
+### Dataset profiling (`profile`)
+
+`python -m src.cli profile` (`src/profile.py`) computes token length
+distributions, language detection, code complexity metrics, and topic
+clustering. Fully CPU-safe.
+
+```bash
+python -m src.cli profile
+# [profile] profiling 2320 sessions
+# [profile] 2320 sessions, 4500000 tokens
+# [profile] avg tokens: 1940, median: 1650
+# [profile] languages: {'python': 1200, 'javascript': 450, 'text': 670}
+```
+
+### Auto-balancing (`auto-balance`)
+
+`python -m src.cli auto-balance` (`src/auto_balance.py`) uses the bucket
+analysis to create balanced training datasets by upsampling minority
+classes and downsampling majority classes.
+
+```bash
+python -m src.cli auto-balance --cap=500
+# [auto-balance] loaded 2320 sessions
+# [auto-balance] sampled 1800 sessions across 10 buckets
+#   file-edit: 200
+#   multi-file-refactor: 150
+#   shell: 180
+#   debug: 250
+```
+
+Bucket weights:
+- `multi-file-refactor`: 2.5x (highest priority)
+- `file-edit`, `data-analysis`: 2.0x
+- `shell`, `code-search`: 1.5x
+- `debug`, `docs`: 1.0x
+- `reasoning`: 0.5x (downsampled)
+
+### Dataset versioning (`dataset-version`)
+
+`python -m src.cli dataset-version-create` (`src/dataset_version.py`)
+creates versioned snapshots of datasets with content hashing for
+reproducibility.
+
+```bash
+python -m src.cli dataset-version-create --label=combined
+# [dataset-version] created v20260720-220000
+#   label: combined
+#   examples: 10000
+#   hash: e3b0c44298fc1c14...
+
+python -m src.cli dataset-version-list
+# [dataset-version] 3 versions:
+#   v20260720-220000 [combined] 10000 examples 45.2MB
+#   v20260719-180000 [combined] 9500 examples 42.1MB
+#   v20260718-120000 [combined] 9000 examples 39.8MB
+```
+
+### Pre-tokenize the mix (`pretokenize`)
+
+`python -m src.cli pretokenize` (`src/pretokenize.py`) renders the
+dataset through the chat template and tokenizes it **once** with the
+real base tokenizer, saving a pre-tokenized Arrow/Parquet dataset.
+
+```bash
+python -m src.cli pretokenize --label=combined --max-length=2048
+# [pretokenize] loading tokenizer: Qwen/Qwen2.5-7B-Instruct
+# [pretokenize] 10000 sessions, max_length=2048
+# [pretokenize] tokenized 10000 sessions
+# [pretokenize] 4500000 total tokens, 450 avg per session
+# [pretokenize] output: /path/to/pretokenized/tokenized.parquet
+```
+
+### Pre-tokenize the mix (`binarize`)
+
+`binarize` (`src/binarize.py`) renders the 10k mix through the chat
+template and tokenizes it **once** with the real base tokenizer,
+saving a pre-tokenized Arrow dataset (`input_ids`/`attention_mask`/
+`labels`, full-sequence supervision) so the focused `train` step doesn't
+re-tokenize every epoch. `train` consumes it via `TRAIN_TOKENIZED_DIR`
+(or `main(tokenized_dir=...)`); the default JSONL path is unchanged.
+
+```bash
+python -m src.cli binarize \
+  --src=/media/scott/data/finetune-staging/data/analysis/train.balanced.jsonl \
+  --out=/media/scott/data/finetune-staging/data/analysis/train.balanced.arrow \
+  --model=/media/scott/SSD_4TB/models-fast/RefinedNeuro/RefinedToolCallV5-3b
+# then later:  TRAIN_TOKENIZED_DIR=.../train.balanced.arrow python -m src.cli train --label=...
+```
+
+### Base-vs-adapter benchmark diff (`bench-compare`)
+
+`bench-compare` (`src/bench.py`) runs the held-out 80-task suite on a
+**base model** and on a **trained adapter**, then prints the delta in
+task / check pass-rate. Pure CPU until a driver loads a GPU model, so the
+harness is ready the moment an adapter exists.
+
+```bash
+python -m src.cli bench-compare \
+  --base=/media/scott/SSD_4TB/models-fast/RefinedNeuro/RefinedToolCallV5-3b \
+  --adapter=/media/scott/data/finetune-staging/outputs/checkpoints/toolcall-v5-3b-<label> \
+  --tasks=eval/tasks/auto-verified.jsonl
+```
+

@@ -32,8 +32,12 @@ sudo grub-reboot "gnulinux-7.0.0-28-generic-advanced-bb13b3dd-737f-4736-af88-a1c
 sudo reboot
 ```
 
-After reboot, verify with:
+After reboot, load GPU modules and verify:
 ```bash
+# kfd is now built into amdgpu — just load amdgpu:
+sudo modprobe amdgpu
+
+# verify:
 bash /media/scott/data/finetune-staging/post-reboot-check.sh
 ```
 Expected: `uname -r` → `7.0.0-28-generic`, `H2D ok`, `DONE`.
@@ -48,11 +52,9 @@ Expected: `uname -r` → `7.0.0-28-generic`, `H2D ok`, `DONE`.
   ```
 - venv: `/media/scott/data/finetune-venv`  (LOCAL `/media/scott/data` drive,
   NOT the NFS SSD_4TB). Built with ROCm torch.
-  - **torch must be `2.11.0.dev20260206+rocm7.0`** (the cached wheel at
-    `/media/scott/data/pip-tmp/torch-2.11.0.dev20260206+rocm7.0-*.whl`).
-    A plain `pip install torch` pulled CUDA torch 2.13.0 and broke the GPU —
-    re-pin with `--index-url https://download.pytorch.org/whl/rocm7.0` and
-    `--no-deps` if it ever gets clobbered again.
+  - **torch is `2.12.0+rocm7.14.0`** (upgraded from 2.11.0.dev). Works with
+    ROCm 7.0 runtime. If clobbered by a plain `pip install torch`, re-pin with
+    `--index-url https://download.pytorch.org/whl/rocm7.0` and `--no-deps`.
   - deps: peft 0.19.1, transformers 5.14.1, trl 1.8.0, datasets 5.0.0.
 - Storage:
   - Local workspace: `/media/scott/data` (1.6T, 604G free) — USE THIS for
@@ -103,3 +105,10 @@ TRAIN_ARGS="--label=ssd" nohup python -m src.cli train $TRAIN_ARGS \
 - #6 `--source=hermes` picks `train.hermes.jsonl`.
 - NEW: keep the `7.0.0-28-generic` kernel; do NOT boot `6.17.0-1028-oem`
   for ROCm work (breaks gfx1151 dispatch).
+- NEW: `sudo modprobe amdgpu` after reboot (kfd is built into amdgpu now).
+
+## Queue status (updated 2026-07-21)
+- **Done**: ssd, nas5-main, nas5-20260717, opencode-all
+- **Remaining**: opencode-portfolio, hermes-reasoning, combined
+- State file: `/media/scott/data/finetune-staging/launch-next.state`
+- Run `./launch-next.sh --loop` to continue the queue.

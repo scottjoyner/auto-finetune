@@ -4,12 +4,17 @@ import json
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from src.bench import (
     ModelDriver,
     Task,
+    TaskResult,
     ToolEnv,
     bench_suite,
     build_auto_bench,
+    compare_suites,
+    format_bench_comparison,
     load_tasks,
     run_task,
 )
@@ -169,3 +174,25 @@ def test_bench_suite_runs(tmp_path: Path) -> None:
     results = bench_suite(_DummyDriver(), [task], "dummy", "self")
     assert len(results) == 1
     assert results[0].success
+
+
+def _mk_result(checks_passed: int, checks_total: int) -> TaskResult:
+    r = TaskResult("t", "exec", "dummy", "dummy")
+    r.checks_passed = checks_passed
+    r.checks_total = checks_total
+    return r
+
+
+def test_compare_suites_delta() -> None:
+    # base: 2/3 tasks pass, 3/5 checks pass; adapter: 3/3 tasks, 5/5 checks
+    base = [_mk_result(2, 2), _mk_result(0, 2), _mk_result(1, 1)]
+    adapter = [_mk_result(2, 2), _mk_result(2, 2), _mk_result(1, 1)]
+    comp = compare_suites(base, adapter, "base", "adapter")
+    assert comp["base"]["pass_rate"] == pytest.approx(2 / 3, abs=1e-3)
+    assert comp["adapter"]["pass_rate"] == 1.0
+    assert comp["delta_pass_rate"] == pytest.approx(1 / 3, abs=1e-3)
+    assert comp["adapter"]["check_rate"] == 1.0
+    assert comp["base"]["check_rate"] == pytest.approx(3 / 5, abs=1e-3)
+    assert comp["delta_check_rate"] == pytest.approx(2 / 5, abs=1e-3)
+    assert "delta=" in format_bench_comparison(comp)
+    assert "bench-compare:" in format_bench_comparison(comp)

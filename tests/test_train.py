@@ -205,7 +205,7 @@ def test_main_uses_label_dataset_path(tmp_path, monkeypatch):
 
     monkeypatch.setattr(T, "validate_dataset", fake_validate)
     monkeypatch.setattr(T, "_resolve_backend", lambda cfg: "peft")
-    monkeypatch.setattr(T, "_train_peft", lambda cfg, data: 0)
+    monkeypatch.setattr(T, "_train_peft", lambda cfg, data, tokenized_ds=None: 0)
 
     assert T.main(cfg, label="ssd") == 0
     assert seen["path"].endswith("train.ssd.jsonl")

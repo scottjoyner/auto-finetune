@@ -17,7 +17,8 @@ agentic benchmark.
 ```
 auto-finetune/
 ├── config.yaml            # all knobs (sources, cleaning, formatting, training)
-├── post-queue.sh          # post-training automation: eval -> best -> probe -> merge -> validate -> benchmark
+├── launch-next.sh         # hands-off chained finetune runner
+├── post-queue.sh          # post-training: eval -> best -> probe -> merge -> validate -> benchmark
 ├── src/
 │   ├── config.py          # loads config.yaml
 │   ├── db.py              # resilient read of corrupt SQLite DBs (row-by-row)
@@ -32,33 +33,180 @@ auto-finetune/
 │   ├── drivers_localchat.py # standard HF chat-model runner (native tool format)
 │   ├── subagent.py        # MCP/ACP-over-stdio server wrapping the optimized loop
 │   ├── fleet.py           # read-only lan fleet-router helper (large references)
+│   │
+│   │  # CPU-heavy data processing
+│   ├── dedup.py           # MinHash + LSH near-duplicate detection
+│   ├── profile.py         # token stats, language detection, topic clustering
+│   ├── pretokenize.py     # batch tokenize to Arrow/Parquet format
+│   ├── auto_balance.py    # weighted balancing from bucket analysis
+│   ├── dataset_version.py # version datasets with content hashing
+│   │
+│   │  # Analysis and verification
+│   ├── analyze.py         # task bucket classification, difficulty, quality flags
+│   ├── contrast.py        # mine contrastive repair pairs from failures
+│   ├── verify.py          # static replay verification
+│   ├── verify_exec.py     # guarded execution replay
+│   ├── verify_gap.py      # diagnose benchmark ceiling
+│   ├── audit.py           # training/benchmark leakage detection
+│   ├── binarize.py        # pre-tokenize to Arrow format
+│   │
+│   │  # Auto-harvester pipeline
+│   ├── harvest.py         # data drift detection, batch planning
+│   ├── scheduler.py       # orchestrate harvest-train-deploy cycle
+│   ├── deploy.py          # single/multi-node deployment with health checks
+│   ├── registry.py        # model version registry with lineage
+│   │
+│   │  # Operations
+│   ├── notify.py          # desktop/webhook/email alerts
+│   ├── metrics.py         # training metrics tracking, regression detection
+│   ├── quantize.py        # post-merge GPTQ/AWQ quantization
+│   ├── cost.py            # GPU hours and resource tracking
+│   │
 │   └── cli.py             # `python -m src.cli <command>`
 └── data/
     ├── raw/               # extracted JSON per session
     ├── cleaned/           # normalized conversations
-    └── datasets/          # final formatted train.jsonl
+    ├── datasets/          # final formatted train.jsonl
+    └── analysis/          # buckets, tasks, metrics, registry
+```
+
+## Quick Start
+
+```bash
+# Full pipeline (extract -> clean -> train -> eval -> deploy)
+python -m src.cli all
+
+# Or run the continuous auto-harvester loop
+python -m src.cli scheduler-loop --interval=3600
+
+# Manual steps
+python -m src.cli extract --label=ssd
+python -m src.cli hermes
+python -m src.cli clean
+python -m src.cli analyze
+python -m src.cli auto-balance --cap=500
+python -m src.cli format
+python -m src.cli train --label=combined
+python -m src.cli eval-all
+python -m src.cli merge --label=combined
+python -m src.cli deploy --label=combined --nodes=local,nas5
 ```
 
 ## Stages
+
+### Data Pipeline (CPU-only)
 
 | Stage | Command | What it does |
 |-------|---------|--------------|
 | Extract | `python -m src.cli extract` | Reads opencode DBs row-by-row, writes `data/raw/<session>.json` |
 | Clean | `python -m src.cli clean` | Redacts secrets, drops empty turns, dedupes |
+| Dedup | `python -m src.cli dedup --threshold=0.85` | MinHash + LSH near-duplicate detection |
+| Profile | `python -m src.cli profile` | Token stats, language detection, topic clustering |
+| Analyze | `python -m src.cli analyze` | Task bucket classification, difficulty scoring |
+| Balance | `python -m src.cli auto-balance --cap=500` | Weighted balancing across task buckets |
 | Format | `python -m src.cli format` | Reconstructs conversations into a chat template |
+| Pretokenize | `python -m src.cli pretokenize` | Batch tokenize to Arrow/Parquet format |
+| Version | `python -m src.cli dataset-version-create` | Version dataset snapshots for reproducibility |
+
+### Training
+
+| Stage | Command | What it does |
+|-------|---------|--------------|
 | Train | `python -m src.cli train` | Unsloth/PEFT QLoRA finetune on the formatted dataset |
 | Eval | `python -m src.cli eval-all` | Held-out loss + tool-call correctness table |
 | Best | `python -m src.cli best --metric=loss` | Pick the winning adapter |
 | Probe | `python -m src.cli probe --label=<x>` | Qualitative tool-call check (base vs adapter) |
 | Merge | `python -m src.cli merge --label=<x>` | Fuse LoRA into a standalone model |
-| Benchmark | `python -m src.cli bench` / `bench-matrix` | Agentic "did-the-task-get-done?" benchmark |
-| All | `./launch-next.sh --loop` then `./post-queue.sh` | Full train→eval→merge→benchmark automation |
+| Quantize | `python -m src.cli quantize --label=<x> --bits=4` | GPTQ/AWQ quantization for faster inference |
 
-> **Data harvesting (extract → clean → format) is documented separately in
-> [`HARVEST.md`](HARVEST.md)** — including how to harvest on CPU *while* a GPU
-> training run is live without disturbing it.
+### Deployment
 
-## The agentic benchmark (`src/bench.py`)
+| Stage | Command | What it does |
+|-------|---------|--------------|
+| Deploy | `python -m src.cli deploy --label=<x> --nodes=n1,n2` | Deploy to multiple inference nodes |
+| Status | `python -m src.cli multi-deploy-status` | Check deployment status across nodes |
+| Rollback | `python -m src.cli rollback --label=<x>` | Revert to previous model version |
+
+### Operations
+
+| Stage | Command | What it does |
+|-------|---------|--------------|
+| Notify | `python -m src.cli notify --event=<x> --message=<y>` | Send alerts (desktop/webhook/email) |
+| Metrics | `python -m src.cli metrics-record --label=<x>` | Track training metrics over time |
+| Regression | `python -m src.cli metrics-regression --label=<x>` | Detect performance regressions |
+| Cost | `python -m src.cli cost-record --label=<x> --hours=8` | Track GPU hours and resource usage |
+
+### Auto-Harvester
+
+| Stage | Command | What it does |
+|-------|---------|--------------|
+| Status | `python -m src.cli harvest-status` | Check data drift and new sessions |
+| Plan | `python -m src.cli harvest-plan --min-new=50` | Decide if harvest/train should run |
+| Scheduler | `python -m src.cli scheduler-run` | Run one complete harvest-train-deploy cycle |
+| Loop | `python -m src.cli scheduler-loop --interval=3600` | Continuous monitoring and automation |
+
+## Auto-Harvester Pipeline
+
+The auto-harvester orchestrates the full lifecycle autonomously:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SCHEDULER LOOP                               │
+├─────────────────────────────────────────────────────────────────┤
+│  harvest-status → harvest-plan → harvest → train → eval →      │
+│  merge → quantize → multi-deploy → notify                      │
+├─────────────────────────────────────────────────────────────────┤
+│  metrics-track → cost-record → dataset-version-create          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Data Drift Detection
+
+```bash
+python -m src.cli harvest-status
+# [harvest-status]
+#   opencode: 1250 sessions, 125 new since last harvest, 2.3 days ago
+#   hermes: 890 sessions, 45 new since last harvest, 1.1 days ago
+
+python -m src.cli harvest-plan --min-new=50
+# [harvest-plan] should_harvest=True should_train=True
+#   total_new=170, batch=['opencode', 'hermes']
+#   reason: opencode: 125 new sessions >= 50; hermes: 45 new sessions >= 50
+```
+
+### Multi-Node Deployment
+
+```bash
+# Deploy to all discovered nodes
+python -m src.cli deploy --label=combined --nodes=local,nas5,laptop
+
+# With quorum requirement
+python -m src.cli deploy --label=combined --nodes=local,nas5 --quorum=2
+
+# Check status
+python -m src.cli multi-deploy-status
+# [multi-deploy-status]
+#   local:
+#     combined v3 [active] 1250MB
+#   nas5:
+#     combined v3 [active] 1250MB
+```
+
+### Metrics and Regression Detection
+
+```bash
+python -m src.cli metrics-record --label=combined --eval-loss=0.42 --tool-exact=0.85
+
+python -m src.cli metrics-regression --label=combined
+# [metrics-regression] OK: eval_loss=0.4200 (best=0.4150)
+
+python -m src.cli metrics-compare --label=combined
+# [metrics-compare] toolcall-v5-3b-combined-v2 vs toolcall-v5-3b-combined-v3
+#   eval_loss: 0.4500 -> 0.4200 (-0.0300, -6.67%)
+#   tool_exact_match: 0.8200 -> 0.8500 (+0.0300, +3.66%)
+```
+
+## The Agentic Benchmark (`src/bench.py`)
 
 `eval`/`loss` only say *"does it look like the training data?"*. The benchmark
 answers *"did the task actually get done?"* — it drives a **model** (not a
@@ -66,7 +214,7 @@ dataset row) through a real multi-turn tool-use loop in a throwaway sandbox and
 verifies the outcome with concrete checkers (`file_exists`, `file_contains`,
 `command_exit`, `command_output`, …).
 
-### Five runners
+### Five Runners
 
 | runner | what it is | model source |
 | --- | --- | --- |
@@ -100,18 +248,7 @@ python -m src.cli bench-matrix --preset=all --report
 - `fast` — ONE model per source (cheap smoke gate)
 - `all` — **local + lmstudio + fleet combined** (what `post-queue.sh` runs)
 
-### Subagent as an MCP/ACP server
-
-`src/subagent.py` wraps the optimized loop as an MCP/ACP-over-stdio server
-(stdlib-only JSON-RPC 2.0 — no `mcp` SDK needed). opencode (`opencode acp`) or
-hermes can connect and call the `run_task` tool, delegating real tasks to the
-RefinedToolCallV5 loop:
-
-```bash
-python -m src.subagent --model=/path/to/RefinedToolCallV5-3b [--variant base|finetune|auto]
-```
-
-## Data model (opencode DB)
+## Data Model (opencode DB)
 
 The opencode store is a SQLite DB with these relevant tables:
 
@@ -126,7 +263,7 @@ The opencode store is a SQLite DB with these relevant tables:
   - `step-start` / `step-finish` — agent step markers + token accounting
   - `compaction` — context-compaction event
 
-### Dealing with corruption
+### Dealing with Corruption
 
 The migrated DBs (`opencode.db`, `opencode_old_broken.db`, …) report
 `database disk image is malformed` on bulk scans because a handful of pages are
@@ -134,7 +271,7 @@ damaged. The extractor works around this by reading **one rowid at a time** with
 a fresh statement, so a single bad page only drops a few rows instead of
 aborting the whole export. In practice >99.99% of rows are recovered.
 
-## Configuring sources
+## Configuring Sources
 
 Edit `config.yaml`:
 
@@ -169,7 +306,7 @@ Extraction, cleaning, formatting, evaluation and the benchmark (on CPU/local
 models) run without a GPU. The package `apsw` (bundled SQLite) is used for
 resilient reads.
 
-## This machine (Ryzen AI 9 HX 370 / Radeon 890M, 24 cores, 91 GB RAM)
+## This Machine (Ryzen AI 9 HX 370 / Radeon 890M, 24 cores, 91 GB RAM)
 
 - No ROCm torch is installed by default. Install the ROCm wheel above, run
   `python -m src.smoke_rocm`, then `python -m src.cli train`.
@@ -193,3 +330,8 @@ resilient reads.
 - The lmstudio q8 `*.gguf` models (e.g. `RefinedNeuro/RefinedToolCallV5-3b-Q8_0.gguf`)
   need llama.cpp / lmstudio's OpenAI server — use `--runner=api` or
   `--preset=lmstudio`, not the transformers `local-chat` runner.
+
+## Next Steps
+
+See [AUTOHARVEST.md](AUTOHARVEST.md) for the full auto-harvester architecture
+and future work.
