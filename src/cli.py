@@ -726,13 +726,14 @@ def main(argv: list[str]) -> int:
     cfg = load()
     label = _parse_label(argv)
     from src.locking import (ResourceBusy, active_owner_records, command_leases,
-                             command_resources, legacy_training_processes, lock_dir)
+                             command_resources, lock_dir,
+                             unmanaged_training_processes)
 
     if cmd == "coordination-status":
         owners = active_owner_records(lock_dir(cfg))
-        legacy = legacy_training_processes()
+        unmanaged = unmanaged_training_processes(lock_dir(cfg))
         print(f"[coordination-status] lock_dir={lock_dir(cfg)}")
-        print(json.dumps({"owners": owners, "legacy_trainers": legacy}, indent=2))
+        print(json.dumps({"owners": owners, "unmanaged_trainers": unmanaged}, indent=2))
         return 0
 
     resources = command_resources(cmd, label)
@@ -740,9 +741,9 @@ def main(argv: list[str]) -> int:
     # The active trainer predates lease support. Fail closed for any command that
     # could mutate its dataset or contend for its GPU during this migration.
     if "gpu" in names or any(r.name == "datasets" and not r.shared for r in resources):
-        legacy = legacy_training_processes()
-        if legacy:
-            print(f"[busy] legacy unleased training process active: {legacy}")
+        unmanaged = unmanaged_training_processes(lock_dir(cfg))
+        if unmanaged:
+            print(f"[busy] unmanaged training process active: {unmanaged}")
             return 75
     try:
         with command_leases(cfg, cmd, label):
