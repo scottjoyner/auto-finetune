@@ -591,7 +591,8 @@ def _dispatch(argv: list[str], cfg=None) -> int:
                 driver = make_driver("api", base_url=base_url, model=model)
                 model_name = model
             else:
-                driver = make_driver(runner, model_path=model_arg)
+                driver = make_driver(runner, model_path=model_arg,
+                                     rocm=_detect_rocm())
                 model_name = model_arg or runner
             print(f"[bench] runner={runner} model={model_name} tasks={len(tasks)}")
             results = bench_suite(driver, tasks, model_name, runner)

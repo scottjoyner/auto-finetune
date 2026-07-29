@@ -152,6 +152,9 @@ class ToolEnv:
 
     def execute(self, name: str, args: Optional[dict]) -> str:
         args = args or {}
+        # Map tool name aliases (opencode-style -> bench-style)
+        _alias = {"terminal": "bash", "command": "bash"}
+        name = _alias.get(name, name)
         try:
             if name == "bash":
                 return self._bash(args.get("command", ""))
@@ -357,11 +360,17 @@ class LocalDriver(ModelDriver):
     def _load(self):
         if self._model is not None:
             return
+        import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
-        dev = {"device_map": "auto"} if self.rocm else {"device_map": "cpu"}
-        self._model = AutoModelForCausalLM.from_pretrained(self.model_path,
-                                                           torch_dtype="auto", **dev)
         self._tok = AutoTokenizer.from_pretrained(self.model_path)
+        if self.rocm:
+            # Load on CPU first, then move to GPU — avoids device_map="auto" hangs on ROCm
+            self._model = AutoModelForCausalLM.from_pretrained(
+                self.model_path, torch_dtype=torch.bfloat16, device_map=None)
+            self._model = self._model.to("cuda")
+        else:
+            self._model = AutoModelForCausalLM.from_pretrained(
+                self.model_path, torch_dtype="auto", device_map="cpu")
 
     def generate(self, messages: list[dict], max_new_tokens: int = 512) -> str:
         self._load()
