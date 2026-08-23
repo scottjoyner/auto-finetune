@@ -87,7 +87,9 @@ train:
   # Base model to finetune. For AMD/ROCm + peft use a standard HF model id.
   # RefinedToolCallV5-3b is already finetuned on Hermes agent reasoning traces
   # with tool calling (qwen2 architecture, 3B params, 131K context).
-  model_name: /media/scott/SSD_4TB/models-fast/RefinedNeuro/RefinedToolCallV5-3b
+  # Local mirror (2026-08-23): NAS models-fast/ was emptied; fresh HF snapshot
+  # lives on the fast local data drive.
+  model_name: /media/scott/data/finetune-staging/models/RefinedToolCallV5-3b
   # LoRA / QLoRA settings (adjusted for 3B continued finetune)
   lora_r: 16
   lora_alpha: 32
