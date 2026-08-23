@@ -44,6 +44,9 @@ QUEUE=(
   "opencode-portfolio:toolcall-v5-3b-opencode-portfolio:done-opencode-portfolio"
   "hermes-reasoning:toolcall-v5-3b-hermes-reasoning:done-hermes-reasoning"
   "combined:toolcall-v5-3b-combined:done-combined"
+  # cron-filtered corpus rebuild (2026-08-23): fresh eval-split partition,
+  # retrained on the deduplicated combined corpus
+  "combined:toolcall-v5-3b-combined-r2:done-combined-r2"
   # comparison-only (low priority) — uncomment to include
   # "nas5-old-broken:toolcall-v5-3b-nas5-old-broken:done-nas5-old-broken"
   # "nas5-recover-old:toolcall-v5-3b-nas5-recover-old:done-nas5-recover-old"
@@ -114,6 +117,19 @@ while true; do
   LOG="$LOGD/train-$out.log"
   export TRAIN_OUTPUT_DIR="$OUT_BASE/$out"
   mkdir -p "$TRAIN_OUTPUT_DIR"
+
+  # Prefer the held-out-excluded partition built by `eval-split --label=<x>`
+  # (future-runs/<label>-seed42/datasets). Training on the raw dataset file
+  # would contaminate every later eval with rows it was scored on.
+  FR_DATADIR="/media/scott/data/finetune-staging/data/future-runs/${label}-seed42/datasets"
+  if [ -f "$FR_DATADIR/train.${label}.jsonl" ]; then
+    export TRAIN_DATASET_DIR="$FR_DATADIR"
+    echo "[launch-next] dataset: held-out-excluded partition ($FR_DATADIR)"
+  else
+    unset TRAIN_DATASET_DIR
+    echo "[launch-next] dataset: raw (no eval-split partition found — run eval-split to avoid contamination)"
+  fi
+
   echo "[launch-next] starting dataset=$label  -> $out  (log: $LOG)"
   echo "[launch-next] $(date)"
 
