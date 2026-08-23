@@ -557,6 +557,7 @@ def _dispatch(argv: list[str], cfg=None) -> int:
         if cmd == "bench":
             # register the local-chat (standard HF model) runner
             import src.drivers_localchat  # noqa: F401  (self-registers)
+            import src.drivers_lfm25  # noqa: F401  (self-registers "lfm25")
             from src.bench import bench_suite, format_bench_results, load_tasks, make_driver
             from src.train import _detect_rocm
             # runner selection
@@ -601,6 +602,7 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             return 0
         if cmd == "bench-matrix":
             import src.drivers_localchat  # noqa: F401  (self-registers "local-chat")
+            import src.drivers_lfm25  # noqa: F401  (self-registers "lfm25")
             from src.bench import bench_matrix, format_bench_matrix, load_tasks
             from src.train import _detect_rocm
             tasks_path = (_parse_str_flag(argv, "--tasks")
