@@ -37,6 +37,14 @@ class HarvestPlan:
     batch_labels: list[str]
     reason: str
     plan_id: str = ""
+    # Labels whose data is cheap to extract now regardless of the training
+    # budget. Falls back to batch_labels for plans built before this field
+    # existed.
+    harvest_labels: list[str] | None = None
+
+    def __post_init__(self):
+        if self.harvest_labels is None:
+            self.harvest_labels = list(self.batch_labels)
 
 
 def _file_stats(path: str) -> tuple[float, int]:
@@ -198,12 +206,13 @@ def plan_harvest(cfg: Config, min_new_sessions: int = 50,
 
     epochs = float(cfg.get("train", "num_train_epochs", default=2) or 2)
     hours_per_session = 0.01 * 50 * epochs * 65 / 3600
-    selected = list(targets)
-    est_hours = sum(s.new_sessions for s in sources if s.name in selected) * hours_per_session
+    # Training is the expensive phase: fit its batch into the runtime budget.
+    train_labels = list(targets)
+    est_hours = sum(s.new_sessions for s in sources if s.name in train_labels) * hours_per_session
     if aggregate_trigger and est_hours > max_batch_hours:
         # Labels are independent immutable work units. Fit a prefix into this
         # promotion; a later plan sees its watermark and picks up deferred labels.
-        selected = []
+        train_labels = []
         selected_hours = 0.0
         for source in sources:
             if source.name not in targets:
@@ -212,21 +221,24 @@ def plan_harvest(cfg: Config, min_new_sessions: int = 50,
             remaining = max_batch_hours - selected_hours
             if source_hours > remaining:
                 reasons.append(
-                    f"deferred {source.name}: estimated {source_hours:.1f}h exceeds "
+                    f"deferred {source.name} training: estimated {source_hours:.1f}h exceeds "
                     f"remaining {remaining:.1f}h runtime limit")
                 continue
-            selected.append(source.name)
+            train_labels.append(source.name)
             selected_hours += source_hours
         est_hours = selected_hours
 
-    should_harvest = bool(selected)
-    should_train = aggregate_trigger and bool(selected)
+    # Harvesting is CPU-only extraction (seconds per label); never gate it on
+    # the training budget or new data would sit unread behind GPU scheduling.
+    should_harvest = bool(targets)
+    should_train = aggregate_trigger and bool(train_labels)
     if not reasons:
         reasons.append("no new data reached the count/time trigger")
-    planned_sources = [source for source in sources if source.name in selected]
+    planned_sources = [source for source in sources if source.name in train_labels]
     return HarvestPlan(should_harvest, should_train, sources, total_new,
-                       est_hours, selected, "; ".join(reasons),
-                       _plan_id(planned_sources))
+                       est_hours, train_labels, "; ".join(reasons),
+                       _plan_id(planned_sources),
+                       harvest_labels=list(targets))
 
 
 def record_harvest(cfg: Config, sources: Iterable[SourceStats],
@@ -266,5 +278,6 @@ def main(cfg: Config) -> int:
     print(f"  plan_id={plan.plan_id}")
     print(f"  total_new={plan.total_new}, est={plan.estimated_train_hours:.1f}h")
     print(f"  batch={plan.batch_labels}")
+    print(f"  harvest_batch={plan.harvest_labels}")
     print(f"  reason: {plan.reason}")
     return 0 if not any(source.error for source in plan.sources) else 1

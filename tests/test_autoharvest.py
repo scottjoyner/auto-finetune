@@ -178,5 +178,58 @@ class TestScheduler:
         assert state.runs_completed == 0
 
 
+class TestPlanHarvestDecoupling:
+    """Harvest must never be gated by the training-time budget."""
+
+    def test_oversized_source_is_harvested_but_training_deferred(self, monkeypatch):
+        from src.harvest import SourceStats, plan_harvest
+        from src.config import load
+
+        def fake_stats(cfg):
+            return [
+                SourceStats(
+                    name="opencode", db_path="/tmp/a.db", total_sessions=50,
+                    last_modified=1000000, db_size_bytes=1024,
+                    new_sessions=50, last_harvest=0, days_since_harvest=9.0,
+                ),
+                SourceStats(
+                    name="hermes", db_path="/tmp/b.db", total_sessions=4079,
+                    last_modified=1000000, db_size_bytes=1024,
+                    new_sessions=4079, last_harvest=0, days_since_harvest=9.0,
+                ),
+            ]
+
+        monkeypatch.setattr("src.harvest.get_source_stats", fake_stats)
+        cfg = load()
+        plan = plan_harvest(cfg)
+
+        # Both labels are queued for cheap CPU extraction...
+        assert set(plan.harvest_labels) == {"opencode", "hermes"}
+        assert plan.should_harvest
+        # ...but the 73h hermes training estimate cannot fit the batch budget.
+        assert "hermes" not in plan.batch_labels
+        assert plan.batch_labels == ["opencode"]
+        # Training still proceeds on whatever fit the budget.
+        assert plan.should_train
+        assert any("deferred hermes training" in r for r in plan.reason.split("; "))
+
+    def test_small_batches_stay_fully_aligned(self, monkeypatch):
+        from src.harvest import SourceStats, plan_harvest
+        from src.config import load
+
+        def fake_stats(cfg):
+            return [SourceStats(
+                name="opencode", db_path="/tmp/a.db", total_sessions=60,
+                last_modified=1000000, db_size_bytes=1024,
+                new_sessions=60, last_harvest=0, days_since_harvest=2.0,
+            )]
+
+        monkeypatch.setattr("src.harvest.get_source_stats", fake_stats)
+        plan = plan_harvest(load())
+
+        assert plan.should_harvest and plan.should_train
+        assert plan.harvest_labels == plan.batch_labels == ["opencode"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

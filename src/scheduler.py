@@ -105,10 +105,10 @@ class Scheduler:
             return True, {"skipped": True, "reason": plan.reason}
 
         print("[scheduler] starting harvest...")
-        harvest_results = {"sources": plan.batch_labels, "total_new": plan.total_new}
+        harvest_results = {"sources": plan.harvest_labels, "total_new": plan.total_new}
 
         # Extract from each source with new data
-        for label in plan.batch_labels:
+        for label in plan.harvest_labels:
             if label == "hermes":
                 cmd = [self.venv_python, "-m", "src.cli", "hermes"]
             else:
@@ -130,7 +130,7 @@ class Scheduler:
             return False, {"error": f"clean failed: {output[-500:]}"}
         harvest_results["clean"] = "ok"
 
-        selected = [s for s in plan.sources if s.name in plan.batch_labels]
+        selected = [s for s in plan.sources if s.name in plan.harvest_labels]
         record_harvest(self.cfg, selected, plan_id=plan.plan_id)
 
         return True, harvest_results

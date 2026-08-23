@@ -296,6 +296,7 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             plan = plan_harvest(cfg, min_new_sessions=min_new)
             print(f"[harvest-plan] should_harvest={plan.should_harvest} should_train={plan.should_train}")
             print(f"  total_new={plan.total_new}, batch={plan.batch_labels}")
+            print(f"  harvest_batch={plan.harvest_labels}")
             print(f"  reason: {plan.reason}")
             return 0
         if cmd in ("deploy", "deploy-status", "rollback", "multi-deploy-status", "discover-nodes"):
