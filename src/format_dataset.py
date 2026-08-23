@@ -147,6 +147,11 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
     system = cfg.get("format", "system_prompt", default="") or ""
     max_turns = cfg.get("format", "max_turns_per_example", default=0) or 0
     max_chars = cfg.get("format", "max_chars_per_example", default=24000) or 0
+    # Session kinds to drop entirely (e.g. automated cron runs: highly
+    # repetitive, low information density, and they dominate session counts).
+    exclude_sources = set(cfg.get("format", "exclude_sources", default=[]) or [])
+    kept_counts: dict[str, int] = {}
+    dropped_counts: dict[str, int] = {}
 
     def _format_one(src_dir: str, out_path: str, filter_source: str | None) -> int:
         examples: list[Any] = []
@@ -157,9 +162,18 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
             with open(os.path.join(src_dir, fn)) as f:
                 rec = json.load(f)
             src = rec.get("source", "")
+            agent = str(rec.get("agent") or "")
             sources_seen.add(src)
+            # Exclusion matches the session's source OR its agent kind
+            # (automated Hermes cron runs carry source='hermes' but
+            # agent='cron').
+            if (src in exclude_sources or agent in exclude_sources) and \
+                    (not filter_source or filter_source == src):
+                dropped_counts[agent or src] = dropped_counts.get(agent or src, 0) + 1
+                continue
             if filter_source and src != filter_source:
                 continue
+            kept_counts[src] = kept_counts.get(src, 0) + 1
             msgs = rec.get("messages", [])
             windows = _window_messages(msgs, max_turns, max_chars)
             for w in windows:
@@ -255,7 +269,11 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
             n = _format_one(cleaned_dir, out_path, source)
             print(f"[format] {source}: {n} examples -> {out_path}")
             total += n
-        return total
+    if exclude_sources:
+        print(f"[format] excluded sources: "
+              + ", ".join(f"{k}={v} sessions dropped" for k, v in sorted(dropped_counts.items()))
+              + f" | kept: " + ", ".join(f"{k}={v}" for k, v in sorted(kept_counts.items())))
+    return total
 
 
 def _window_messages(msgs: list[dict], max_turns: int, max_chars: int) -> list[list[dict]]:

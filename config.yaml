@@ -63,6 +63,10 @@ clean:
 format:
   # chatml | alpaca | sharegpt | hermes (uses tokenizer chat_template)
   template: hermes
+  # Session kinds dropped before formatting. Automated cron sessions are
+  # highly repetitive scheduled runs (70% of live Hermes volume) — training
+  # on them burns GPU-hours and skews the model toward cron patterns.
+  exclude_sources: [cron]
   # Empty = use tokenizer's default system prompt (includes tool definitions)
   system_prompt: ""
   # Split long multi-session histories into windows of N turns for training.

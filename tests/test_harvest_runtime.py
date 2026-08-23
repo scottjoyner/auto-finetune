@@ -160,14 +160,18 @@ def test_runtime_limit_splits_sources_and_defers_oversized_source(tmp_path):
 
 
 def test_runtime_limit_defers_without_advancing_when_nothing_fits(tmp_path):
+    # Harvesting is decoupled from the training budget: both labels are queued
+    # for cheap CPU extraction, but NEITHER fits the 8h train batch, so no
+    # training promotion happens and planning alone writes no watermark state.
     opencode, hermes = _databases(tmp_path, 500, 500)
     cfg = _cfg(tmp_path, opencode, hermes)
     plan = plan_harvest(cfg, min_new_sessions=1, max_batch_hours=8)
 
-    assert not plan.should_harvest
+    assert plan.should_harvest
+    assert set(plan.harvest_labels) == {"opencode", "hermes"}
     assert not plan.should_train
     assert plan.batch_labels == []
     assert plan.total_new == 1000
-    assert "deferred opencode" in plan.reason
-    assert "deferred hermes" in plan.reason
+    assert "deferred opencode training" in plan.reason
+    assert "deferred hermes training" in plan.reason
     assert not (tmp_path / "analysis" / "harvest-state.json").exists()
