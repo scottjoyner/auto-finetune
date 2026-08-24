@@ -74,6 +74,35 @@ _TOOLS_DOC = (
     '"newString"]}}]'
 )
 
+# ── sm0l-derived guards ──────────────────────────────────────────────────
+TOOL_OUTPUT_CLIP = 2000        # max chars of any single tool result fed back
+COMPACT_RATIO = 0.62           # compact when est. tokens exceed this * ctx
+CHARS_PER_TOKEN = 3.6
+
+_COMPACT_SYS = (
+    "You compress a chat log into a brief for your future self. "
+    "Keep: user goals, file paths, commands, decisions, errors, unfinished "
+    "work. Drop greetings and repeated tool dumps. Output plain prose, max "
+    "280 words. No tools. No questions."
+)
+
+
+def estimate_tokens(messages: list[dict]) -> int:
+    """Cheap char-based estimate (sm0l's heuristic)."""
+    n = 0
+    for m in messages:
+        n += 8
+        n += int(len(str(m.get("content") or "")) / CHARS_PER_TOKEN) + 1
+    return n
+
+
+def _clip(text: str, limit: int = TOOL_OUTPUT_CLIP) -> str:
+    if len(text) <= limit:
+        return text
+    keep = limit // 2
+    return text[:keep] + "\n…[clipped " + str(len(text) - limit) + " chars]…\n" + text[-keep:]
+
+
 _MALFORMED_NUDGE = (
     "Your previous message contained a malformed tool call. Emit EXACTLY this "
     'syntax between the special tokens, one pythonic call per list element: '
@@ -94,6 +123,11 @@ _REFUSAL_RE = re.compile(
     r"here(?:'s| is) how you can|you could use the following|"
     r"i won't perform|since there are none|let me know if you'd like|"
     r"i have written|i've written|i have saved|i've saved|"
+    r"i don't have [^.\n]{0,48}(?:way|ability|capability|access)|"
+    r"without running a command|(?:run|do) .{0,30}for you[.?]|"
+    r"would you like me to\b|i can run a command for you|"
+    r"i will (?:now )?(?:write|create|save|run)\b|"
+    r"(?:count|number) .{0,24}to the file you requested|"
     r"in your terminal", re.IGNORECASE)
 
 
@@ -183,12 +217,13 @@ class LFM25Driver(ModelDriver):
     def __init__(self, base_url: str = "http://127.0.0.1:8095",
                  model: str = "lfm2.5-1.2b-instruct",
                  api_key: str = "", temperature: float = 0.2,
-                 advertise_tools: bool = True):
+                 advertise_tools: bool = True, num_ctx: int = 8192):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
         self.temperature = temperature
         self.advertise_tools = advertise_tools
+        self.num_ctx = num_ctx
 
     # ── wire protocol ────────────────────────────────────────────────────
     def _chat(self, messages: list[dict], max_tokens: int) -> str:
@@ -233,8 +268,46 @@ class LFM25Driver(ModelDriver):
         return out
 
     # ── ModelDriver contract ─────────────────────────────────────────────
+    def _maybe_compact(self, payload_msgs: list[dict]) -> list[dict]:
+        """sm0l-style autocompaction: summarise older turns at 62% ctx.
+
+        Never splits a tool loop (cut points only at user turns); on summary
+        failure the oldest non-system turns are hard-dropped instead.
+        """
+        num_ctx = int(self.num_ctx or 8192)
+        thresh = max(int((num_ctx - 2048) * COMPACT_RATIO), 1024)
+        if estimate_tokens(payload_msgs) < thresh:
+            return payload_msgs
+        user_idxs = [i for i, m in enumerate(payload_msgs)
+                     if m.get("role") == "user"
+                     and not _is_wrapped_tool_result(m.get("content"))]
+        if len(user_idxs) < 2:
+            return payload_msgs
+        cut = user_idxs[-1]
+        prefix, suffix = payload_msgs[:cut], payload_msgs[cut:]
+        if not prefix:
+            return payload_msgs
+        blob_lines = []
+        for m in prefix:
+            if m.get("role") == "system":
+                continue
+            c = str(m.get("content") or "")[:600]
+            if c:
+                blob_lines.append(f"{m.get('role')}: {c}")
+        try:
+            summary = self._chat(
+                [{"role": "system", "content": _COMPACT_SYS},
+                 {"role": "user", "content": "Compress this log:\n\n"
+                  + "\n".join(blob_lines)[-12000:]}], 400)
+        except Exception:
+            summary = ""
+        memory = {"role": "system",
+                  "content": "[compacted memory — earlier turns]\n" + summary}
+        return [payload_msgs[0], memory] + suffix
+
     def generate(self, messages: list[dict], max_new_tokens: int = 512) -> str:
         payload_msgs = self._translate(messages, self.advertise_tools)
+        payload_msgs = self._maybe_compact(payload_msgs)
         text = self._chat(payload_msgs, max_new_tokens)
 
         # Habit-shaping retry: emitted call syntax we cannot recover?
@@ -269,7 +342,9 @@ class LFM25Driver(ModelDriver):
 
     @staticmethod
     def wrap_result(result: str) -> str:
-        return json.dumps([{"output": result}], ensure_ascii=False)
+        # sm0l guard: hard-clip huge tool dumps before they flood context.
+        return json.dumps([{"output": _clip(str(result))}],
+                          ensure_ascii=False)
 
 
 def _make_lfm25(runner: str = "lfm25", **kw) -> LFM25Driver:
