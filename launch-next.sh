@@ -50,6 +50,9 @@ QUEUE=(
   # LFM2.5-Base SFT on the same corpus rewritten into LFM-native tool dialect
   # (scripts/make_lfm25_sft.py). Small base: tighter seq window.
   "lfm-combined:lfm2.5-1.2b-sft-r1:done-lfm25-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/LFM2.5-1.2B-Base,TRAIN_MAX_SEQ_LENGTH=4096"
+  # A/B experiment: same corpus on Thinking-Instruct — does SFT teach its
+  # reasoning loops to converge on tool calls? (probed non-convergent stock)
+  "lfm-combined:lfm2.5-thinking-sft-r1:done-lfm25-sft-think-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/LFM2.5-Thinking-Instruct,TRAIN_MAX_SEQ_LENGTH=4096"
   # comparison-only (low priority) — uncomment to include
   # "nas5-old-broken:toolcall-v5-3b-nas5-old-broken:done-nas5-old-broken"
   # "nas5-recover-old:toolcall-v5-3b-nas5-recover-old:done-nas5-recover-old"
