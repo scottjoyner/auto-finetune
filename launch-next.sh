@@ -47,6 +47,9 @@ QUEUE=(
   # cron-filtered corpus rebuild (2026-08-23): fresh eval-split partition,
   # retrained on the deduplicated combined corpus
   "combined:toolcall-v5-3b-combined-r2:done-combined-r2"
+  # LFM2.5-Base SFT on the same corpus rewritten into LFM-native tool dialect
+  # (scripts/make_lfm25_sft.py). Small base: tighter seq window.
+  "lfm-combined:lfm2.5-1.2b-sft-r1:done-lfm25-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/LFM2.5-1.2B-Base,TRAIN_MAX_SEQ_LENGTH=4096"
   # comparison-only (low priority) — uncomment to include
   # "nas5-old-broken:toolcall-v5-3b-nas5-old-broken:done-nas5-old-broken"
   # "nas5-recover-old:toolcall-v5-3b-nas5-recover-old:done-nas5-recover-old"
@@ -83,11 +86,14 @@ PY
 
 while true; do
   # pick next undone item
+  # Entry format: label:out_name:done_marker[:KEY=VAL,KEY=VAL]
   NEXT=""
   for item in "${QUEUE[@]}"; do
-    marker="${item##*:}"; item="${item%:*}"; out="${item##*:}"; label="${item%:*}"
+    IFS=':' read -r -a parts <<< "$item"
+    label="${parts[0]}"; out="${parts[1]}"; marker="${parts[2]}"
+    runenv="${parts[3]:-}"
     if [ ! -f "$STATE_FILE" ] || ! grep -qx "$marker" "$STATE_FILE" 2>/dev/null; then
-      NEXT="$label|$out|$marker"; break
+      NEXT="$label|$out|$marker|$runenv"; break
     fi
   done
 
@@ -96,7 +102,8 @@ while true; do
     exit 0
   fi
 
-  label="${NEXT%%|*}"; rest="${NEXT#*|}"; out="${rest%%|*}"; marker="${rest#*|}"
+  label="${NEXT%%|*}"; rest="${NEXT#*|}"; out="${rest%%|*}"; rest="${rest#*|}"
+  marker="${rest%%|*}"; runenv="${rest#*|}"
 
   # stop file check
   if [ -f "$STOP_FILE" ]; then
@@ -133,6 +140,15 @@ while true; do
   echo "[launch-next] starting dataset=$label  -> $out  (log: $LOG)"
   echo "[launch-next] $(date)"
 
+  # Optional per-run env overrides from the queue entry (4th colon field).
+  if [ -n "$runenv" ]; then
+    IFS=',' read -r -a _kvps <<< "$runenv"
+    for _kv in "${_kvps[@]}"; do
+      export "${_kv?}"
+      echo "[launch-next] override: $_kv"
+    done
+  fi
+
   # train reads output_dir from TRAIN_OUTPUT_DIR env if set.
   # Launch as a plain background job of THIS shell (NOT setsid) so `wait`
   # actually blocks until training completes. Only one dataset trains at a
@@ -153,6 +169,12 @@ while true; do
   else
     echo "[launch-next] $label FAILED (rc=$RC) — stopping. See $LOG"
     exit $RC
+  fi
+
+  # Scope per-run overrides: clear anything set by this entry.
+  if [ -n "$runenv" ]; then
+    IFS=',' read -r -a _kvps <<< "$runenv"
+    for _kv in "${_kvps[@]}"; do unset "${_kv%%=*}"; done
   fi
 
   [ "$LOOP" -eq 1 ] || break

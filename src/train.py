@@ -154,8 +154,12 @@ def _train_peft(cfg: Config, data: list[dict],
     from trl import SFTTrainer
 
     t = cfg.get("train", default={})
-    model_name = t.get("model_name", "Qwen/Qwen3-8B-Instruct")
-    max_seq = t.get("max_seq_length", 8192)
+    # Per-run overrides (set by launch-next for queued runs on other bases):
+    # TRAIN_MODEL_NAME / TRAIN_TARGET_MODULES / TRAIN_MAX_SEQ_LENGTH.
+    model_name = os.environ.get("TRAIN_MODEL_NAME") or \
+        t.get("model_name", "Qwen/Qwen3-8B-Instruct")
+    max_seq = int(os.environ.get("TRAIN_MAX_SEQ_LENGTH")
+                  or t.get("max_seq_length", 8192))
     load_4bit = t.get("load_in_4bit", True)
     grad_ckpt = t.get("gradient_checkpointing", False)
 
@@ -189,12 +193,21 @@ def _train_peft(cfg: Config, data: list[dict],
         model.gradient_checkpointing_enable()
         model.config.use_cache = False
 
+    target_modules = t.get("target_modules") or \
+        ["q_proj", "k_proj", "v_proj", "o_proj",
+         "gate_proj", "up_proj", "down_proj"]
+    env_modules = os.environ.get("TRAIN_TARGET_MODULES")
+    if env_modules:
+        target_modules = [m.strip() for m in env_modules.split(",") if m.strip()]
+    elif os.environ.get("TRAIN_MODEL_NAME"):
+        # Non-default base: auto-target every linear layer so architecture
+        #-specific qwen2 module names never silently miss.
+        target_modules = "all-linear"
     lora = LoraConfig(
         r=t.get("lora_r", 32),
         lora_alpha=t.get("lora_alpha", 64),
         lora_dropout=t.get("lora_dropout", 0.0),
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                        "gate_proj", "up_proj", "down_proj"],
+        target_modules=target_modules,
         bias="none",
         task_type="CAUSAL_LM",
     )

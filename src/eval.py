@@ -180,7 +180,7 @@ def build_disjoint_partition(source_path: str | Path, out_dir: str | Path,
     if not 0.0 < frac < 1.0:
         raise ValueError("held-out fraction must be between 0 and 1")
     raw = src.read_bytes()
-    rows = [json.loads(line) for line in raw.decode().splitlines() if line.strip()]
+    rows = [json.loads(line) for line in raw.decode().split("\n") if line.strip()]
     groups: dict[str, list[int]] = {}
     for index, row in enumerate(rows):
         groups.setdefault(_canonical_row(row), []).append(index)
