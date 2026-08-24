@@ -106,17 +106,18 @@ train:
   max_seq_length: 8192
   gradient_checkpointing: true
   # 4-bit quantization for fitting large models on modest GPUs.
-  # peft backend uses bitsandbytes (CUDA) or auto-gptq (ROCm) under the hood.
-  # NOTE: bitsandbytes has NO ROCm binary installed here (libbitsandbytes_rocm83.so
-  # missing) — keep this false or the run crashes at model load on AMD/ROCm.
+  # UNLOCKED 2026-08-24: bitsandbytes 0.50.1 pip wheels ship ROCm builds
+  # targeting gfx1151 explicitly; NF4 quantize/dequantize and AdamW8bit
+  # verified working on the Radeon 8050S. Keep false for small bases where
+  # bf16 is fine (less quant noise); flip true for >=7B bases.
   load_in_4bit: false
   # Optimizer / schedule
   learning_rate: 1e-4
   num_train_epochs: 2
   # 890M iGPU (gfx1151) over NFS measured ~65 s/step. Larger effective batch via
   # grad-accum keeps VRAM low; ~16 ex/step => ~8h/epoch before first epoch checkpoint.
-  per_device_train_batch_size: 4
-  gradient_accumulation_steps: 4
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 8
   warmup_ratio: 0.03
   weight_decay: 0.01
   # Make a long run observable: checkpoint every ~1h of training (≈55 steps) so the
