@@ -335,3 +335,9 @@ resilient reads.
 
 See [AUTOHARVEST.md](AUTOHARVEST.md) for the full auto-harvester architecture
 and future work.
+
+## Autonomous ops & LFM2.5 program (2026-08-24)
+
+Operator details live in `/media/scott/data/finetune-staging/RUNBOOK.md`
+(§9 autonomous loops: watchdog / harvest cron / backup cron / prune cron;
+§10 LFM2.5 serving + MCP wiring + showdown script).
