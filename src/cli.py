@@ -458,13 +458,19 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             if not label:
                 print("[error] merge requires --label=<name>")
                 return 2
-            base = cfg.get("train", "model_name", default="Qwen/Qwen2.5-7B-Instruct")
+            # Env overrides let non-default bases (e.g. LFM2.5) merge without
+            # touching config.yaml; mirrors the train.py overrides.
+            base = os.environ.get("TRAIN_MODEL_NAME") or cfg.get(
+                "train", "model_name", default="Qwen/Qwen2.5-7B-Instruct")
             out_base = "/media/scott/data/finetune-staging/outputs/checkpoints"
-            adapter = os.environ.get("TRAIN_OUTPUT_DIR") or os.path.join(out_base, f"toolcall-v5-3b-{label}")
+            adapter = (os.environ.get("TRAIN_ADAPTER")
+                       or os.environ.get("TRAIN_OUTPUT_DIR")
+                       or os.path.join(out_base, f"toolcall-v5-3b-{label}"))
             if not os.path.exists(os.path.join(adapter, "adapter_config.json")):
                 print(f"[error] adapter not found: {adapter}")
                 return 2
-            merged = os.path.join(out_base, f"toolcall-v5-3b-{label}-merged")
+            merged = os.environ.get("TRAIN_MERGED_OUT") or os.path.join(
+                out_base, f"{os.path.basename(adapter.rstrip('/'))}-merged")
             merge_adapter(adapter, base, merged, rocm=_detect_rocm())
             return 0
         if cmd == "report":
