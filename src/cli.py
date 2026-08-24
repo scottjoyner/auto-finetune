@@ -102,13 +102,13 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             cfg.ensure_dirs()
             count = run(cfg, label=label, project=project)
             print(f"[extract] wrote {count} sessions")
-            return 0
+            return count
         if cmd == "hermes":
             from src.extract_hermes import main as run
             cfg.ensure_dirs()
             count = run(cfg)
             print(f"[hermes] wrote {count} sessions")
-            return 0
+            return count
         if cmd == "clean":
             from src.clean import main as run
             count = run(cfg, label=label, keep_reasoning=keep_reasoning)

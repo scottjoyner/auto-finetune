@@ -1,12 +1,32 @@
 """Tests for src.cli dispatch."""
 from __future__ import annotations
 
+import contextlib
 import copy
 import sys
 import types
 from pathlib import Path
 
+import pytest
+
 from src.cli import main as cli_main
+
+
+@pytest.fixture(autouse=True)
+def _stub_resource_leases(monkeypatch):
+    """CLI tests must not depend on whether a real trainer holds leases.
+
+    src.locking.command_leases is acquired (fail-closed) by mutating
+    commands; on a box running an actual promotion every GPU/datasets
+    command would return rc=75 regardless of what the test asserts.
+    """
+    import src.locking as locking
+    monkeypatch.setattr(locking, "command_leases",
+                        lambda *a, **k: contextlib.nullcontext())
+    # Tests run against fake tmp lock_dirs; the /proc scan would otherwise
+    # classify any real trainer on this box as "unmanaged".
+    monkeypatch.setattr(locking, "unmanaged_training_processes",
+                        lambda *a, **k: [])
 
 
 def test_cli_help():
