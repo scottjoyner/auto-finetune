@@ -18,3 +18,4 @@ outputs/
 htmlcov/
 # bench-matrix report (generated)
 eval/bench-matrix.md
+data/
