@@ -564,6 +564,7 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             # register the local-chat (standard HF model) runner
             import src.drivers_localchat  # noqa: F401  (self-registers)
             import src.drivers_lfm25  # noqa: F401  (self-registers "lfm25")
+            import src.drivers_api_tools  # noqa: F401  (self-registers "api-tools")
             from src.bench import bench_suite, format_bench_results, load_tasks, make_driver
             from src.train import _detect_rocm
             # runner selection
@@ -598,6 +599,12 @@ def _dispatch(argv: list[str], cfg=None) -> int:
                     return 2
                 driver = make_driver("api", base_url=base_url, model=model)
                 model_name = model
+            elif runner == "api-tools":
+                base_url = _parse_str_flag(argv, "--base-url") or ""
+                driver = make_driver("api-tools", base_url=base_url,
+                                     model=model_arg or "local-model",
+                                     api_key=os.environ.get("OPENAI_API_KEY", ""))
+                model_name = model_arg or "local-model"
             elif runner == "lfm25":
                 # LFM2.5 edge-model harness (drivers_lfm25). Served by any
                 # OpenAI-compatible endpoint, default llama.cpp CPU on 8095.
@@ -616,6 +623,7 @@ def _dispatch(argv: list[str], cfg=None) -> int:
         if cmd == "bench-matrix":
             import src.drivers_localchat  # noqa: F401  (self-registers "local-chat")
             import src.drivers_lfm25  # noqa: F401  (self-registers "lfm25")
+            import src.drivers_api_tools  # noqa: F401  (self-registers "api-tools")
             from src.bench import bench_matrix, format_bench_matrix, load_tasks
             from src.train import _detect_rocm
             tasks_path = (_parse_str_flag(argv, "--tasks")

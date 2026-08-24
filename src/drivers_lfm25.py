@@ -256,7 +256,7 @@ class LFM25Driver(ModelDriver):
                 out.append({"role": "tool", "content": content})
                 continue
             if role == "system":
-                if advertise_tools and _TOOLS_DOC.split(":")[0] not in content:
+                if advertise_tools and "List of tools:" not in content:
                     content = _TOOLS_DOC + "\n" + (content or "")
                 sys_done = True
             elif advertise_tools and not sys_done and role == "user":
@@ -310,9 +310,12 @@ class LFM25Driver(ModelDriver):
         payload_msgs = self._maybe_compact(payload_msgs)
         text = self._chat(payload_msgs, max_new_tokens)
 
-        # Habit-shaping retry: emitted call syntax we cannot recover?
-        if _TOOL_CALL_SPAN_RE.search(text) and \
-                not parse_pythonic_tool_calls(text):
+        # Habit-shaping retry: emitted call syntax we cannot fully recover?
+        # (positional-arg or bare-name spans parse to args=None entries.)
+        _spans = _TOOL_CALL_SPAN_RE.search(text)
+        _calls = parse_pythonic_tool_calls(text) if _spans else []
+        if _spans and (not _calls or
+                       all(c["args"] is None for c in _calls)):
             retry = payload_msgs + [
                 {"role": "assistant", "content": text},
                 {"role": "user", "content": _MALFORMED_NUDGE},
