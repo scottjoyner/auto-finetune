@@ -114,6 +114,23 @@ done
 hermes-reasoning → combined`) and `post-queue.sh` finishes with a
 `bench-matrix --preset=all` sweep.
 
+### 2026-08-23 pipeline notes
+
+* **Cron sessions are excluded at format time** (`format.exclude_sources:
+  [cron]`). Automated Hermes cron runs were 70% of session volume with
+  median 4 messages; training on them wasted GPU-hours. The knob matches
+  `source` OR `agent` fields.
+* **Harvest is decoupled from the train budget** (`harvest_labels` vs
+  `batch_labels` in the plan). CPU extraction of a drifted source always
+  runs; only *training* is fitted to `scheduler.max_batch_hours`.
+* **launch-next prefers held-out-excluded partitions**: it exports
+  `TRAIN_DATASET_DIR=future-runs/<label>-seed42/datasets` when present, so
+  always run `eval-split --label=<label>` before adding a queue entry.
+* Queue entries support an optional 4th field for per-run env overrides:
+  `"label:out:marker:TRAIN_MODEL_NAME=/path,TRAIN_MAX_SEQ_LENGTH=4096"`.
+* Edge-model SFT: `scripts/make_lfm25_sft.py` rewrites harvested
+  `<tool_call>` XML into LFM2.5-native pythonic dialect (see its header).
+
 ---
 
 ## 4. Verify a harvest
