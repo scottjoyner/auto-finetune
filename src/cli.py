@@ -592,6 +592,13 @@ def _dispatch(argv: list[str], cfg=None) -> int:
                     return 2
                 driver = make_driver("api", base_url=base_url, model=model)
                 model_name = model
+            elif runner == "lfm25":
+                # LFM2.5 edge-model harness (drivers_lfm25). Served by any
+                # OpenAI-compatible endpoint, default llama.cpp CPU on 8095.
+                base_url = _parse_str_flag(argv, "--base-url") or "http://127.0.0.1:8095"
+                driver = make_driver("lfm25", base_url=base_url,
+                                     model=model_arg or "lfm2.5-1.2b-instruct")
+                model_name = model_arg or "lfm2.5-1.2b-instruct"
             else:
                 driver = make_driver(runner, model_path=model_arg,
                                      rocm=_detect_rocm())
@@ -787,7 +794,10 @@ def main(argv: list[str]) -> int:
         print(json.dumps({"owners": owners, "unmanaged_trainers": unmanaged}, indent=2))
         return 0
 
-    resources = command_resources(cmd, label)
+    resources = command_resources(
+        cmd, label,
+        runner=(_parse_str_flag(argv, "--runner")
+                if cmd in {"bench", "bench-matrix"} else None))
     names = {request.name for request in resources}
     # The active trainer predates lease support. Fail closed for any command that
     # could mutate its dataset or contend for its GPU during this migration.
@@ -797,7 +807,9 @@ def main(argv: list[str]) -> int:
             print(f"[busy] unmanaged training process active: {unmanaged}")
             return 75
     try:
-        with command_leases(cfg, cmd, label):
+        with command_leases(cfg, cmd, label,
+                            runner=(_parse_str_flag(argv, "--runner")
+                                    if cmd in {"bench", "bench-matrix"} else None)):
             return _dispatch(argv, cfg=cfg)
     except ResourceBusy as exc:
         print(f"[busy] {exc}")

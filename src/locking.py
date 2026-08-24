@@ -131,7 +131,8 @@ def lock_dir(cfg: Config) -> str:
     return cfg.path("lock_dir")
 
 
-def command_resources(cmd: str, label: str | None = None) -> list[ResourceRequest]:
+def command_resources(cmd: str, label: str | None = None,
+                      runner: str | None = None) -> list[ResourceRequest]:
     """Map a direct CLI command to the shared resources it mutates/consumes."""
     if cmd in {"extract", "hermes", "clean", "analyze", "mine-repairs", "dedup", "profile"}:
         return [ResourceRequest("harvest")]
@@ -147,7 +148,13 @@ def command_resources(cmd: str, label: str | None = None) -> list[ResourceReques
     if cmd in {"eval", "eval-all", "best", "sanity", "merge", "quantize",
                "report", "probe", "compare", "bench", "bench-compare",
                "bench-matrix"}:
-        return [ResourceRequest("datasets", shared=True), ResourceRequest("gpu")]
+        # CPU-only / remote-endpoint runners never contend for the local GPU,
+        # so benchmarking an edge model can proceed during a training run.
+        gpu_free_runners = {"api", "lfm25"}
+        reqs = [ResourceRequest("datasets", shared=True)]
+        if runner not in gpu_free_runners:
+            reqs.append(ResourceRequest("gpu"))
+        return reqs
     if cmd in {"scheduler-run", "scheduler-loop"}:
         return [ResourceRequest("pipeline")]
     if cmd in {"deploy", "rollback"}:
@@ -155,8 +162,10 @@ def command_resources(cmd: str, label: str | None = None) -> list[ResourceReques
     return []
 
 
-def command_leases(cfg: Config, cmd: str, label: str | None = None) -> LeaseSet:
-    return LeaseSet(lock_dir(cfg), command_resources(cmd, label), command=f"src.cli {cmd}")
+def command_leases(cfg: Config, cmd: str, label: str | None = None,
+                   runner: str | None = None) -> LeaseSet:
+    return LeaseSet(lock_dir(cfg), command_resources(cmd, label, runner=runner),
+                    command=f"src.cli {cmd}")
 
 
 def legacy_training_processes() -> list[dict]:
