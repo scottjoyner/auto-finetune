@@ -13,6 +13,14 @@ MARKER=done-lfm25-sft-r1
 RESULTS=/media/scott/data/fleet-power/showdown-results.md
 
 echo "[cascade] watching for $MARKER ..."
+# log the earlier milestone too: combined-r2 promotion completion
+R2=done-combined-r2
+while ! grep -qx "$R2" "$STATE" 2>/dev/null; do
+  sleep 120
+done
+python3 /home/scott/git/fleet-power/scripts/event_timeline.py r2-complete \
+    label="combined-r2 promotion finished" >/dev/null
+echo "[cascade] $R2 detected $(date)"
 while ! grep -qx "$MARKER" "$STATE" 2>/dev/null; do
   # abort if the poller/watchdog reported trainer death repeatedly? keep simple:
   sleep 300

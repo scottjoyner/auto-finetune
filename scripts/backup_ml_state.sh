@@ -12,9 +12,16 @@
 set -uo pipefail
 
 STAGING=/media/scott/data/finetune-staging
-DEST_ROOT=/media/scott/NAS3/fileserver/ml-state-backups
-[ -d /media/scott/NAS3 ] || { echo "[ml-backup] NAS3 not mounted — skipping"; exit 0; }
-mkdir -p "$DEST_ROOT" || { echo "[ml-backup] cannot write $DEST_ROOT"; exit 0; }
+# Primary: SSD_4TB (x1-370 NFS, reachable). Fallback: NAS3 (down since Jun 24).
+if [ -d /media/scott/SSD_4TB/fileserver ]; then
+  DEST_ROOT=/media/scott/SSD_4TB/fileserver/ml-state-backups
+elif [ -d /media/scott/SSD_4TB ]; then
+  DEST_ROOT=/media/scott/SSD_4TB/agent-state-backups/ml-state-backups
+elif [ -d /media/scott/NAS3 ]; then
+  DEST_ROOT=/media/scott/NAS3/fileserver/ml-state-backups
+else
+  echo "[ml-backup] no backup target mounted - skipping"; exit 0
+fi
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 RUN="$DEST_ROOT/xwing/$STAMP"
