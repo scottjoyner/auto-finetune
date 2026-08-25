@@ -189,6 +189,12 @@ def _train_peft(cfg: Config, data: list[dict],
     if load_4bit:
         model = prepare_model_for_kbit_training(model)
 
+    # LFM2 on ROCm/gfx1151: MIOpen conv1d find-phase can glitch mid-run
+    # ("No suitable algorithm"); wrap convs with unfold fallback/rescue.
+    if getattr(getattr(model, "config", None), "model_type", "") == "lfm2":
+        from .compat_lfm2_rocm import apply_to_model
+        print(f"[train] lfm2 rocm conv shim: {apply_to_model(model)}")
+
     if grad_ckpt:
         model.gradient_checkpointing_enable()
         model.config.use_cache = False
