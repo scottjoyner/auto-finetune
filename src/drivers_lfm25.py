@@ -229,7 +229,10 @@ class LFM25Driver(ModelDriver):
     def _chat(self, messages: list[dict], max_tokens: int) -> str:
         body = {"model": self.model, "messages": messages,
                 "temperature": self.temperature, "max_tokens": max_tokens,
-                "stream": False}
+                "stream": False,
+                # halt right after a pythonic call or turn end — otherwise the
+                # model keeps generating and hallucinates the tool_result too
+                "stop": ["<|tool_call_end|>", "<|im_end|>"]}
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"

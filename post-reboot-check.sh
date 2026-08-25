@@ -5,7 +5,10 @@ set -u
 V=/media/scott/data/finetune-venv/bin
 export PATH="$V:$PATH"
 export PYTHONPATH=/home/scott/git/auto-finetune
-TRAIN_ARGS=${TRAIN_ARGS:---source=hermes}
+# TRAIN_ARGS empty by default (2026-08-25): boot-time auto-training disabled —
+# runs are started deliberately via launch-next.sh --loop. Override explicitly:
+#   TRAIN_ARGS="--source=hermes" bash post-reboot-check.sh
+TRAIN_ARGS=${TRAIN_ARGS:-}
 
 # Keep scratch off NFS + small root: redirect HF/torch temp to local data drive.
 export HF_HOME=/media/scott/data/finetune-staging/hf-home

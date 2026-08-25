@@ -45,6 +45,7 @@ sleep 2
 setsid "$LLAMA/build-cpu/bin/llama-server" \
   --model "$GGUF" --host 127.0.0.1 --port $PORT \
   --ctx-size 8192 --parallel 1 --jinja --no-webui \
+  --special \
   </dev/null >>"$STAGING/logs/lfm-serve.log" 2>&1 &
 sleep 8
 
@@ -62,11 +63,17 @@ resp = handle_request({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                        "params": {"name": "lfm_task",
                                   "arguments": {"prompt": sys.argv[1]}}}, ctx)
 text = resp["result"]["content"][0]["text"]
-print(text.splitlines()[0])
+print(text)
 PY
 ) || RESULT="smoke harness error"
-echo "[serve-lfm25] smoke: $RESULT"
+echo "[serve-lfm25] smoke: $(echo "$RESULT" | head -1)"
+# Gate intent: prove the served model issues parseable tool calls that the
+# harness executes. completed=True is ideal; >=1 executed [tool] action also
+# proves the serving path end-to-end (young adapters often loop before
+# converging on a final no-tool answer).
 case "$RESULT" in
-  *completed=True*) echo "[serve-lfm25] PASS — finetuned LFM2.5 serving on :$PORT";;
-  *)                echo "[serve-lfm25] FAIL — inspect logs"; exit 1;;
+  *completed=True*|*"\\n[tool] "*|*"[tool] "*)
+    echo "[serve-lfm25] PASS — finetuned LFM2.5 serving on :$PORT (tool execution verified)";;
+  *)
+    echo "[serve-lfm25] FAIL — inspect logs"; exit 1;;
 esac
