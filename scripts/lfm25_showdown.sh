@@ -10,7 +10,11 @@ cd "$REPO"
 for port in 8094 8095; do
   tag=$([ "$port" = "8094" ] && echo stock || echo finetuned)
   echo "=== $tag (:8094/:8095 -> $port) ==="
+  # 2026-08-25: keep per-task rows, not just the completion headline —
+  # partial-pass detail is where finetune-vs-stock knowledge gains show.
+  DETAIL=/tmp/showdown-detail-$tag.txt
   python -m src.cli bench --runner=lfm25 --base-url=http://127.0.0.1:$port \
-    --tasks=$TASKS 2>&1 | grep -E "completion:" || true
+    --tasks=$TASKS 2>&1 | tee "$DETAIL" | grep -E "completion:" || true
+  grep -E "task|PASS|FAIL|✓|✗|passed" "$DETAIL" | grep -v "completion:" | head -40 || true
 done
 echo "compare smoke-tier rows above; mined tasks show knowledge gains."
