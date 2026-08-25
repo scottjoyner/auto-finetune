@@ -145,6 +145,10 @@ def command_resources(cmd: str, label: str | None = None,
         checkpoint = f"checkpoint-{_safe_name(label or 'default')}"
         return [ResourceRequest("datasets", shared=True), ResourceRequest("gpu"),
                 ResourceRequest(checkpoint)]
+    if cmd == "merge" and os.environ.get("MERGE_DEVICE", "").lower() == "cpu":
+        # merge_adapter() loads with device_map=None (CPU) — the GPU lease is
+        # only needed for the default path; allow CPU merges during training.
+        return [ResourceRequest("datasets", shared=True)]
     if cmd in {"eval", "eval-all", "best", "sanity", "merge", "quantize",
                "report", "probe", "compare", "bench", "bench-compare",
                "bench-matrix"}:

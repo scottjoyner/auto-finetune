@@ -19,6 +19,9 @@ LABEL=lfm-combined
 PORT=8095
 export PATH="$VENV:$PATH" PYTHONPATH="$REPO"
 export HF_HOME="$STAGING/hf-home"
+# merge_adapter() is device_map=None (CPU): safe alongside a GPU training run
+# once the lease manager knows we are CPU-only.
+export MERGE_DEVICE=cpu
 
 ADAPTER="$STAGING/outputs/checkpoints/toolcall-v5-3b-combined-r2/../lfm2.5-1.2b-sft-r1"
 OUT="$STAGING/outputs/checkpoints/lfm2.5-1.2b-sft-r1-merged"
@@ -47,7 +50,9 @@ sleep 8
 
 echo "[serve-lfm25] 4/4 smoke gate: one harness task..."
 PROMPT='Create a file named hello.txt containing exactly: hello world'
-RESULT=$(timeout 300 python - "$PROMPT" <<'PY'
+# 900s: the CPU llama-server shares cores with any concurrent training/eval
+# (observed 4 t/s under load); a multi-turn harness task needs headroom.
+RESULT=$(timeout 900 python - "$PROMPT" <<'PY'
 import json, sys
 from src.lfm_harness import HarnessContext, handle_request
 from src.drivers_lfm25 import LFM25Driver
