@@ -315,15 +315,25 @@ def test_merge_adapter(monkeypatch, tmp_path):
         pass
 
     import sys
+    import types
 
-    import peft as _peft
-    _tf = sys.modules["transformers"]
-    monkeypatch.setattr(_tf, "AutoModelForCausalLM",
-                        type("M", (), {"from_pretrained": staticmethod(lambda *a, **k: StubBase())}))
-    monkeypatch.setattr(_tf, "AutoTokenizer",
-                        type("T", (), {"from_pretrained": staticmethod(lambda *a, **k: StubTok())}))
-    monkeypatch.setattr(_peft, "PeftModel",
-                        type("P", (), {"from_pretrained": staticmethod(lambda *a, **k: StubPeft())}))
+    # Stub the ENTIRE peft module: importing real peft after monkeypatching
+    # transformers attributes trips peft's own transformers dependency chain
+    # (auto_factory GenerationMixin re-import) inside pytest. The test is
+    # hermetic otherwise — keep it that way.
+    stub_peft_mod = types.ModuleType("peft")
+    stub_peft_mod.PeftModel = type(
+        "P", (), {"from_pretrained": staticmethod(lambda *a, **k: StubPeft())})
+    monkeypatch.setitem(sys.modules, "peft", stub_peft_mod)
+
+    # Hermetic transformers stub too: nothing imported the real one yet, and
+    # merge_adapter only touches these two names.
+    stub_tf = types.ModuleType("transformers")
+    stub_tf.AutoModelForCausalLM = type(
+        "M", (), {"from_pretrained": staticmethod(lambda *a, **k: StubBase())})
+    stub_tf.AutoTokenizer = type(
+        "T", (), {"from_pretrained": staticmethod(lambda *a, **k: StubTok())})
+    monkeypatch.setitem(sys.modules, "transformers", stub_tf)
 
     out = tmp_path / "merged"
     res = M.merge_adapter(str(tmp_path / "toolcall-v5-3b-ssd"), "base", str(out), rocm=False)

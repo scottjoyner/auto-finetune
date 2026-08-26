@@ -8,6 +8,10 @@ import sys
 
 import pytest
 
+# Dispatch tests must pass on a machine that happens to be training right
+# now; the unmanaged-trainer guard is exercised by dedicated tests instead.
+os.environ.setdefault("AF_SKIP_UNMANAGED_CHECK", "1")
+
 # Make `src` importable as a package regardless of cwd.
 SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
 if SRC not in sys.path:

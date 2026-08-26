@@ -49,7 +49,7 @@ def test_cli_extract_runs(make_opencode_db, tmp_path, monkeypatch):
     cfg = __import__("src.config", fromlist=["Config"]).Config(raw=raw)
     monkeypatch.setattr(cli, "load", lambda *a, **k: cfg)
     rc = cli_main(["cli", "extract"])
-    assert rc == 1
+    assert rc == 0  # success exits 0; session count is logged, not used as status
     assert (tmp_path / "raw" / "ssd" / "ses_demo.json").exists()
 
 
@@ -133,7 +133,7 @@ def test_cli_clean_and_format(make_opencode_db, tmp_path, monkeypatch):
                     "dataset_dir": str(tmp_path / "datasets")}
     cfg = Config(raw=raw)
     monkeypatch.setattr(cli, "load", lambda *a, **k: cfg)
-    assert cli_main(["cli", "extract"]) == 1
+    assert cli_main(["cli", "extract"]) == 0
     assert isinstance(cli_main(["cli", "clean"]), int)
     assert isinstance(cli_main(["cli", "format"]), int)
 
