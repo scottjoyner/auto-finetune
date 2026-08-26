@@ -52,7 +52,11 @@ class Lease:
         except BlockingIOError as exc:
             os.close(self.fd)
             self.fd = None
-            owners = active_owner_records(str(self.lock_dir), self.request.name)
+            # Reap provably-dead holders first: a lease whose process died
+            # (crash, reboot, kill -9) has no release path and would block
+            # every future acquisition forever.
+            owners = active_owner_records(str(self.lock_dir), self.request.name,
+                                          reap_stale=True)
             detail = f"; owners={owners}" if owners else ""
             raise ResourceBusy(f"resource busy: {self.request.name}{detail}") from exc
 
@@ -204,17 +208,43 @@ def unmanaged_training_processes(lock_directory: str,
     return [trainer for trainer in candidates if int(trainer["pid"]) not in leased_pids]
 
 
-def active_owner_records(lock_directory: str, resource: str | None = None) -> list[dict]:
+def active_owner_records(lock_directory: str, resource: str | None = None,
+                         reap_stale: bool = False) -> list[dict]:
+    """Owner records for live lease holders.
+
+    With reap_stale=True, owner files whose process is provably dead
+    (different boot_id, or vanished pid) are deleted first — leases have no
+    other release path when a process dies, so without this they accumulate
+    until every later command fails with ResourceBusy (seen 2026-08-25:
+    5 stale gpu leases blocked all work after an unclean shutdown).
+    """
     base = Path(lock_directory) / "owners"
     paths = list((base / resource).glob("*.json")) if resource else list(base.glob("*/*.json"))
+    current_boot = _boot_id()
     records: list[dict] = []
     for path in sorted(paths):
         try:
             rec = json.loads(path.read_text())
-            rec["owner_file"] = str(path)
-            records.append(rec)
         except (OSError, json.JSONDecodeError):
             continue
+        if reap_stale:
+            dead = False
+            if rec.get("boot_id") != current_boot:
+                dead = True
+            else:
+                pid = rec.get("pid")
+                try:
+                    os.kill(int(pid), 0)
+                except (OSError, TypeError, ValueError):
+                    dead = True
+            if dead:
+                try:
+                    path.unlink(missing_ok=True)
+                    continue
+                except OSError:
+                    pass
+        rec["owner_file"] = str(path)
+        records.append(rec)
     return records
 
 
