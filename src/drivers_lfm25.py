@@ -246,7 +246,15 @@ class LFM25Driver(ModelDriver):
         if msg.get("reasoning_content"):
             parts.append(str(msg["reasoning_content"]))
         parts.append(msg.get("content") or "")
-        return "".join(parts)
+        text = "".join(parts)
+        # Reasoning bases (e.g. ornith qwen3_5) open a <think> block before
+        # any tool call; strip it so turn parsing and completion detection
+        # only see actionable content.
+        while "<think>" in text and "</think>" in text:
+            start = text.index("<think>")
+            end = text.index("</think>") + len("</think>")
+            text = text[:start] + text[end:]
+        return text
 
     @staticmethod
     def _translate(messages: list[dict], advertise_tools: bool) -> list[dict]:

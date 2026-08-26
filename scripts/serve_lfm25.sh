@@ -42,10 +42,21 @@ python "$LLAMA/convert_hf_to_gguf.py" "$OUT" --outfile "$GGUF" --outtype q8_0
 echo "[serve-lfm25] 3/4 restarting llama-server on :$PORT..."
 pkill -f "llama-server.*8095" 2>/dev/null || true
 sleep 2
-setsid "$LLAMA/build-cpu/bin/llama-server" \
+# GPU auto-detect: when no exclusive trainer holds the GPU, serve with the
+# ROCm build at full offload (~10-20x decode vs CPU). During training, fall
+# back to the CPU build so serving never contends for the device.
+LLAMA_BIN="$LLAMA/build-cpu/bin/llama-server"
+NGL=0
+if ! pgrep -f "src.cli train" >/dev/null 2>&1 \
+   && [ -x "$LLAMA/build-rocm/bin/llama-server" ]; then
+  LLAMA_BIN="$LLAMA/build-rocm/bin/llama-server"
+  NGL=999
+  echo "[serve-lfm25] GPU free -> ROCm backend, full offload"
+fi
+setsid "$LLAMA_BIN" \
   --model "$GGUF" --host 127.0.0.1 --port $PORT \
   --ctx-size 8192 --parallel 1 --jinja --no-webui \
-  --special \
+  --special -ngl $NGL \
   </dev/null >>"$STAGING/logs/lfm-serve.log" 2>&1 &
 sleep 8
 

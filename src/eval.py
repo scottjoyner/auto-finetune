@@ -241,19 +241,32 @@ def build_held_out(dataset_dir: str, label: str, frac: float = 0.1,
 def load_model_and_tokenizer(model_path: str, base_model: str, rocm: bool = False):
     """Load a base model + optional PEFT adapter at model_path.
 
-    If model_path contains an adapter_config.json, load it as a LoRA adapter
-    on top of base_model; otherwise load base_model directly (for baseline).
+    If model_path contains adapter_config.json, the adapter's OWN recorded
+    base (base_model_name_or_path) takes priority over the passed base_model —
+    adapters from different bases (LFM2.5, Qwen3-8B, ...) must never be
+    stacked onto the wrong base. Falls back to base_model for legacy
+    adapters that don't record it.
     """
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    tok = AutoTokenizer.from_pretrained(base_model)
+    is_adapter = (Path(model_path) / "adapter_config.json").exists()
+    resolved_base = base_model
+    if is_adapter:
+        try:
+            acfg = json.loads((Path(model_path) / "adapter_config.json").read_text())
+            recorded = acfg.get("base_model_name_or_path")
+            if recorded:
+                resolved_base = recorded
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    tok = AutoTokenizer.from_pretrained(resolved_base)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
-    is_adapter = (Path(model_path) / "adapter_config.json").exists()
     base = AutoModelForCausalLM.from_pretrained(
-        base_model if not is_adapter else base_model,
+        resolved_base,
         torch_dtype=torch.bfloat16 if rocm else torch.float16,
         attn_implementation="sdpa",
         device_map=None,
@@ -435,6 +448,23 @@ def evaluate_all(
             evaluate_baseline(base_model, str(held), rocm=rocm, max_seq=max_seq,
                               loss_only=loss_only)
         )
+
+    # Generic sweep: any adapter in out_base not covered by EVAL_MATRIX
+    # (lfm2.5-*, qwen3-8b, ornith15-9b, ...). Each resolves its own base via
+    # adapter_config.json (load_model_and_tokenizer). Held-out set: reuse the
+    # combined split — the closest general proxy for cross-base comparison.
+    seen = {str(Path(out_base) / f"toolcall-v5-3b-{label}") for label in EVAL_MATRIX}
+    held_mixed = Path(eval_dir) / "held-out-combined.jsonl"
+    if held_mixed.exists():
+        for adapter_dir in sorted(Path(out_base).iterdir()):
+            if not (adapter_dir / "adapter_config.json").exists():
+                continue
+            if str(adapter_dir) in seen or "merged" in adapter_dir.name:
+                continue
+            results.append(
+                evaluate(str(adapter_dir), base_model, str(held_mixed),
+                         rocm=rocm, max_seq=max_seq, loss_only=loss_only)
+            )
     return results
 
 
