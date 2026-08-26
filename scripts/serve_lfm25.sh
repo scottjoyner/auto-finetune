@@ -47,16 +47,19 @@ sleep 2
 # back to the CPU build so serving never contends for the device.
 LLAMA_BIN="$LLAMA/build-cpu/bin/llama-server"
 NGL=0
+EXTRA_FLAGS=""
 if ! pgrep -f "src.cli train" >/dev/null 2>&1 \
    && [ -x "$LLAMA/build-rocm/bin/llama-server" ]; then
   LLAMA_BIN="$LLAMA/build-rocm/bin/llama-server"
   NGL=999
+  # Free perf: flash attention + q8_0 KV cache (lossless) + tuned batches
+  EXTRA_FLAGS="-fa on -ctk q8_0 -ctv q8_0 -b 2048 -ub 512 --cache-prompt"
   echo "[serve-lfm25] GPU free -> ROCm backend, full offload"
 fi
 setsid "$LLAMA_BIN" \
   --model "$GGUF" --host 127.0.0.1 --port $PORT \
   --ctx-size 8192 --parallel 1 --jinja --no-webui \
-  --special -ngl $NGL \
+  --special -ngl $NGL $EXTRA_FLAGS \
   </dev/null >>"$STAGING/logs/lfm-serve.log" 2>&1 &
 sleep 8
 
