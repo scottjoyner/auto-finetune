@@ -53,12 +53,14 @@ QUEUE=(
   # A/B experiment: same corpus on Thinking-Instruct — does SFT teach its
   # reasoning loops to converge on tool calls? (probed non-convergent stock)
   "lfm-combined:lfm2.5-thinking-sft-r1:done-lfm25-sft-think-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/LFM2.5-Thinking-Instruct,TRAIN_MAX_SEQ_LENGTH=4096,LFM_CONV_FALLBACK=force"
-  # 7-9B class on 4-bit bitsandbytes (RUNBOOK §10): recipe caveat — LFM r1
-  # showdown showed tool-format SFT regressing general task completion
-  # (stock 21% vs finetuned 0%); consider mixing general instruct data or
-  # fewer epochs for these before trusting the adapters.
-  "combined:qwen3-8b-sft-r1:done-qwen38b-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/Qwen3-8B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=1"
-  "combined:ornith15-9b-sft-r1:done-ornith15b-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/Ornith-1.5-9B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=1"
+  # 7-9B class on 4-bit bitsandbytes (RUNBOOK §10) on the MIXED corpus
+  # (train.mixed.jsonl = combined tool corpus + 35% no_robots general).
+  # Rationale: LFM r1 showdown showed pure tool-dialect SFT regresses task
+  # completion (stock 21% vs finetuned 0%, loops without converging);
+  # general-data mixing is the anti-overfit countermeasure. Ornith needs
+  # transformers>=5 (upgrade-gate fires after qwen38b completes).
+  "mixed:qwen3-8b-sft-r1:done-qwen38b-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/Qwen3-8B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=1"
+  "mixed:ornith15-9b-sft-r1:done-ornith15b-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/Ornith-1.5-9B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=1"
   # comparison-only (low priority) — uncomment to include
   # "nas5-old-broken:toolcall-v5-3b-nas5-old-broken:done-nas5-old-broken"
   # "nas5-recover-old:toolcall-v5-3b-nas5-recover-old:done-nas5-recover-old"

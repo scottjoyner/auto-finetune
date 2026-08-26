@@ -139,6 +139,9 @@ def command_resources(cmd: str, label: str | None = None,
     if cmd in {"format", "combine", "strata", "auto-balance", "eval-split",
                "pretokenize", "binarize", "dataset-version-restore"}:
         return [ResourceRequest("datasets")]
+    if cmd == "mix":
+        # reads corpora, writes a NEW file — safe alongside active training
+        return [ResourceRequest("datasets", shared=True)]
     if cmd == "all":
         return [ResourceRequest("harvest"), ResourceRequest("datasets")]
     if cmd in {"train", "dpo"}:

@@ -452,6 +452,22 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             for k, v in status.items():
                 print(f"  {k:<22} {v}")
             return 0
+        if cmd == "mix":
+            # Blend tool corpus with general instruct data (anti-overfit).
+            from src.mixcorpus import mix_corpus
+            dset = cfg.path("dataset_dir")
+            tool = (_parse_str_flag(argv, "--tool")
+                    or os.path.join(dset, "train.combined.jsonl"))
+            out = (_parse_str_flag(argv, "--out")
+                   or os.path.join(dset, "train.mixed.jsonl"))
+            ratio = float(_parse_str_flag(argv, "--general-ratio") or 0.35)
+            seed = int(_parse_str_flag(argv, "--seed") or 42)
+            general = [s.strip() for s in (
+                _parse_str_flag(argv, "--general")
+                or os.path.join(dset, "general-norobots.jsonl")).split(",") if s.strip()]
+            mix_corpus(tool, out, general, general_ratio=ratio, seed=seed)
+            return 0
+
         if cmd == "merge":
             from src.merge import merge_adapter
             from src.train import _detect_rocm
