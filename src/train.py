@@ -161,6 +161,11 @@ def _train_peft(cfg: Config, data: list[dict],
     max_seq = int(os.environ.get("TRAIN_MAX_SEQ_LENGTH")
                   or t.get("max_seq_length", 8192))
     load_4bit = t.get("load_in_4bit", True)
+    # Per-run override: >=7B bases need 4-bit on this 8GB iGPU while the
+    # config default targets the 3B (bf16) pipeline.
+    env_lb = os.environ.get("TRAIN_LOAD_4BIT")
+    if env_lb is not None:
+        load_4bit = env_lb.strip().lower() not in {"0", "false", "off", "no"}
     grad_ckpt = t.get("gradient_checkpointing", False)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
