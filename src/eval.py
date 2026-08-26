@@ -456,14 +456,35 @@ def evaluate_all(
     seen = {str(Path(out_base) / f"toolcall-v5-3b-{label}") for label in EVAL_MATRIX}
     held_mixed = Path(eval_dir) / "held-out-combined.jsonl"
     if held_mixed.exists():
+        # Per-base STOCK baselines so each finetune is judged against its own
+        # un-finetuned base, not just the global 3B default.
+        baselined_bases = {base_model}
+        pending_baseline = []
+
+        def _recorded_base(ad: Path) -> str | None:
+            try:
+                acfg = json.loads((ad / "adapter_config.json").read_text())
+                return acfg.get("base_model_name_or_path") or None
+            except (OSError, json.JSONDecodeError):
+                return None
+
         for adapter_dir in sorted(Path(out_base).iterdir()):
             if not (adapter_dir / "adapter_config.json").exists():
                 continue
             if str(adapter_dir) in seen or "merged" in adapter_dir.name:
                 continue
+            rbase = _recorded_base(adapter_dir)
+            if rbase and rbase not in baselined_bases:
+                baselined_bases.add(rbase)
+                pending_baseline.append(rbase)
             results.append(
-                evaluate(str(adapter_dir), base_model, str(held_mixed),
+                evaluate(str(adapter_dir), rbase or base_model, str(held_mixed),
                          rocm=rocm, max_seq=max_seq, loss_only=loss_only)
+            )
+        for rb in pending_baseline:
+            results.append(
+                evaluate_baseline(rb, str(held_mixed), rocm=rocm,
+                                  max_seq=max_seq, loss_only=loss_only)
             )
     return results
 
