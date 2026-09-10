@@ -1,0 +1,17 @@
+name: minicpm5-finetune
+train:
+  model_name: "openbmb/MiniCPM5-2B"
+  load_in_4bit: true
+  max_seq_length: 4096
+  lora_r: 16
+  lora_alpha: 32
+  lora_dropout: 0.1
+  target_modules: ["q_proj","k_proj","v_proj","o_proj","gate_proj","up_proj","down_proj"]
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 4
+  num_train_epochs: 3
+  learning_rate: 2e-4
+  fp16: false
+  bf16: true
+  gradient_checkpointing: true
+  output_dir: "/media/scott/data/finetune-staging/models/MiniCPM5-2B-adapter"
