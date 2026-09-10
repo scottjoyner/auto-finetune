@@ -104,3 +104,20 @@ if __name__ == "__main__":
             print(f"Verification: {f.read().strip()}")
     except:
         print("Verify: file not written continuously")
+
+
+def extract_function(text, name="compress"):
+    """Extract complete bash function with balanced braces."""
+    start = text.find(f"{name}()")
+    if start < 0:
+        return None
+    brace_count = 0
+    end = start
+    for i, c in enumerate(text[start:], start):
+        if c == '{': brace_count += 1
+        elif c == '}':
+            brace_count -= 1
+            if brace_count == 0:
+                end = i + 1
+                break
+    return text[start:end]
