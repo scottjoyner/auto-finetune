@@ -421,6 +421,12 @@ class OptimizedDriver(LocalDriver):
         # past a complete tool call
         stops = [self._tok.convert_tokens_to_ids("<|im_end|>"),
                  _SEP_CHARS, _SEP_LITERAL]
+        # MiniCPM5 optimization: add thinking-pattern stops for faster response
+        # (MiniCPM5 reasoning_content produces "Thinking Process:", "Analyze", etc.)
+        stops += [self._tok.convert_tokens_to_ids("Thinking"),
+                  self._tok.convert_tokens_to_ids("Process:")]
+        stops = [s for s in stops if isinstance(s, int) and s is not None
+                 and s != self._tok.unk_token_id]
         stops = [s for s in stops if isinstance(s, int) and s is not None
                  and s != self._tok.unk_token_id]
         gen = dict(max_new_tokens=max_new_tokens, do_sample=False,
@@ -466,7 +472,15 @@ class ApiDriver(ModelDriver):
                      "Authorization": f"Bearer {self.api_key}" if self.api_key else ""})
         with urllib.request.urlopen(req, timeout=180) as resp:
             data = json.loads(resp.read().decode())
-        return data["choices"][0]["message"]["content"]
+        msg = data["choices"][0]["message"]
+        content = msg.get("content", "")
+        # Harness adaptation: MiniCPM5 (and related variants) return reasoning
+        # in reasoning_content with empty content. Merge when empty.
+        if not content:
+            reasoning = msg.get("reasoning_content", "")
+            if reasoning:
+                content = reasoning
+        return content
 
 
 # ── run one task to completion ───────────────────────────────────────────────────
