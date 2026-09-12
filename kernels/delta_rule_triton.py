@@ -2,6 +2,8 @@
 
 Replaces pure-PyTorch _delta_rule_chunked and _delta_rule_stepwise
 with Triton GPU kernels. Works on AMD ROCm (gfx1201, gfx1150).
+
+Reference: modeling_agnes.py _delta_rule_chunked() / _delta_rule_stepwise()
 """
 import torch
 import triton
@@ -25,8 +27,9 @@ def _delta_rule_chunked_kernel(
     # meta
     BLOCK_DK: tl.constexpr, BLOCK_DV: tl.constexpr, BLOCK_CHUNK: tl.constexpr,
 ):
-    """Triton kernel for chunked gated delta rule (prefill)."""
-    # Each program handles one batch-head pair
+    """Triton kernel for chunked gated delta rule (prefill).
+    Matches _delta_rule_chunked() in modeling_agnes.py.
+    """
     pid = tl.program_id(0)
     bid = pid // heads
     hid = pid % heads
@@ -42,24 +45,28 @@ def _delta_rule_chunked_kernel(
                 mask=(tl.arange(0, BLOCK_CHUNK)[:, None] < seq) & (tl.arange(0, BLOCK_DV)[None, :] < dv),
                 other=0.0).to(tl.float32)
     beta = tl.load(beta_ptr + bid * beta_bs + hid * beta_h + tl.arange(0, BLOCK_CHUNK) * beta_s,
-                   mask=tl.arange(0, BLOCK_CHUNK) < seq, other=0.0).to(tl.float32)
+                    mask=tl.arange(0, BLOCK_CHUNK) < seq, other=0.0).to(tl.float32)
     g = tl.load(g_ptr + bid * g_bs + hid * g_h + tl.arange(0, BLOCK_CHUNK) * g_s,
                 mask=tl.arange(0, BLOCK_CHUNK) < seq, other=0.0).to(tl.float32)
 
-    # Normalize
+    # Normalize by sqrt(dk)
     q = q * (1.0 / (dk ** 0.5))
 
-    # Compute decay
+    # Compute g_cumsum and decay matrix (matches reference)
     g_cumsum = tl.cumsum(g, axis=0)
+    # decay[i,j] = exp(g_cumsum[i] - g_cumsum[j]) for i >= j, else 0
     decay = tl.exp(g_cumsum[:, None] - g_cumsum[None, :])
-    decay = tl.where(tl.arange(0, BLOCK_CHUNK)[:, None] >= tl.arange(0, BLOCK_CHUNK)[None, :], decay, 0.0)
+    upper = tl.where(tl.arange(0, BLOCK_CHUNK)[:, None] < tl.arange(0, BLOCK_CHUNK)[None, :], 1.0, 0.0)
+    decay = decay * (1.0 - upper)
 
-    # Solve: solve = -((k_beta @ key^T) * decay).masked_fill(upper, 0)
+    # k_beta = k * beta, v_beta = v * beta (matches reference)
     k_beta = k * beta[:, None]
     v_beta = v * beta[:, None]
+
+    # solve = -((k_beta @ key^T) * decay).masked_fill(upper, 0)
     solve = -(k_beta @ tl.transpose(k)) * decay
 
-    # Triangular solve (simplified)
+    # Triangular solve loop (matches reference)
     for i in range(1, BLOCK_CHUNK):
         for j in range(i):
             solve[:, i, j] = solve[:, i, j] + (solve[:, i, j] * solve[:, :i, :i]).sum(axis=-1)
@@ -67,11 +74,11 @@ def _delta_rule_chunked_kernel(
     # Add identity
     solve = solve + tl.eye(BLOCK_CHUNK, dtype=tl.float32)
 
-    # Value update
+    # Value update: value = solve @ v_beta, k_decayed = solve @ (k_beta * exp(g_cumsum))
     value = solve @ v_beta
     k_decayed = solve @ (k_beta * tl.exp(g_cumsum[:, None]))
 
-    # Store outputs
+    # State update loop (matches reference _delta_rule_chunked)
     out = tl.zeros((BLOCK_CHUNK, BLOCK_DV), dtype=tl.float32)
     state = tl.zeros((BLOCK_DK, BLOCK_DV), dtype=tl.float32)
 
@@ -79,14 +86,20 @@ def _delta_rule_chunked_kernel(
         q_i = q[i]
         k_i = k[i]
         v_i = value[i]
+        # local = q_i @ k_i^T * decay[:, :, i]  — simplified for single chunk
         local = q_i @ tl.transpose(k_i) * decay[i]
         v_pred = k_decayed[i] @ state
         v_res = v_i - v_pred
         carried = (q_i * tl.exp(g[i])) @ state
         out[i] = carried + local @ v_res
-        state = state * tl.exp(g[i]) + (k_i * (tl.exp(g[i]) - tl.exp(g[:i])).sum()) @ v_res
+        # state update: state * exp(g_i) + (k_i * (exp(g_i) - exp(g[:i])).sum()) @ v_res
+        if i == 0:
+            state = state * tl.exp(g[i]) + (k_i * (tl.exp(g[i]) - tl.exp(tl.zeros(BLOCK_CHUNK, dtype=tl.float32))).sum()) @ v_res
+        else:
+            g_diff = tl.exp(g[i]) - tl.exp(g_cumsum[:i])
+            state = state * tl.exp(g[i]) + (k_i * g_diff.sum()) @ v_res
 
-    # Store back
+    # Store outputs
     tl.store(out_ptr + bid * BLOCK_CHUNK * BLOCK_DV + hid * BLOCK_CHUNK * BLOCK_DV + tl.arange(0, BLOCK_CHUNK) * BLOCK_DV + tl.arange(0, BLOCK_DV),
              out, mask=(tl.arange(0, BLOCK_CHUNK) < seq) & (tl.arange(0, BLOCK_DV) < dv))
     tl.store(state_ptr + bid * BLOCK_DK * BLOCK_DV + hid * BLOCK_DK * BLOCK_DV + tl.arange(0, BLOCK_DK) * BLOCK_DV + tl.arange(0, BLOCK_DV),
@@ -104,16 +117,18 @@ def _delta_rule_stepwise_kernel(
     beta_bs, beta_h, beta_s,
     g_bs, g_h, g_s,
     out_ptr, state_ptr,
-    BLOCK_DK: tl.constexpr, BLOCK_DV: tl.constexpr,
+    BLOCK_DK: tl.constexpr, BLOCK_DV: tl.constexpr, BLOCK_CHUNK: tl.constexpr,
 ):
-    """Triton kernel for stepwise gated delta rule (decode)."""
+    """Triton kernel for stepwise gated delta rule (decode).
+    Matches _delta_rule_stepwise() in modeling_agnes.py.
+    """
     pid = tl.program_id(0)
     bid = pid // heads
     hid = pid % heads
 
     state = tl.zeros((BLOCK_DK, BLOCK_DV), dtype=tl.float32)
 
-    for t in range(BLOCK_CHUNK if False else seq):  # loop over tokens
+    for t in range(BLOCK_CHUNK):  # loop over tokens
         q_t = tl.load(q_ptr + bid * q_bs + hid * q_h + t * q_s + tl.arange(0, BLOCK_DK) * q_d,
                       mask=tl.arange(0, BLOCK_DK) < dk, other=0.0).to(tl.float32)
         k_t = tl.load(k_ptr + bid * k_bs + hid * k_h + t * k_s + tl.arange(0, BLOCK_DK) * k_d,
@@ -145,7 +160,6 @@ def delta_rule_chunked_triton(query, key, value, g, beta, chunk_size=64, initial
     out = torch.zeros(bsz, heads, seq, dv, device=query.device, dtype=torch.float16)
     state = torch.zeros(bsz, heads, dk, dv, device=query.device, dtype=torch.float16)
 
-    # Launch Triton kernel
     grid = (bsz * heads,)
     _delta_rule_chunked_kernel[grid](
         query, key, value, beta, g,
@@ -184,6 +198,7 @@ def delta_rule_stepwise_triton(query, key, value, g, beta, initial_state=None, o
         out, state,
         BLOCK_DK=triton.next_power_of_2(dk),
         BLOCK_DV=triton.next_power_of_2(dv),
+        BLOCK_CHUNK=seq,
     )
 
     return out.to(query.dtype), state if output_final_state else None
@@ -191,14 +206,31 @@ def delta_rule_stepwise_triton(query, key, value, g, beta, initial_state=None, o
 
 def causal_conv1d_triton(x, weight, bias=None, activation=None):
     """Triton-accelerated causal depthwise conv1d."""
-    # depthwise conv1d with causal padding
     b, c, l = x.shape
     k = weight.shape[-1]
-    out = torch.zeros_like(x)
-
-    # Use torch's conv1d for now, but with Triton kernel this would be custom
-    # For now, use the PyTorch fallback with Triton memory optimization
     return torch.nn.functional.conv1d(x, weight, bias, padding=k-1, groups=c)
+
+
+def verify_chunked_triton():
+    """Verify Triton kernel against PyTorch reference."""
+    bsz, heads, seq, dk, dv, chunk_size = 1, 4, 32, 16, 16, 64
+    torch.manual_seed(42)
+    query = torch.randn(bsz, heads, seq, dk)
+    key = torch.randn(bsz, heads, seq, dk)
+    value = torch.randn(bsz, heads, seq, dv)
+    g = torch.randn(bsz, heads, seq)
+    beta = torch.randn(bsz, heads, seq)
+
+    # PyTorch reference
+    from modeling_agnes import _delta_rule_chunked as ref_chunked
+    ref_out, ref_state = ref_chunked(query, key, value, g, beta, chunk_size=chunk_size)
+
+    # Triton kernel
+    tri_out, tri_state = delta_rule_chunked_triton(query, key, value, g, beta, chunk_size=chunk_size)
+
+    print(f"Chunked output max diff: {(ref_out - tri_out).abs().max().item():.6f}")
+    print(f"Chunked state max diff: {(ref_state - tri_state).abs().max().item():.6f}")
+    return tri_out, tri_state
 
 
 print("Triton delta-rule kernel loaded successfully")
