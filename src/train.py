@@ -186,11 +186,9 @@ def _train_peft(cfg: Config, data: list[dict],
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         trust_remote_code=True,
-        dtype=torch.bfloat16 if _detect_rocm() else torch.float16,
+        dtype=None if (load_4bit or load_8bit) else (torch.bfloat16 if _detect_rocm() else torch.float16),
         attn_implementation="sdpa",
         quantization_config=quant_config,
-        # device_map="auto" wedges the ROCm runtime on this gfx1151 iGPU after a
-        # long run (core dump at from_pretrained). Single-GPU so None is equivalent.
         device_map="auto",
     )
     if load_4bit:
