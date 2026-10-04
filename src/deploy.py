@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from src.config import Config
+from src.locking import atomic_write_json
 
 
 # Default inference node paths (shared SSD mount)
@@ -50,6 +51,41 @@ class DeployResult:
     deploy_path: str
     message: str
     duration_seconds: float
+
+
+def _read_versions(version_file: str) -> dict:
+    """Load versions.json, failing loudly if it is corrupt.
+
+    Deliberately not tolerant: this is the only record of what is deployed on a
+    node, so returning {} would look like "nothing is deployed" and could
+    trigger a fresh deploy over a live model. Callers get an actionable message
+    instead of a bare JSONDecodeError traceback.
+    """
+    try:
+        with open(version_file) as f:
+            data = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"corrupt deployment state {version_file}: {exc}. Refusing to "
+            f"continue; move the file aside to redeploy from scratch."
+        ) from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(
+            f"malformed deployment state {version_file}: expected an object, "
+            f"got {type(data).__name__}"
+        )
+    return data
+
+
+def _write_versions(version_file: str, versions: dict) -> None:
+    """Persist versions.json atomically.
+
+    The previous open(...,'w') + json.dump truncated first, so a kill during the
+    write left a half-written file and permanently wedged deploy, status and
+    rollback on that node. This path lives on shared fleet mounts, where a
+    partial write is more likely, not less.
+    """
+    atomic_write_json(version_file, versions)
 
 
 def _get_model_size(path: str) -> int:
@@ -160,8 +196,7 @@ def deploy_model(
     version_file = os.path.join(target_dir, "versions.json")
     versions = {}
     if os.path.exists(version_file):
-        with open(version_file) as f:
-            versions = json.load(f)
+        versions = _read_versions(version_file)
 
     current_version = versions.get(label, {}).get("version", 0)
     new_version = current_version + 1
@@ -221,8 +256,7 @@ def deploy_model(
         "health_check": check_passed,
         "size_bytes": _get_model_size(deploy_path),
     }
-    with open(version_file, "w") as f:
-        json.dump(versions, f, indent=2)
+    _write_versions(version_file, versions)
 
     duration = time.time() - start
     status_msg = f"deployed v{new_version}"
@@ -249,8 +283,7 @@ def get_deployed_models(cfg: Config, inference_base: str | None = None) -> list[
     if not os.path.exists(version_file):
         return []
 
-    with open(version_file) as f:
-        versions = json.load(f)
+    versions = _read_versions(version_file)
 
     models = []
     active_link = os.path.join(target_dir, DEFAULT_ACTIVE_LINK)
@@ -487,8 +520,7 @@ def get_multi_deploy_status(
             status[node] = []
             continue
 
-        with open(version_file) as f:
-            versions = json.load(f)
+        versions = _read_versions(version_file)
 
         models = []
         active_link = os.path.join(target_dir, DEFAULT_ACTIVE_LINK)

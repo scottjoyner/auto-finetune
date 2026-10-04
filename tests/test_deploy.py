@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 
+import pytest
 from conftest import make_cfg
 
 from src.config import Config
@@ -277,3 +278,116 @@ def test_discover_nodes_finds_local_and_per_node(monkeypatch, tmp_path):
     os.makedirs(os.path.join(str(tmp_path), "notanode"), exist_ok=True)
     nodes = discover_nodes(make_cfg(), str(tmp_path))
     assert nodes == ["local", "nas5"]
+
+
+# --- versions.json durability ----------------------------------------------
+
+def test_versions_survives_corrupt_state_without_wedging_deploy(tmp_path):
+    # A truncated versions.json used to make deploy, status and rollback all
+    # raise a bare JSONDecodeError, with no way forward except deleting the
+    # file by hand. It must fail with an actionable message instead.
+    cfg = _cfg_for(tmp_path)
+    base = str(tmp_path / "inference")
+    os.makedirs(os.path.join(base, "models"), exist_ok=True)
+    vf = os.path.join(base, "models", "versions.json")
+    with open(vf, "w") as fh:
+        fh.write('{"combined": {"version": 1')      # truncated mid-write
+
+    with pytest.raises(RuntimeError, match="corrupt deployment state"):
+        deploy_model(cfg, "combined", inference_base=base, health_check=False)
+
+    from src.deploy import get_deployed_models
+    with pytest.raises(RuntimeError, match="corrupt deployment state"):
+        get_deployed_models(cfg, base)
+
+
+def test_malformed_versions_shape_is_rejected(tmp_path):
+    from src.deploy import _read_versions
+    vf = tmp_path / "versions.json"
+    vf.write_text("[1, 2, 3]")
+    with pytest.raises(RuntimeError, match="expected an object"):
+        _read_versions(str(vf))
+
+
+def test_versions_write_is_atomic_and_leaves_no_tmp(tmp_path):
+    cfg = _cfg_for(tmp_path)
+    base = str(tmp_path / "inference")
+    deploy_model(cfg, "combined", inference_base=base, health_check=False)
+    deploy_model(cfg, "combined", inference_base=base, health_check=False)
+    models_dir = os.path.join(base, "models")
+    leftovers = [p for p in os.listdir(models_dir) if p.endswith(".tmp")]
+    assert leftovers == [], f"atomic write left temp files: {leftovers}"
+    assert json.load(open(os.path.join(models_dir, "versions.json")))["combined"]["version"] == 2
+
+
+def test_previous_versions_content_never_truncated_on_write(tmp_path):
+    # Simulate a crash *during* the write by making atomic_write_json fail
+    # after the existing file is in place; the old state must survive intact.
+    from src.deploy import _write_versions
+    vf = tmp_path / "versions.json"
+    vf.write_text('{"combined": {"version": 7}}')
+    with pytest.raises(TypeError):
+        _write_versions(str(vf), {"combined": {"version": 8}, "bad": object()})
+    assert json.load(open(vf))["combined"]["version"] == 7
+    assert list(p.name for p in tmp_path.iterdir() if p.name.endswith(".tmp")) == []
+
+
+# --- status readers --------------------------------------------------------
+
+def test_get_deployed_models_marks_the_active_version(tmp_path):
+    cfg = _cfg_for(tmp_path)
+    base = str(tmp_path / "inference")
+    deploy_model(cfg, "combined", inference_base=base, health_check=False)
+    deploy_model(cfg, "combined", inference_base=base, health_check=False)
+
+    from src.deploy import get_deployed_models
+    models = get_deployed_models(cfg, base)
+    # versions.json tracks only the current version per label, so exactly one
+    # entry, and it must be the one the active symlink points at.
+    assert len(models) == 1
+    assert models[0].label == "combined"
+    assert models[0].version == 2
+    assert models[0].status == "active"
+    assert models[0].deploy_path.endswith("combined-v2")
+
+
+def test_get_deployed_models_empty_without_state(tmp_path):
+    from src.deploy import get_deployed_models
+    assert get_deployed_models(make_cfg(), str(tmp_path / "nothing")) == []
+
+
+def test_multi_deploy_status_isolates_per_node_state(tmp_path):
+    from src.deploy import get_multi_deploy_status
+    cfg = _cfg_for(tmp_path)
+    base = str(tmp_path / "inference")
+    deploy_model(cfg, "combined", target="local", inference_base=base,
+                 health_check=False)
+    status = get_multi_deploy_status(cfg, ["local", "nas5"], inference_base=base)
+    assert len(status["local"]) == 1
+    assert status["nas5"] == [], "node with no state must report empty, not raise"
+
+
+def test_multi_rollback_defaults_to_discovered_nodes(monkeypatch, tmp_path):
+    from src.deploy import multi_rollback
+    os.makedirs(os.path.join(str(tmp_path), "models"), exist_ok=True)
+    seen: list[str] = []
+
+    def fake(cfg, label, target="local", inference_base=None, health_check=True,
+             rollback=False):
+        seen.append(target)
+        return _result(True, node=target)
+
+    monkeypatch.setattr("src.deploy.deploy_model", fake)
+    results = multi_rollback(make_cfg(), "combined", [], inference_base=str(tmp_path))
+    assert [r.success for r in results] == [True]
+    assert seen == ["local"]
+
+
+def test_multi_rollback_reports_nothing_to_rollback(tmp_path):
+    from src.deploy import multi_rollback
+    cfg = _cfg_for(tmp_path)
+    base = str(tmp_path / "inference")
+    os.makedirs(os.path.join(base, "models"), exist_ok=True)
+    results = multi_rollback(cfg, "combined", ["local"], inference_base=base)
+    assert not any(r.success for r in results)
+    assert all("nothing to rollback" in r.message for r in results)
