@@ -31,7 +31,19 @@ def _pad_and_unfold(x: torch.Tensor, k: int) -> torch.Tensor:
 
 def fallback_causal_conv1d_fn(x, weight, bias=None, activation=None,
                               seq_idx=None, *args, **kwargs):
-    """Causal depthwise conv1d. x [B,C,L]; weight [C,K] (depthwise)."""
+    """Causal depthwise conv1d. x [B,C,L]; weight [C,K] (depthwise).
+
+    seq_idx is rejected rather than ignored. causal_conv1d uses it to stop
+    attention-free leakage across packed sequences; silently dropping it yields
+    output identical to the seq_idx=None path, i.e. tokens near a boundary
+    convolve against the previous sequence. Raising surfaces the limitation so
+    packing can be disabled, instead of training on quietly corrupted batches.
+    """
+    if seq_idx is not None:
+        raise RuntimeError(
+            "causal_conv1d fallback does not support packed sequences "
+            "(seq_idx was provided); disable packing or install working "
+            "causal_conv1d kernels for this device")
     k = weight.shape[-1]
     xu = _pad_and_unfold(x, k)                       # [B, C, L, K]
     w = weight.squeeze(1) if weight.dim() == 3 else weight
@@ -52,7 +64,10 @@ def fallback_causal_conv1d_update(x, conv_state, weight, bias=None,
     out = (concat * w.view(1, -1, k)).sum(-1)
     if bias is not None:
         out = out + bias.view(1, -1)
-    new_state = concat[:, :, -(k - 1):] if k > 1 else concat[:, :, :1]
+    # Carry exactly k-1 tokens of history. The k=1 branch used to hand back
+    # width 1, which fed straight back in on the next step and made the output
+    # (stale_state + x) * w instead of x * w -- wrong by a multiple, silently.
+    new_state = concat[:, :, -(k - 1):] if k > 1 else concat[:, :, :0]
     if activation == "silu":
         out = F.silu(out)
     return out, new_state
@@ -121,20 +136,49 @@ def maybe_install_from_env() -> str:
 # ---------------------------------------------------------------------------
 
 def _unfold_conv1d(conv, x):
-    """Replicates nn.Conv1d for stride=1, dilation=1 without MIOpen."""
+    """Replicates nn.Conv1d without MIOpen, exactly, for stride=dilation=1.
+
+    Three things this had wrong, all of them silent:
+
+    * padding_mode. It used a bare F.pad, which is zero padding, so a conv built
+      with padding_mode='reflect'/'replicate'/'circular' returned values that
+      differed from nn.Conv1d by ~1.0 absolute with no error raised. This is a
+      correctness shim, so silently-wrong forward math is the worst possible
+      failure mode; the exact padding mode is now used.
+    * grouped convs where in_channels != out_channels. The reshape packed the
+      *input* channel axis as (groups, out_channels/groups), which only lines up
+      when in==out, i.e. depthwise. For e.g. Conv1d(4, 6, 3, groups=2) it raised
+      a confusing "shape '[2,3,3]' is invalid" from inside reshape.
+    * asymmetric padding ('same' with an odd kernel). Now mirrors nn.Conv1d's
+      own _reversed_padding_repeated_twice instead of assuming symmetry.
+    """
     if conv.stride[0] != 1 or conv.dilation[0] != 1:
         raise ValueError("unfold fallback supports stride=dilation=1 only")
     k = conv.kernel_size[0]
-    pad = conv.padding[0]
-    xp = F.pad(x, (pad, pad)) if pad else x
-    xu = xp.unfold(-1, k, 1)                      # [B, C, Lout, K]
+    # Use whatever PyTorch itself would pad with, so 'same'/asymmetric cases and
+    # non-zero padding modes agree exactly.
+    pad = tuple(getattr(conv, "_reversed_padding_repeated_twice",
+                        (conv.padding[0], conv.padding[0])))
+    pad_mode = {"zeros": "constant", "reflect": "reflect",
+                "replicate": "replicate", "circular": "circular"}[conv.padding_mode]
+    xp = F.pad(x, pad, mode=pad_mode) if any(pad) else x
+    xu = xp.unfold(-1, k, 1)                      # [B, Cin, Lout, K]
     G = conv.groups
-    Cout = conv.weight.shape[0]
-    cg = Cout // G
-    w = conv.weight.view(G, cg, k)
-    out = (xu.reshape(xu.shape[0], G, cg, xu.shape[-2], k)
-           * w.view(1, G, cg, 1, k)).sum(-1)
-    out = out.reshape(xu.shape[0], Cout, xu.shape[-2])
+    cin = xu.shape[1]
+    cout = conv.weight.shape[0]
+    if cin % G or cout % G:
+        raise ValueError(f"channels {cin}/{cout} not divisible by groups={G}")
+    cg_out = cout // G
+    cg_in = cin // G
+    w = conv.weight.view(G, cg_out, cg_in, k)     # [G, cout/G, cin/G, K]
+    batch, length = xu.shape[0], xu.shape[-2]
+    # Axis order must mirror w exactly: [B, G, 1, cg_in, L, K] broadcasts against
+    # [1, G, cg_out, cg_in, 1, K]. Putting cg_in at index 2 instead pairs input
+    # channels with output channels -- which for a grouped conv whose cg_in
+    # equals its cg_out still has the right *shape* and silently wrong values.
+    xu = xu.reshape(batch, G, 1, cg_in, length, k)
+    out = (xu * w.view(1, G, cg_out, cg_in, 1, k)).sum(dim=(-1, -3))
+    out = out.reshape(batch, cout, length)
     if conv.bias is not None:
         out = out + conv.bias.view(1, -1, 1)
     return out
@@ -153,7 +197,11 @@ def _wrap_conv(conv, mode: str):
 
     def rescue(self, x):
         try:
-            return nn.Conv1d.forward(self, x)
+            # torch.nn, not a bare `nn`: this module only imports torch and
+            # torch.nn.functional, so the previous `nn.Conv1d.forward` raised
+            # NameError the first time MIOpen actually failed -- meaning rescue
+            # mode, the default, had never once successfully fallen back.
+            return torch.nn.Conv1d.forward(self, x)
         except RuntimeError as e:
             if not _is_miopen_error(e):
                 raise
