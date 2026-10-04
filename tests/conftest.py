@@ -12,10 +12,15 @@ import pytest
 # now; the unmanaged-trainer guard is exercised by dedicated tests instead.
 os.environ.setdefault("AF_SKIP_UNMANAGED_CHECK", "1")
 
-# Make `src` importable as a package regardless of cwd.
-SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src")
-if SRC not in sys.path:
-    sys.path.insert(0, SRC)
+# Make `src` importable as a package regardless of cwd. This must add the
+# *repo root* to sys.path, not the src/ directory: with src/ itself on the path,
+# its plain module names shadow part of transformers' import machinery and
+# `from transformers import AutoTokenizer` fails with "cannot import name
+# 'GenerationMixin'". The repo root is what `from src.x import y` resolves
+# against.
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 import copy
 

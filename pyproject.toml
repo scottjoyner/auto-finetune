@@ -17,7 +17,12 @@ testpaths = ["tests"]
 # 1,450 more covered statements; cli.py (51%), get_deployed_models and
 # multi_rollback in deploy.py, and metrics.py (45%) are the largest gaps.
 addopts = "-q --cov=src --cov-report=term-missing --cov-fail-under=60"
-pythonpath = ["src"]
+# Deliberately no pythonpath = ["src"]. Putting the src/ directory itself on
+# sys.path shadowed part of transformers' import machinery, so
+# `from transformers import AutoTokenizer` failed with "cannot import name
+# 'GenerationMixin'" once that entry was active. The one line that needed it
+# (src/train.py __main__) now imports from src.cli. conftest.py already puts the
+# repo root on sys.path, which is all `from src.x import y` needs.
 
 [tool.coverage.run]
 source = ["src"]

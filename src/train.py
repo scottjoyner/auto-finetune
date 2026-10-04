@@ -377,5 +377,10 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
 
 
 if __name__ == "__main__":
-    from cli import main as _cli_main  # pragma: no cover
+    # Was `from cli import ...`, which only resolved because the test config put
+    # the src/ directory itself on sys.path. That made `src/` shadow part of
+    # transformers' import machinery, so `from transformers import AutoTokenizer`
+    # raised "cannot import name 'GenerationMixin'" whenever it was reached
+    # after that path entry was active.
+    from src.cli import main as _cli_main  # pragma: no cover
     sys.exit(_cli_main(sys.argv))
