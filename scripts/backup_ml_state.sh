@@ -1,6 +1,6 @@
 #!/bin/bash
-# Backup the irreplaceable ML state to NAS3 when it is mounted.
-# Safe to cron weekly: exits 0 silently if NAS3 is unavailable.
+# Backup the irreplaceable ML state to the first writable backup target.
+# Safe to cron weekly: exits 0 silently if no target is usable.
 #
 # Covers (small, high-value only — datasets/merged models are regenerable
 # from raw stores and base weights):
@@ -12,20 +12,40 @@
 set -uo pipefail
 
 STAGING=/media/scott/data/finetune-staging
-# Primary: SSD_4TB (x1-370 NFS, reachable). Fallback: NAS3 (down since Jun 24).
-if [ -d /media/scott/SSD_4TB/fileserver ]; then
-  DEST_ROOT=/media/scott/SSD_4TB/fileserver/ml-state-backups
-elif [ -d /media/scott/SSD_4TB ]; then
-  DEST_ROOT=/media/scott/SSD_4TB/agent-state-backups/ml-state-backups
-elif [ -d /media/scott/NAS3 ]; then
-  DEST_ROOT=/media/scott/NAS3/fileserver/ml-state-backups
-else
-  echo "[ml-backup] no backup target mounted - skipping"; exit 0
-fi
+
+# Pick the first target we can actually WRITE, not merely one that exists.
+# The 2026-09-21 run picked /media/scott/SSD_4TB/fileserver (a symlink to the
+# NAS3 export) because the path resolved, then every mkdir failed with
+# "Read-only file system" and the whole backup was silently lost -- the
+# -d test cannot see that condition.
+#
+# Order: proven SSD_4TB NFS target, then the CIFS NAS, then the legacy NAS3.
+pick_dest() {
+  local candidate
+  for candidate in "$@"; do
+    if mkdir -p "$candidate" 2>/dev/null && [ -w "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    echo "[ml-backup] unusable target: $candidate" >&2
+  done
+  return 1
+}
+
+DEST_ROOT=$(pick_dest \
+  /media/scott/SSD_4TB/agent-state-backups/ml-state-backups \
+  /nas/ml-state-backups \
+  /media/scott/NAS3/fileserver/ml-state-backups) || {
+  echo "[ml-backup] no writable backup target - skipping"
+  exit 0
+}
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 RUN="$DEST_ROOT/xwing/$STAMP"
-mkdir -p "$RUN"
+if ! mkdir -p "$RUN"; then
+  echo "[ml-backup] cannot create $RUN - skipping"
+  exit 0
+fi
 
 # 1) small critical files
 cp "$STAGING/launch-next.state" "$RUN/" 2>/dev/null || true
