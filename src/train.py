@@ -166,6 +166,7 @@ def _train_peft(cfg: Config, data: list[dict],
     env_lb = os.environ.get("TRAIN_LOAD_4BIT")
     if env_lb is not None:
         load_4bit = env_lb.strip().lower() not in {"0", "false", "off", "no"}
+    load_8bit = t.get("load_in_8bit", False)
     grad_ckpt = t.get("gradient_checkpointing", False)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -181,10 +182,16 @@ def _train_peft(cfg: Config, data: list[dict],
             bnb_4bit_compute_dtype=torch.bfloat16 if _detect_rocm() else torch.float16,
             bnb_4bit_use_double_quant=True,
         )
+    elif load_8bit:
+        from transformers import BitsAndBytesConfig
+        quant_config = BitsAndBytesConfig(
+            load_in_8bit=True,
+        )
 
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        dtype=torch.bfloat16 if _detect_rocm() else torch.float16,
+        trust_remote_code=True,
+        dtype=None if (load_4bit or load_8bit) else (torch.bfloat16 if _detect_rocm() else torch.float16),
         attn_implementation="sdpa",
         quantization_config=quant_config,
         # device_map="auto" wedges the ROCm runtime on this gfx1151 iGPU after a
