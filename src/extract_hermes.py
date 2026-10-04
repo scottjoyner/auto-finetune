@@ -105,12 +105,25 @@ def _tool_calls_to_parts(tool_calls_raw: Any) -> list[dict]:
     for call in tc:
         if not isinstance(call, dict):
             continue
-        fn = call.get("function") or {}
+        # `function` is normally a dict, but some providers serialize it as a
+        # bare name string. Calling .get() on that raised AttributeError, which
+        # escaped the per-message loop and aborted the entire extraction run --
+        # one malformed message cost every session, not just its own.
+        fn = call.get("function")
+        if isinstance(fn, str):
+            fn = {"name": fn}
+        elif not isinstance(fn, dict):
+            fn = {}
         name = call.get("name") or fn.get("name")
         args = call.get("arguments")
         if args is None:
             args = fn.get("arguments")
-        args = _safe_json(args) if isinstance(args, str) else args
+        if isinstance(args, str):
+            parsed = _safe_json(args)
+            # Keep the raw text when it does not parse. Returning None here put
+            # a tool call with no arguments at all into the corpus, which trains
+            # the model to emit argument-less calls with nothing to show for it.
+            args = parsed if parsed is not None else (args or None)
         parts.append({
             "type": "tool",
             "tool": name,
@@ -168,7 +181,10 @@ def extract_state_db(cfg: Config, db_path: str, out_dir: str) -> int:
                 # Tool result: attach output to the matching assistant tool part.
                 out_val = m["content"]
                 cid = m["tool_call_id"]
-                target = pending_tool.get(cid) if cid else None
+                # pop, not get: a retried tool emits two result rows with the
+                # same call_id, and leaving the entry in place let the second
+                # silently overwrite the first result.
+                target = pending_tool.pop(cid, None) if cid else None
                 if target is not None:
                     target["output"] = out_val
                 else:
