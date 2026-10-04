@@ -55,6 +55,27 @@ def _has_flag(argv: list[str], name: str) -> bool:
     return any(a == name for a in argv)
 
 
+def _lmstudio_specs() -> list[dict]:
+    """Build bench specs from the local lmstudio *.gguf models.
+
+    lmstudio serves each model by its containing folder name, so the folder is
+    the model id. The root is overridable via LMSTUDIO_MODELS_DIR so this is
+    testable without depending on what happens to be downloaded on the host.
+    """
+    lm_root = os.environ.get("LMSTUDIO_MODELS_DIR",
+                             "/home/scott/.lmstudio/models")
+    base_url = os.environ.get("LMSTUDIO_URL", "http://localhost:1234/v1")
+    api_key = os.environ.get("LMSTUDIO_API_KEY", "lm-studio")
+    if not os.path.isdir(lm_root):
+        return []
+    specs = []
+    for md in sorted(Path(lm_root).rglob("*.gguf")):
+        specs.append({"name": md.parent.name, "runner": "api",
+                      "base_url": base_url, "model": md.parent.name,
+                      "api_key": api_key})
+    return specs
+
+
 def _local_ref_specs() -> list[dict]:
     """Local, no-network reference set: a transformers-loadable large reference
     (qwen2.5-7b) plus any finished FT adapters found on disk.
@@ -666,17 +687,10 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             elif preset == "lmstudio":
                 # lmstudio q8 *.gguf models served over OpenAI-compatible /v1.
                 # Requires lmstudio's local server to be running (default 1234).
-                lm_root = "/home/scott/.lmstudio/models"
-                base_url = os.environ.get("LMSTUDIO_URL", "http://localhost:1234/v1")
-                api_key = os.environ.get("LMSTUDIO_API_KEY", "lm-studio")
-                for md in sorted(Path(lm_root).rglob("*.gguf")):
-                    # model id = parent dir name (lmstudio serves by folder name)
-                    specs.append({"name": md.parent.name, "runner": "api",
-                                  "base_url": base_url, "model": md.parent.name,
-                                  "api_key": api_key})
+                specs = _lmstudio_specs()
                 if not specs:
                     print("[error] lmstudio preset: no *.gguf found under "
-                          f"{lm_root}")
+                          f"{os.environ.get('LMSTUDIO_MODELS_DIR', '/home/scott/.lmstudio/models')}")
                     return 2
             elif preset == "fleet":
                 from src.fleet import list_models
@@ -687,17 +701,8 @@ def _dispatch(argv: list[str], cfg=None) -> int:
                 # quick smoke: ONE model per reference source (local + lmstudio
                 # + fleet). Cheap enough for a pre-merge / pre-queue sanity gate.
                 specs = list(_local_ref_specs()[:1]) or []
-                lm_root = "/home/scott/.lmstudio/models"
-                if os.path.isdir(lm_root):
-                    ggufs = sorted(Path(lm_root).rglob("*.gguf"))
-                    if ggufs:
-                        base_url = os.environ.get("LMSTUDIO_URL",
-                                                   "http://localhost:1234/v1")
-                        api_key = os.environ.get("LMSTUDIO_API_KEY", "lm-studio")
-                        specs.append({"name": ggufs[0].parent.name, "runner": "api",
-                                      "base_url": base_url,
-                                      "model": ggufs[0].parent.name,
-                                      "api_key": api_key})
+                if _lmstudio_specs():
+                    specs.append(_lmstudio_specs()[0])
                 try:
                     from src.fleet import list_models as _lm
                     fm = _lm()

@@ -75,22 +75,36 @@ def test_bench_matrix_bad_spec_survives():
     assert "error" in matrix["bad"]["summary"]
 
 
-def test_lmstudio_preset_builds_gguf_specs(monkeypatch):
-    # replicate the lmstudio preset spec construction the CLI does, without a
-    # live lmstudio server (no network calls). Just checks the glob + shape.
-    import src.cli as cli  # noqa: F401
-    lm_root = Path("/home/scott/.lmstudio/models")
-    if not lm_root.exists():
-        pytest.skip("no lmstudio models dir")
-    specs = []
-    for md in sorted(lm_root.rglob("*.gguf")):
-        specs.append({"name": md.parent.name, "runner": "api",
-                      "base_url": "http://localhost:1234/v1",
-                      "model": md.parent.name, "api_key": "lm-studio"})
-    assert len(specs) >= 1
+def test_lmstudio_preset_builds_gguf_specs(monkeypatch, tmp_path):
+    # Exercises the real spec builder against a synthetic model root, so this
+    # does not depend on which ggufs happen to be downloaded on the host.
+    import src.cli as cli
+
+    root = tmp_path / "models"
+    for name in ("RefinedToolCallV5-3b", "some-other-model"):
+        d = root / name
+        d.mkdir(parents=True)
+        (d / "model.Q4_K_M.gguf").write_bytes(b"")
+    (root / "not-a-model.gguf").write_bytes(b"")  # loose file, no parent dir name
+    monkeypatch.setenv("LMSTUDIO_MODELS_DIR", str(root))
+    monkeypatch.setenv("LMSTUDIO_URL", "http://localhost:9999/v1")
+
+    specs = cli._lmstudio_specs()
+    names = [s["name"] for s in specs]
+    assert "RefinedToolCallV5-3b" in names
+    assert "some-other-model" in names
+    # lmstudio serves by folder name, so name == model
     assert all(s["runner"] == "api" and s["model"] == s["name"] for s in specs)
-    # RefinedToolCallV5 q8 gguf should be discoverable
-    assert any(s["name"] == "RefinedToolCallV5-3b" for s in specs)
+    assert all(s["base_url"] == "http://localhost:9999/v1" for s in specs)
+
+
+def test_lmstudio_specs_missing_root_is_empty(monkeypatch, tmp_path):
+    # An absent lmstudio root must yield no specs rather than raising, so the
+    # 'fast' preset can fall back instead of erroring out.
+    import src.cli as cli
+
+    monkeypatch.setenv("LMSTUDIO_MODELS_DIR", str(tmp_path / "nope"))
+    assert cli._lmstudio_specs() == []
 
 
 def test_local_preset_finds_qwen(monkeypatch):
