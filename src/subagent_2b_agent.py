@@ -4,7 +4,12 @@
 Strategy: Strict tool-call format first; if model generates prose,
 fallback to parsing commands from inline/backtick/code blocks.
 """
-import json, re, os, time, subprocess, urllib.request
+import json
+import os
+import re
+import subprocess
+import time
+import urllib.request
 
 
 def call_2b(messages, model="minicpm5-2b", max_tokens=512,
@@ -46,42 +51,81 @@ def extract_bash(text):
     return [c.strip() for c in calls if c.strip()]
 
 
+# A prose fallback is only worth running if it actually looks like a command.
+# The previous check was `kw in cmd`, so ordinary English matched: "calls"
+# contains "ls", "islands" nearly does. It returned the first such hit, so a
+# real `ls -la /tmp` later in the same text was never reached -- and this agent
+# hands the result to subprocess.run(shell=True). Anchoring on a leading
+# binary removes the class entirely.
+_COMMAND_START = re.compile(
+    r"^\s*(?:sudo\s+|env\s+|time\s+|command\s+)?"
+    r"(?:find|ls|echo|cat|wc|grep|tar|df|ps|mkdir|chmod|gzip|rm|cp|mv|"
+    r"whoami|pwd|free|nproc|sed|awk|head|tail|du|stat|touch|ln|chown|"
+    r"git|curl|wget|jq|sort|uniq|diff|date|sleep|true|false|test|expr|seq)"
+    r"\b"
+)
+
+
+def _looks_like_command(text: str) -> bool:
+    """True when the text starts with something plausible as a shell command."""
+    for line in text.splitlines():
+        line = line.strip().lstrip("$").strip()
+        if not line or line.startswith("#"):
+            continue
+        return bool(_COMMAND_START.match(line))
+    return False
+
+
 def extract_fallback(text):
     """Extract command from prose (code block, backtick, inline)."""
     # Code block ```bash or ```
     for m in re.finditer(r'```(?:bash|sh)?\n(.+?)```', text, re.DOTALL):
         cmd = m.group(1).strip()
-        if any(kw in cmd.split('\n')[0].lower() for kw in
-               ['find', 'ls', 'echo', 'cat', 'wc', 'grep', 'tar', 'df', 'ps',
-                'mkdir', 'chmod', 'gzip', 'rm', 'cp', 'mv', 'whoami', 'pwd', 'free']):
+        if _looks_like_command(cmd):
             return cmd
 
-    # Inline commands like `echo x` or `$ ls`
-    for m in re.finditer(r'`([^`]+)`', text):
+    # Inline commands like `echo x` or `$ ls`.
+    # [^`\n] rather than [^`]: an inline command is single-line, and allowing
+    # newlines let a match span from a ``` fence to the next backtick, which
+    # swallowed the real command entirely.
+    for m in re.finditer(r'`([^`\n]+)`', text):
         cmd = m.group(1).strip()
-        if any(kw in cmd.lower() for kw in ['echo', 'ls', 'find', 'wc', 'cat', 'tar', 'df', 'ps']):
+        if _looks_like_command(cmd):
             return cmd
 
     # Inline $ commands
-    for m in re.finditer(r'\$\s*((?:find|ls|cat|echo|tar|wc|grep|df|ps|free|nproc|whoami)[^$\n]+)', text):
+    for m in re.finditer(
+            r'\$\s*((?:find|ls|cat|echo|tar|wc|grep|df|ps|free|nproc|pwd|whoami)[^$\n]+)',
+            text):
         return m.group(1).strip()
 
     return None
 
 
 def extract_function(text):
-    """Extract complete bash function with balanced braces."""
+    """Extract complete bash function with balanced braces.
+
+    Scans past candidates whose braces never balance. It used to return on the
+    first `name() {` regardless, so a truncated fragment earlier in the output
+    (common when generation hits max_tokens) shadowed a perfectly good function
+    further down and produced an empty body.
+    """
     for m in re.finditer(r'(\w+)\(\)\s*\{', text):
         name = m.group(1)
         start = m.start()
-        count, end = 0, start
+        count, end = 0, None
         for i in range(start, len(text)):
-            if text[i] == '{': count += 1
+            if text[i] == '{':
+                count += 1
             elif text[i] == '}':
                 count -= 1
                 if count == 0:
                     end = i + 1
                     break
+        # Unbalanced (truncated) candidate: keep looking rather than reporting
+        # an empty body for it.
+        if end is None:
+            continue
         return name, text[start:end]
     return None, None
 
@@ -124,11 +168,13 @@ def run_2b_agent(task, model="minicpm5-2b", max_steps=5):
                     p = subprocess.run(test_cmd, shell=True, capture_output=True,
                                        text=True, timeout=10)
                     print(f"  Func: {func_name} -> {path} | test: {p.stdout.strip()}")
-                except:
+                except Exception:
+                    # Not bare: a bare except also swallows KeyboardInterrupt
+                    # and SystemExit, so the agent could not be interrupted.
                     pass
                 tools = [{"cmd": test_cmd, "is_func": True}]
             elif fallback:
-                print(f"  Fallback: parsed command from prose")
+                print("  Fallback: parsed command from prose")
                 tools = [{"cmd": fallback}]
 
         if not tools:
