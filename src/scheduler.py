@@ -14,8 +14,10 @@ Usage:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass, asdict
@@ -41,6 +43,10 @@ class SchedulerState:
     runs_failed: int
     current_phase: str  # idle, harvesting, training, deploying
     last_error: str | None
+    pending_candidate: str | None = None
+    pending_plan_id: str | None = None
+    pending_labels: list[str] | None = None
+    pending_dataset_labels: list[str] | None = None
 
 
 @dataclass
@@ -69,6 +75,10 @@ class Scheduler:
         if os.path.exists(self.state_path):
             with open(self.state_path) as f:
                 data = json.load(f)
+            data.setdefault("pending_candidate", None)
+            data.setdefault("pending_plan_id", None)
+            data.setdefault("pending_labels", None)
+            data.setdefault("pending_dataset_labels", None)
             return SchedulerState(**data)
         return SchedulerState(
             last_run=0, last_harvest=0, last_train=0, last_deploy=0,
@@ -97,9 +107,260 @@ class Scheduler:
         except Exception as e:
             return 1, str(e)
 
-    def harvest(self, plan) -> tuple[bool, dict]:
-        """Run the harvest phase: extract + clean new data."""
+    def _candidate_id(self, plan) -> str:
+        payload = {
+            "plan_id": plan.plan_id,
+            "sources": [
+                {
+                    "source_id": source.source_id,
+                    "total_sessions": source.total_sessions,
+                    "dataset_label": source.dataset_label,
+                }
+                for source in plan.sources
+                if source.name in plan.harvest_labels
+            ],
+            "format": self.cfg.get("format", default={}) or {},
+            "clean": self.cfg.get("clean", default={}) or {},
+            "eval": {
+                "frac": float(self.cfg.get("scheduler", "eval_frac", default=0.1) or 0.1),
+                "seed": int(self.cfg.get("scheduler", "eval_seed", default=42) or 42),
+            },
+        }
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        return hashlib.sha256(encoded).hexdigest()[:24]
+
+    def _candidate_root(self, candidate_id: str) -> Path:
+        return Path(self.cfg.path("analysis_dir")) / "candidates" / candidate_id
+
+    def _pending_candidate(self, plan) -> Path | None:
+        if self.state.pending_candidate and self.state.pending_plan_id == plan.plan_id:
+            root = self._candidate_root(self.state.pending_candidate)
+            if root.exists():
+                return root
+        return None
+
+    def _save_pending(self, candidate_id: str | None, plan) -> None:
+        self.state.pending_candidate = candidate_id
+        self.state.pending_plan_id = plan.plan_id if candidate_id else None
+        self.state.pending_labels = list(plan.harvest_labels) if candidate_id else None
+        self.state.pending_dataset_labels = list(plan.dataset_labels or []) if candidate_id else None
+        self._save_state()
+
+    @staticmethod
+    def _atomic_replace_dir(src: Path, dst: Path) -> None:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
+        if tmp.exists():
+            shutil.rmtree(tmp)
+        os.replace(src, tmp)
+        if dst.exists():
+            if dst.is_dir() and not dst.is_symlink():
+                shutil.rmtree(dst)
+            else:
+                dst.unlink()
+        os.replace(tmp, dst)
+
+    def _stage_cleaned(self, plan, root: Path) -> None:
+        cleaned = Path(self.cfg.path("cleaned_dir"))
+        staged = root / "cleaned"
+        staged.mkdir(parents=True, exist_ok=True)
+        for source in plan.sources:
+            if source.name not in plan.harvest_labels:
+                continue
+            dataset_label = source.dataset_label or source.name
+            if source.name == "hermes":
+                dst = staged / dataset_label
+                dst.mkdir(parents=True, exist_ok=True)
+                for path in sorted(cleaned.glob("*.json")):
+                    shutil.copy2(path, dst / path.name)
+                continue
+            src = cleaned / dataset_label
+            if src.is_dir():
+                shutil.copytree(src, staged / dataset_label, dirs_exist_ok=True)
+
+    def _format_candidate(self, plan, root: Path) -> dict[str, Path]:
+        from src.format_dataset import main as format_main
+
+        candidate_cfg = Config(raw=dict(self.cfg.raw))
+        candidate_cfg.raw.setdefault("paths", {})["cleaned_dir"] = str(root / "cleaned")
+        candidate_cfg.raw["paths"]["dataset_dir"] = str(root / "datasets")
+        datasets = root / "datasets"
+        datasets.mkdir(parents=True, exist_ok=True)
+        outputs: dict[str, Path] = {}
+        for source_name, dataset_label in zip(plan.harvest_labels, plan.dataset_labels or plan.harvest_labels):
+            source = next((s for s in plan.sources if s.name == source_name), None)
+            if source is None:
+                continue
+            count = format_main(candidate_cfg, label=dataset_label)
+            output = datasets / f"train.{dataset_label}.jsonl"
+            if count <= 0 or not output.is_file():
+                raise RuntimeError(f"candidate format produced no rows for {dataset_label}")
+            outputs[dataset_label] = output
+        return outputs
+
+    def _partition_candidate(self, datasets: dict[str, Path], root: Path) -> dict[str, dict]:
+        from src.eval import build_disjoint_partition
+
+        frac = float(self.cfg.get("scheduler", "eval_frac", default=0.1) or 0.1)
+        seed = int(self.cfg.get("scheduler", "eval_seed", default=42) or 42)
+        partitions: dict[str, dict] = {}
+        for label, source_path in datasets.items():
+            result = build_disjoint_partition(source_path, root / "partitions" / label,
+                                              frac=frac, seed=seed, label=label)
+            if result.contamination["status"] != "clean":
+                raise RuntimeError(f"partition contamination for {label}")
+            partitions[label] = {
+                "train_path": str(result.train_path),
+                "eval_path": str(result.eval_path),
+                "source_sha256": result.source_sha256,
+                "seed": seed,
+                "frac": frac,
+                "n_train": len(result.train_rows),
+                "n_eval": len(result.eval_rows),
+            }
+        return partitions
+
+    def _audit_candidate(self, datasets: dict[str, Path]) -> dict[str, dict]:
+        from src.audit import _load_jsonl, audit_leakage
+
+        bench_path = Path(self.repo) / "eval" / "tasks" / "auto-verified.jsonl"
+        if not bench_path.is_file():
+            raise RuntimeError(f"benchmark suite not found: {bench_path}")
+        bench_rows = _load_jsonl(str(bench_path))
+        audits: dict[str, dict] = {}
+        for label, train_path in datasets.items():
+            result = audit_leakage(_load_jsonl(str(train_path)), bench_rows)
+            if result["status"] != "clean":
+                raise RuntimeError(
+                    f"candidate {label} failed contamination audit: {result['status']}")
+            audits[label] = result
+        return audits
+
+    def _train_candidate(self, plan, root: Path, partitions: dict[str, dict]) -> dict[str, str]:
+        outputs: dict[str, str] = {}
+        for source_name, dataset_label in zip(plan.harvest_labels, plan.dataset_labels or plan.harvest_labels):
+            source = next((s for s in plan.sources if s.name == source_name), None)
+            if source is None or dataset_label not in partitions:
+                continue
+            adapter = root / "adapters" / dataset_label
+            cmd = [self.venv_python, "-m", "src.cli", "train", f"--label={dataset_label}"]
+            env = {
+                "TRAIN_DATASET_DIR": partitions[dataset_label]["train_path"],
+                "TRAIN_OUTPUT_DIR": str(adapter),
+            }
+            rc, output = self._run_cmd(cmd, timeout=int(
+                self.cfg.get("scheduler", "train_timeout_seconds", default=86400) or 86400),
+                extra_env=env)
+            if rc != 0:
+                raise RuntimeError(f"candidate train failed for {dataset_label}: {output[-500:]}")
+            if not (adapter / "adapter_config.json").is_file():
+                raise RuntimeError(f"candidate adapter incomplete for {dataset_label}")
+            outputs[dataset_label] = str(adapter)
+        return outputs
+
+    def _eval_candidate(self, root: Path, partitions: dict[str, dict],
+                        adapters: dict[str, str]) -> dict[str, float]:
+        from src.eval import evaluate
+
+        base = self.cfg.get("train", "model_name", default="Qwen/Qwen2.5-7B-Instruct")
+        losses: dict[str, float] = {}
+        for label, partition in partitions.items():
+            result = evaluate(adapters[label], str(base), partition["eval_path"],
+                              loss_only=True)
+            if result.n_held_out <= 0 or result.loss != result.loss:
+                raise RuntimeError(f"candidate evaluation invalid for {label}")
+            losses[label] = result.loss
+        return losses
+
+    def _merge_candidate(self, root: Path, label: str, adapter: str) -> str:
+        from src.merge import merge_adapter
+
+        base = self.cfg.get("train", "model_name", default="Qwen/Qwen2.5-7B-Instruct")
+        merged = root / "merged"
+        merge_adapter(adapter, str(base), str(merged), rocm=False)
+        if not (merged / "config.json").is_file() or not (merged / "tokenizer.json").is_file():
+            raise RuntimeError("candidate merge output is incomplete")
+        return str(merged)
+
+    def _benchmark_candidate(self, merged: str) -> dict:
+        from src.bench import bench_suite, load_tasks, make_driver
+        from src.train import _detect_rocm
+
+        tasks_path = Path(self.repo) / "eval" / "tasks" / "auto-verified.jsonl"
+        tasks = load_tasks(str(tasks_path))
+        driver = make_driver("subagent", model_path=merged, rocm=_detect_rocm())
+        results = bench_suite(driver, tasks, merged, "subagent")
+        passed = sum(1 for result in results if result.success)
+        return {"tasks": len(results), "passed": passed,
+                "pass_rate": passed / len(results) if results else 0.0,
+                "results": [asdict(result) for result in results]}
+
+    def _candidate_pipeline(self, plan, root: Path) -> dict:
+        self._stage_cleaned(plan, root)
+        datasets = self._format_candidate(plan, root)
+        partitions = self._partition_candidate(datasets, root)
+        audits = self._audit_candidate(datasets)
+        adapters = self._train_candidate(plan, root, partitions)
+        losses = self._eval_candidate(root, partitions, adapters)
+        winner = min(losses, key=losses.get)
+        merged = self._merge_candidate(root, winner, adapters[winner])
+        benchmark = self._benchmark_candidate(merged)
+        manifest = {
+            "schema_version": 1,
+            "candidate_id": root.name,
+            "plan_id": plan.plan_id,
+            "sources": [asdict(source) for source in plan.sources],
+            "dataset_labels": list(plan.dataset_labels or []),
+            "datasets": {label: str(path) for label, path in datasets.items()},
+            "partitions": partitions,
+            "audits": audits,
+            "eval_losses": losses,
+            "winner": winner,
+            "adapter": adapters[winner],
+            "merged": merged,
+            "benchmark": benchmark,
+        }
+        atomic_write_json(root / "candidate.json", manifest)
+        return manifest
+
+    def _promote_candidate(self, plan, manifest: dict) -> None:
+        winner = manifest["winner"]
+        merged = manifest["merged"]
+        output_root = Path(os.path.dirname(str(self.cfg.get(
+            "train", "output_dir", default="outputs/checkpoints"))))
+        target = output_root / f"toolcall-v5-3b-{winner}-merged"
+        self._atomic_replace_dir(Path(merged), target)
         from src.harvest import record_harvest
+        selected = [source for source in plan.sources if source.name in plan.harvest_labels]
+        record_harvest(self.cfg, selected, plan_id=plan.plan_id)
+        self._save_pending(None, plan)
+
+    def run_candidate(self, plan) -> tuple[bool, dict]:
+        candidate_id = self.state.pending_candidate or self._candidate_id(plan)
+        root = self._candidate_root(candidate_id)
+        manifest_path = root / "candidate.json"
+        if manifest_path.is_file():
+            manifest = json.loads(manifest_path.read_text())
+            if manifest.get("plan_id") != plan.plan_id:
+                raise RuntimeError("pending candidate does not match the current plan")
+            self._promote_candidate(plan, manifest)
+            return True, {"candidate_id": candidate_id, "promoted": True}
+        root.mkdir(parents=True, exist_ok=True)
+        self._save_pending(candidate_id, plan)
+        try:
+            manifest = self._candidate_pipeline(plan, root)
+            self._promote_candidate(plan, manifest)
+            return True, {"candidate_id": candidate_id, "promoted": True,
+                          "winner": manifest["winner"],
+                          "benchmark": manifest["benchmark"]}
+        except Exception as exc:
+            self.state.last_error = str(exc)
+            self._save_state()
+            raise
+
+    def harvest(self, plan) -> tuple[bool, dict]:
+        """Extract and clean without advancing the promotion watermark."""
+        from src.harvest import record_extraction
 
         if not plan.should_harvest:
             return True, {"skipped": True, "reason": plan.reason}
@@ -107,23 +368,19 @@ class Scheduler:
         print("[scheduler] starting harvest...")
         harvest_results = {"sources": plan.harvest_labels, "total_new": plan.total_new}
 
-        # Extract from each source with new data
         for label in plan.harvest_labels:
             if label == "hermes":
                 cmd = [self.venv_python, "-m", "src.cli", "hermes"]
+            elif label == "opencode":
+                cmd = [self.venv_python, "-m", "src.cli", "extract", "--label=ssd"]
             else:
-                # The configured live OpenCode source is named opencode; its raw
-                # and dataset label is the established "ssd" label.
-                extract_label = "ssd" if label == "opencode" else label
-                cmd = [self.venv_python, "-m", "src.cli", "extract",
-                       f"--label={extract_label}"]
+                cmd = [self.venv_python, "-m", "src.cli", "extract", f"--label={label}"]
 
             rc, output = self._run_cmd(cmd, timeout=1800)
             if rc != 0:
                 return False, {"error": f"extract failed for {label}: {output[-500:]}"}
             harvest_results[f"extract_{label}"] = "ok"
 
-        # Clean all
         cmd = [self.venv_python, "-m", "src.cli", "clean"]
         rc, output = self._run_cmd(cmd, timeout=1800)
         if rc != 0:
@@ -131,8 +388,7 @@ class Scheduler:
         harvest_results["clean"] = "ok"
 
         selected = [s for s in plan.sources if s.name in plan.harvest_labels]
-        record_harvest(self.cfg, selected, plan_id=plan.plan_id)
-
+        record_extraction(self.cfg, selected)
         return True, harvest_results
 
     def train(self, labels: list[str]) -> tuple[bool, dict]:

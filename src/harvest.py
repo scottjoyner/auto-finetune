@@ -7,6 +7,7 @@ import os
 import sqlite3
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 
 from src.config import Config
@@ -25,6 +26,7 @@ class SourceStats:
     days_since_harvest: float
     error: str | None = None
     source_id: str = ""
+    dataset_label: str = ""
 
 
 @dataclass
@@ -41,10 +43,16 @@ class HarvestPlan:
     # budget. Falls back to batch_labels for plans built before this field
     # existed.
     harvest_labels: list[str] | None = None
+    dataset_labels: list[str] | None = None
 
     def __post_init__(self):
         if self.harvest_labels is None:
             self.harvest_labels = list(self.batch_labels)
+        if self.dataset_labels is None:
+            self.dataset_labels = [
+                next((s.dataset_label for s in self.sources if s.name == label), label)
+                for label in self.batch_labels
+            ]
 
 
 def _file_stats(path: str) -> tuple[float, int]:
@@ -115,6 +123,37 @@ def _source_id(name: str, path: str) -> str:
     return f"{name}:{os.path.realpath(os.path.abspath(path))}"
 
 
+def _opencode_sources(cfg: Config) -> list[tuple[str, str, str]]:
+    """Return (source name, DB path, dataset label) for enabled OpenCode DBs."""
+    oc = cfg.get("sources", "opencode", default={}) or {}
+    out: list[tuple[str, str, str]] = []
+    main_db = oc.get("db_path")
+    if main_db:
+        out.append(("opencode", str(main_db), "ssd"))
+    for extra in oc.get("extra_dbs") or []:
+        if not isinstance(extra, dict) or not extra.get("enabled", False):
+            continue
+        path = extra.get("path")
+        if not path:
+            continue
+        label = str(extra.get("label") or Path(path).stem.replace(".db", ""))
+        out.append((label, str(path), label))
+    return out
+
+
+def _hermes_sources(cfg: Config) -> list[tuple[str, str, str]]:
+    """Return enabled Hermes source descriptors."""
+    hermes = cfg.get("sources", "hermes", default={}) or {}
+    if not hermes.get("enabled", False):
+        return []
+    state_db = hermes.get("state_db")
+    if state_db:
+        return [("hermes", str(state_db), "hermes-reasoning")]
+    if hermes.get("dir"):
+        return [("hermes", str(hermes["dir"]), "hermes-reasoning")]
+    return []
+
+
 def _plan_id(sources: Iterable[SourceStats]) -> str:
     snapshot = sorted((source.source_id, source.total_sessions) for source in sources)
     encoded = json.dumps(snapshot, separators=(",", ":")).encode()
@@ -133,7 +172,8 @@ def _promoted_watermark(state: dict, source_id: str) -> tuple[int, float]:
     return total, promoted_at
 
 
-def _source_stat(name: str, path: str, snapshot: dict, state: dict, now: float) -> SourceStats:
+def _source_stat(name: str, path: str, snapshot: dict, state: dict, now: float,
+                 dataset_label: str = "") -> SourceStats:
     identity = _source_id(name, path)
     saved = state.get("sources", {}).get(name, {})
     # Legacy name-only watermarks remain valid. Identity-bearing watermarks must
@@ -141,11 +181,15 @@ def _source_stat(name: str, path: str, snapshot: dict, state: dict, now: float) 
     saved_matches = not saved.get("source_id") or saved.get("source_id") == identity
     saved_total = int(saved.get("total_at_harvest", 0) or 0) if saved_matches else 0
     promoted_total, promoted_at = _promoted_watermark(state, identity)
+    extracted = state.get("extracted_sources", {}).get(identity, {})
+    extracted_total = int(extracted.get("total_at_extraction", 0) or 0)
+    extracted_at = float(extracted.get("extracted_at", 0) or 0)
     last_harvest = max(
         float(saved.get("last_harvest", 0) or 0) if saved_matches else 0,
         promoted_at,
+        extracted_at,
     )
-    baseline = max(saved_total, promoted_total)
+    baseline = max(saved_total, promoted_total, extracted_total)
     total = int(snapshot.get("total", 0) or 0)
     return SourceStats(
         name=name,
@@ -158,6 +202,7 @@ def _source_stat(name: str, path: str, snapshot: dict, state: dict, now: float) 
         days_since_harvest=(now - last_harvest) / 86400 if last_harvest else 999,
         error=snapshot.get("error"),
         source_id=identity,
+        dataset_label=dataset_label,
     )
 
 
@@ -167,15 +212,15 @@ def get_source_stats(cfg: Config) -> list[SourceStats]:
     now = time.time()
     sources: list[SourceStats] = []
 
-    opencode_db = cfg.get("sources", "opencode", "db_path", default="")
-    if opencode_db:
-        sources.append(_source_stat("opencode", opencode_db,
-                                    _get_opencode_stats(opencode_db), state, now))
+    for name, db_path, dataset_label in _opencode_sources(cfg):
+        sources.append(_source_stat(name, db_path,
+                                    _get_opencode_stats(db_path), state, now,
+                                    dataset_label=dataset_label))
 
-    hermes_db = cfg.get("sources", "hermes", "state_db", default="")
-    if hermes_db and cfg.get("sources", "hermes", "enabled", default=True):
-        sources.append(_source_stat("hermes", hermes_db,
-                                    _get_hermes_stats(hermes_db), state, now))
+    for name, db_path, dataset_label in _hermes_sources(cfg):
+        sources.append(_source_stat(name, db_path,
+                                    _get_hermes_stats(db_path), state, now,
+                                    dataset_label=dataset_label))
     return sources
 
 
@@ -238,7 +283,10 @@ def plan_harvest(cfg: Config, min_new_sessions: int = 50,
     return HarvestPlan(should_harvest, should_train, sources, total_new,
                        est_hours, train_labels, "; ".join(reasons),
                        _plan_id(planned_sources),
-                       harvest_labels=list(targets))
+                       harvest_labels=list(targets),
+                       dataset_labels=[next((s.dataset_label for s in sources
+                                             if s.name == label), label)
+                                       for label in train_labels])
 
 
 def record_harvest(cfg: Config, sources: Iterable[SourceStats],
@@ -257,12 +305,31 @@ def record_harvest(cfg: Config, sources: Iterable[SourceStats],
             "total_at_harvest": source.total_sessions,
             "sessions_harvested": source.new_sessions,
             "source_id": source.source_id,
+            "dataset_label": source.dataset_label,
         }
     identity = plan_id or _plan_id(sources)
     state["promoted_plans"][identity] = {
         "promoted_at": now,
         "sources": {source.source_id: source.total_sessions for source in sources},
+        "dataset_labels": {source.source_id: source.dataset_label for source in sources},
     }
+    atomic_write_json(state_path, state)
+
+
+def record_extraction(cfg: Config, sources: Iterable[SourceStats]) -> None:
+    """Record completed extraction without advancing the training watermark."""
+    state_path = os.path.join(cfg.path("analysis_dir"), "harvest-state.json")
+    state = _load_harvest_state(state_path)
+    state["schema_version"] = 3
+    state.setdefault("extracted_sources", {})
+    now = time.time()
+    for source in sources:
+        state["extracted_sources"][source.source_id] = {
+            "extracted_at": now,
+            "total_at_extraction": source.total_sessions,
+            "source_name": source.name,
+            "dataset_label": source.dataset_label,
+        }
     atomic_write_json(state_path, state)
 
 

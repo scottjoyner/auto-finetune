@@ -82,7 +82,7 @@ format:
 #               or GPTQ. This is what you want on AMD GPUs.
 #   auto     -> use unsloth if a CUDA GPU + unsloth is present, else peft.
 train:
-  # This host is AMD (Ryzen AI 9 HX 370 / Radeon 890M) -> ROCm/peft backend.
+  # This host is AMD (Ryzen AI MAX PRO 390 / Radeon 8050S) -> ROCm/peft backend.
   backend: peft
   # Base model to finetune. For AMD/ROCm + peft use a standard HF model id.
   # RefinedToolCallV5-3b is already finetuned on Hermes agent reasoning traces
