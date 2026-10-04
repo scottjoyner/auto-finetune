@@ -12,12 +12,12 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import time
+from collections import deque
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
-from urllib.request import Request, urlopen
 from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 from src.config import Config
 
@@ -49,14 +49,19 @@ EVENT_SEVERITY = {
 
 
 def send_desktop(title: str, message: str) -> bool:
-    """Send a desktop notification via notify-send (Linux)."""
+    """Send a desktop notification via notify-send (Linux).
+
+    Returns the real delivery status. The exit code used to be ignored, so a
+    failed send -- no D-Bus session, say -- reported OK and the channel status
+    this function feeds was a lie.
+    """
     try:
-        subprocess.run(
+        proc = subprocess.run(
             ["notify-send", "-u", "normal", "-i", "dialog-information", title, message],
             capture_output=True, timeout=5,
         )
-        return True
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return proc.returncode == 0
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         return False
 
 
@@ -128,6 +133,13 @@ def send_notification(
     Returns dict of channel -> success status.
     """
     severity = EVENT_SEVERITY.get(event, "info")
+    if event not in EVENT_SEVERITY:
+        # A misspelled or unregistered event used to land on "info" silently,
+        # so e.g. "training_faild" rendered a failure as informational. Keep the
+        # severity non-escalating to avoid alert fatigue, but say so where the
+        # caller can see it.
+        print(f"[notify] warning: event {event!r} is not in EVENT_SEVERITY; "
+              f"treating severity as 'info'", file=sys.stderr)
     notification = Notification(
         event=event,
         message=message,
@@ -167,7 +179,14 @@ def send_notification(
 
 
 def get_notification_history(cfg: Config, limit: int = 50) -> list[dict]:
-    """Get recent notifications from the log."""
+    """Get recent notifications from the log.
+
+    Tolerates malformed lines. This file is append-only and never rotated, so a
+    crash between the write and the newline leaves a torn record; the previous
+    json.loads-per-line reader raised on it and made the entire history
+    permanently unreadable with no way to recover short of deleting the file.
+    Only the tail is retained, so memory stays bounded as the log grows.
+    """
     log_dir = cfg.get("notify", "log_dir",
                       default=os.path.join(cfg.path("analysis_dir"), "notifications"))
     log_file = os.path.join(log_dir, "notifications.jsonl")
@@ -175,14 +194,18 @@ def get_notification_history(cfg: Config, limit: int = 50) -> list[dict]:
     if not os.path.exists(log_file):
         return []
 
-    notifications = []
+    tail: deque = deque(maxlen=max(int(limit), 1))
     with open(log_file) as f:
         for line in f:
             line = line.strip()
-            if line:
-                notifications.append(json.loads(line))
+            if not line:
+                continue
+            try:
+                tail.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
 
-    return notifications[-limit:]
+    return list(tail)
 
 
 def main(cfg: Config, argv: list[str]) -> int:
@@ -199,10 +222,14 @@ def main(cfg: Config, argv: list[str]) -> int:
         elif arg.startswith("--message="):
             message = arg.split("=", 1)[1]
         elif arg.startswith("--data="):
+            raw = arg.split("=", 1)[1]
             try:
-                data = json.loads(arg.split("=", 1)[1])
-            except json.JSONDecodeError:
-                pass
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                # Was silently dropped, so a typo'd payload produced a
+                # notification that looked like it carried data but did not.
+                print(f"[error] --data must be valid JSON: {exc}")
+                return 2
 
     if cmd == "notify":
         if not message:
@@ -219,7 +246,15 @@ def main(cfg: Config, argv: list[str]) -> int:
         limit = 50
         for arg in argv:
             if arg.startswith("--limit="):
-                limit = int(arg.split("=", 1)[1])
+                raw = arg.split("=", 1)[1]
+                try:
+                    limit = int(raw)
+                except ValueError:
+                    print(f"[error] --limit must be an integer, got {raw!r}")
+                    return 2
+                if limit <= 0:
+                    print("[error] --limit must be positive")
+                    return 2
 
         history = get_notification_history(cfg, limit)
         if not history:
