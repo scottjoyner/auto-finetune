@@ -97,7 +97,11 @@ def _symlink_rotate(target_dir: str, new_model_path: str) -> str:
 
     # Create temp link, then atomically rename
     temp_link = os.path.join(target_dir, f".active-{os.getpid()}")
-    if os.path.exists(temp_link):
+    # lexists, not exists: a symlink whose target no longer resolves (a deploy
+    # interrupted after the old model dir was pruned) reports exists()==False,
+    # so the cleanup is skipped and os.symlink raises FileExistsError. Compare
+    # the live and the broken case before changing this.
+    if os.path.lexists(temp_link):
         os.remove(temp_link)
     os.symlink(new_model_path, temp_link)
     os.rename(temp_link, active_link)
@@ -167,16 +171,21 @@ def deploy_model(
 
     # Handle rollback
     if rollback:
-        if current_version > 0:
-            # Roll back to previous version
-            prev_path = os.path.join(target_dir, f"{label}-v{current_version}")
+        # One version back. This used to build prev_path from current_version,
+        # i.e. the version already active, so every "rollback" re-pointed the
+        # symlink at itself and reported success without changing anything.
+        # The version counter is deliberately not rewound: keeping it monotonic
+        # means repeated rollbacks stay idempotent and no version dir is
+        # overwritten by a later deploy.
+        if current_version > 1:
+            prev_path = os.path.join(target_dir, f"{label}-v{current_version - 1}")
             if os.path.exists(prev_path):
                 # Restore symlink
                 _symlink_rotate(target_dir, prev_path)
                 return DeployResult(
                     success=True, label=label, target=target,
                     deploy_path=prev_path,
-                    message=f"rolled back to v{current_version}",
+                    message=f"rolled back to v{current_version - 1}",
                     duration_seconds=time.time() - start,
                 )
         return DeployResult(
@@ -265,6 +274,21 @@ def get_deployed_models(cfg: Config, inference_base: str | None = None) -> list[
         ))
 
     return sorted(models, key=lambda m: -m.deployed_at)
+
+
+def quorum_required(node_count: int, quorum: int) -> int:
+    """Successful deploys required: the explicit quorum, else every node."""
+    return quorum if quorum > 0 else node_count
+
+
+def quorum_met(results: list[DeployResult], quorum: int = 0) -> bool:
+    """Whether a multi-deploy satisfied its quorum.
+
+    Callers must use this rather than all(r.success): that ignores the quorum
+    the operator asked for and fails a deploy that met it.
+    """
+    successful = sum(1 for r in results if r.success)
+    return successful >= quorum_required(len(results), quorum)
 
 
 def multi_deploy(
@@ -356,7 +380,7 @@ def multi_deploy(
 
     # Check quorum
     successful = sum(1 for r in results if r.success)
-    required = quorum if quorum > 0 else len(unique_nodes)
+    required = quorum_required(len(unique_nodes), quorum)
 
     total_duration = time.time() - start
     print(f"[multi-deploy] {successful}/{len(unique_nodes)} nodes succeeded "
@@ -572,7 +596,13 @@ def main(cfg: Config, argv: list[str]) -> int:
                 if arg.startswith("--quorum="):
                     quorum = int(arg.split("=", 1)[1])
             results = multi_deploy(cfg, label, nodes, quorum=quorum)
-            return 0 if all(r.success for r in results) else 1
+            if not quorum_met(results, quorum):
+                successful = sum(1 for r in results if r.success)
+                need = quorum_required(len(results), quorum)
+                print(f"[error] deploy quorum not met: {successful}/{len(results)} "
+                      f"nodes succeeded, required {need}")
+                return 1
+            return 0
         else:
             result = deploy_model(cfg, label, target=target)
             if result.success:

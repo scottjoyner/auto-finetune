@@ -11,12 +11,12 @@ requires-python = ">=3.10"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Ratchet, not aspiration. The original 80% gate had been failing for weeks,
-# which trains everyone to ignore it. This is the honest current floor (59.5%)
+# which trains everyone to ignore it. This is the honest current floor (61%)
 # so any *regression* is caught immediately; raise it as coverage improves
 # rather than lowering it to make a run green. Reaching 80% needs roughly
-# 1,570 more covered statements; deploy.py (13%), cli.py (51%) and
-# metrics.py (45%) are the largest remaining gaps.
-addopts = "-q --cov=src --cov-report=term-missing --cov-fail-under=59"
+# 1,450 more covered statements; cli.py (51%), get_deployed_models and
+# multi_rollback in deploy.py, and metrics.py (45%) are the largest gaps.
+addopts = "-q --cov=src --cov-report=term-missing --cov-fail-under=60"
 pythonpath = ["src"]
 
 [tool.coverage.run]
