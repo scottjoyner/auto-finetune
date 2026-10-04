@@ -6,7 +6,8 @@ import sqlite3
 from pathlib import Path
 
 from src.config import Config
-from src.harvest import SourceStats, get_source_stats, plan_harvest, record_harvest
+from src.harvest import (SourceStats, get_source_stats, plan_harvest,
+                         record_extraction, record_harvest)
 from src.scheduler import Scheduler
 
 
@@ -82,6 +83,42 @@ def test_record_harvest_uses_each_source_total_atomically(tmp_path):
     assert state["sources"]["opencode"]["total_at_harvest"] == 2
     assert state["sources"]["hermes"]["total_at_harvest"] == 2
     assert all(s.new_sessions == 0 for s in get_source_stats(cfg))
+
+
+def test_record_extraction_does_not_advance_the_training_watermark(tmp_path):
+    # Extraction records what was read, NOT that the data was trained. A merge
+    # once grafted the promoted_plans write into record_extraction, which both
+    # raised NameError on an undefined plan_id and made _promoted_watermark()
+    # advance the baseline at extract time -- silently consuming data that the
+    # candidate pipeline may then never train.
+    opencode, hermes = _databases(tmp_path)
+    cfg = _cfg(tmp_path, opencode, hermes)
+    sources = get_source_stats(cfg)
+
+    record_extraction(cfg, sources)
+    state = json.loads((tmp_path / "analysis" / "harvest-state.json").read_text())
+    assert state["extracted_sources"], "extraction must be recorded"
+    assert "promoted_plans" not in state, "extraction must not promote a plan"
+    assert state["sources"] == {}, "extraction must not touch training watermarks"
+
+    # And the contrast that matters: the promotion path is what writes
+    # promoted_plans. (new_sessions does go to 0 after extraction on purpose —
+    # the extraction watermark stops the same sessions being extracted twice,
+    # which is a different concern from whether they were trained.)
+    record_harvest(cfg, sources, plan_id="plan-xyz")
+    promoted = json.loads((tmp_path / "analysis" / "harvest-state.json").read_text())
+    assert "plan-xyz" in promoted["promoted_plans"]
+    assert promoted["sources"]["opencode"]["total_at_harvest"] == 2
+
+
+def test_record_extraction_survives_repeat_calls(tmp_path):
+    opencode, hermes = _databases(tmp_path)
+    cfg = _cfg(tmp_path, opencode, hermes)
+    sources = get_source_stats(cfg)
+    record_extraction(cfg, sources)
+    record_extraction(cfg, sources)
+    state = json.loads((tmp_path / "analysis" / "harvest-state.json").read_text())
+    assert len(state["extracted_sources"]) == len(sources)
 
 
 def test_scheduler_builds_split_argv_and_distinct_outputs(tmp_path):
