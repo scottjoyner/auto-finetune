@@ -13,14 +13,26 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass, asdict
-from pathlib import Path
-from typing import Any
+from dataclasses import asdict, dataclass
 
 from src.config import Config
-
+from src.locking import atomic_write_json
 
 METRICS_FILE = "training-metrics.json"
+
+# Explicit, not a substring test on the metric name. "loss" in metric
+# misclassified eval_perplexity as higher-is-better, so get_best returned the
+# *worst* model and detect_regression reported a 25x perplexity blow-up as
+# "latest is best". Lower is better for all of these.
+LOWER_IS_BETTER = frozenset({
+    "train_loss", "train_loss_final", "eval_loss", "eval_perplexity",
+    "train_runtime_seconds",
+})
+
+
+def metric_direction(metric: str) -> str:
+    """Return "lower" or "higher" -- which way is an improvement."""
+    return "lower" if metric in LOWER_IS_BETTER else "higher"
 
 
 @dataclass
@@ -60,15 +72,24 @@ class MetricsTracker:
 
     def _load(self):
         if os.path.exists(self.metrics_path):
-            with open(self.metrics_path) as f:
-                data = json.load(f)
+            try:
+                with open(self.metrics_path) as f:
+                    data = json.load(f)
+            except json.JSONDecodeError:
+                # This file is the run history; losing it silently would make
+                # every later regression check answer "insufficient data".
+                raise RuntimeError(
+                    f"corrupt metrics history {self.metrics_path}; move it "
+                    f"aside to start a new history"
+                ) from None
             self.metrics = [TrainingMetrics(**m) for m in data]
 
     def _save(self):
         os.makedirs(os.path.dirname(self.metrics_path), exist_ok=True)
         data = [asdict(m) for m in self.metrics]
-        with open(self.metrics_path, "w") as f:
-            json.dump(data, f, indent=2)
+        # Atomic: the previous open(...,'w') + json.dump truncated first, so a
+        # kill during the write destroyed the entire accumulated history.
+        atomic_write_json(self.metrics_path, data)
 
     def record(self, **kwargs) -> TrainingMetrics:
         """Record a new metrics entry."""
@@ -78,11 +99,16 @@ class MetricsTracker:
         return entry
 
     def get_history(self, label: str | None = None, limit: int = 50) -> list[TrainingMetrics]:
-        """Get metrics history, optionally filtered by label."""
+        """Get metrics history, optionally filtered by label.
+
+        Newest first, truncated to the most recent `limit`. The sort is
+        descending, so this must slice from the front: a trailing [-limit:]
+        returned the *oldest* entries and silently hid every recent run.
+        """
         metrics = self.metrics
         if label:
             metrics = [m for m in metrics if m.label == label]
-        return sorted(metrics, key=lambda m: -m.timestamp)[-limit:]
+        return sorted(metrics, key=lambda m: -m.timestamp)[:limit]
 
     def get_latest(self, label: str) -> TrainingMetrics | None:
         """Get the latest metrics for a label."""
@@ -102,11 +128,9 @@ class MetricsTracker:
         if not valid:
             return None
 
-        # Lower is better for loss, higher is better for others
-        if "loss" in metric:
+        if metric_direction(metric) == "lower":
             return min(valid, key=lambda m: getattr(m, metric))
-        else:
-            return max(valid, key=lambda m: getattr(m, metric))
+        return max(valid, key=lambda m: getattr(m, metric))
 
     def detect_regression(
         self,
@@ -134,7 +158,7 @@ class MetricsTracker:
         if latest_val is None or best_val is None:
             return False, "metric not available"
 
-        if "loss" in metric:
+        if metric_direction(metric) == "lower":
             # Lower is better - regression if latest is higher
             regression = latest_val > best_val * (1 + threshold)
             direction = "higher"
@@ -228,22 +252,36 @@ def main(cfg: Config, argv: list[str]) -> int:
     tracker = MetricsTracker(metrics_dir)
 
     if cmd == "metrics-record":
-        kwargs = {}
+        kwargs: dict = {}
+        # name -> (coercer, TrainingMetrics field). Validated explicitly: the
+        # raw int()/float() raised a bare ValueError traceback on bad input.
+        numeric = {
+            "--version": (int, "version"),
+            "--loss": (float, "train_loss"),
+            "--eval-loss": (float, "eval_loss"),
+            # Was missing entirely, so eval_perplexity could not be recorded
+            # through the documented CLI even though the dataclass, the
+            # direction table and compare_versions all referenced it.
+            "--eval-perplexity": (float, "eval_perplexity"),
+            "--tool-exact": (float, "tool_exact_match"),
+            "--dataset-size": (int, "dataset_size"),
+            "--runtime": (float, "train_runtime_seconds"),
+        }
         for arg in argv:
             if arg.startswith("--label="):
                 kwargs["label"] = arg.split("=", 1)[1]
-            elif arg.startswith("--version="):
-                kwargs["version"] = int(arg.split("=", 1)[1])
-            elif arg.startswith("--loss="):
-                kwargs["train_loss"] = float(arg.split("=", 1)[1])
-            elif arg.startswith("--eval-loss="):
-                kwargs["eval_loss"] = float(arg.split("=", 1)[1])
-            elif arg.startswith("--tool-exact="):
-                kwargs["tool_exact_match"] = float(arg.split("=", 1)[1])
-            elif arg.startswith("--dataset-size="):
-                kwargs["dataset_size"] = int(arg.split("=", 1)[1])
-            elif arg.startswith("--runtime="):
-                kwargs["train_runtime_seconds"] = float(arg.split("=", 1)[1])
+            elif arg.startswith("--gpu-name="):
+                kwargs["gpu_name"] = arg.split("=", 1)[1]
+            else:
+                for flag, (coerce, field) in numeric.items():
+                    if arg.startswith(flag + "="):
+                        raw = arg.split("=", 1)[1]
+                        try:
+                            kwargs[field] = coerce(raw)
+                        except ValueError:
+                            print(f"[error] {flag} must be numeric, got {raw!r}")
+                            return 2
+                        break
 
         if "label" not in kwargs:
             print("[error] metrics-record requires --label=<name>")
