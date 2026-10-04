@@ -115,6 +115,24 @@ def test_manifest_dispatch_writes_requested_path(cfg, tmp_path):
     assert payload["evaluation"]["contamination"]["status"] == "not_checked"
 
 
+def test_subagent_harness_dispatch(cfg, monkeypatch):
+    import src.subagent_harness as harness
+
+    captured = {}
+
+    def fake_main(argv):
+        captured["argv"] = argv
+        return 17
+
+    monkeypatch.setattr(harness, "main", fake_main)
+    assert cli._dispatch(
+        ["cli", "subagent-harness", "--type=lfm25",
+         "--base-url=http://127.0.0.1:8095"],
+        cfg=cfg) == 17
+    assert captured == {
+        "argv": ["--type=lfm25", "--base-url=http://127.0.0.1:8095"]}
+
+
 def test_combine_dispatch(cfg):
     assert cli.main(["cli", "combine"]) == 0
 

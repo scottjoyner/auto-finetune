@@ -317,6 +317,9 @@ def _dispatch(argv: list[str], cfg=None) -> int:
         if cmd == "scheduler-loop":
             from src.scheduler import main as run
             return run(cfg, ["scheduler-loop"] + argv[2:])
+        if cmd == "subagent-harness":
+            from src.subagent_harness import main as run
+            return run(argv[2:])
         if cmd in ("notify", "notify-history"):
             from src.notify import main as run
             return run(cfg, argv)
@@ -578,9 +581,10 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             return 0
         if cmd == "bench":
             # register the local-chat (standard HF model) runner
-            import src.drivers_localchat  # noqa: F401  (self-registers)
-            import src.drivers_lfm25  # noqa: F401  (self-registers "lfm25")
             import src.drivers_api_tools  # noqa: F401  (self-registers "api-tools")
+            import src.drivers_lfm25  # noqa: F401  (self-registers "lfm25")
+            import src.drivers_localchat  # noqa: F401  (self-registers)
+            import src.subagent_minicpm5  # noqa: F401  (self-registers "minicpm5")
             from src.bench import bench_suite, format_bench_results, load_tasks, make_driver
             from src.train import _detect_rocm
             # runner selection
@@ -628,6 +632,12 @@ def _dispatch(argv: list[str], cfg=None) -> int:
                 driver = make_driver("lfm25", base_url=base_url,
                                      model=model_arg or "lfm2.5-1.2b-instruct")
                 model_name = model_arg or "lfm2.5-1.2b-instruct"
+            elif runner == "minicpm5":
+                base_url = _parse_str_flag(argv, "--base-url") or "http://127.0.0.1:38899/v1"
+                model = model_arg or _parse_str_flag(argv, "--api-model") or "minicpm5-2b"
+                driver = make_driver("minicpm5", base_url=base_url, model=model,
+                                     api_key=os.environ.get("MINICPM5_API_KEY", ""))
+                model_name = model
             else:
                 driver = make_driver(runner, model_path=model_arg,
                                      rocm=_detect_rocm())
@@ -637,9 +647,9 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             print(format_bench_results(results))
             return 0
         if cmd == "bench-matrix":
-            import src.drivers_localchat  # noqa: F401  (self-registers "local-chat")
-            import src.drivers_lfm25  # noqa: F401  (self-registers "lfm25")
             import src.drivers_api_tools  # noqa: F401  (self-registers "api-tools")
+            import src.drivers_lfm25  # noqa: F401  (self-registers "lfm25")
+            import src.drivers_localchat  # noqa: F401  (self-registers "local-chat")
             from src.bench import bench_matrix, format_bench_matrix, load_tasks
             from src.train import _detect_rocm
             tasks_path = (_parse_str_flag(argv, "--tasks")
@@ -783,7 +793,7 @@ def _dispatch(argv: list[str], cfg=None) -> int:
         print(f"[error] {e}")
         return 2
     print(__doc__)
-    print("Commands: extract | hermes | clean | format | combine | analyze | strata | verify | verify-exec | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | dedup | profile | pretokenize | all")
+    print("Commands: extract | hermes | clean | format | combine | analyze | strata | verify | verify-exec | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | dedup | profile | pretokenize | subagent-harness | all")
     print("Flags:    --source=hermes|opencode  --label=<name>  --all-split  --dry-run  --max-examples=<n>  --frac=<held-out-frac>  --loss-only  --report  --metric=<loss|tool_exact>")
     print("Analyze:  analyze [--out=<dir>]   strata [--out=<dir>] [--bucket-map=<json>] [--balance] [--cap=<n>]")
     print("CPU:      dedup [--threshold=0.85]  profile [--out=<dir>]  pretokenize [--model=<path>] [--max-length=2048]")
@@ -794,6 +804,9 @@ def _dispatch(argv: list[str], cfg=None) -> int:
     print("          rollback --label=<name> [--nodes=<n1,...>]")
     print("Registry: registry-list [--label=<name>]  registry-add --label=<name> --checkpoint=<path>")
     print("Scheduler: scheduler-status  scheduler-run [--dry-run]  scheduler-loop [--interval=3600]")
+    print("Harness:  subagent-harness --type=local|minicpm5|lfm25|api-tools|hermes")
+    print("          [--model=<path-or-id> --base-url=<url> --api-key=<key>]")
+    print("          [--temperature=<n> --variant=base|finetune|auto --rocm --hermes-dir=<dir>]")
     print("Notify:   notify --event=<name> --message=<text>  notify-history [--limit=N]")
     print("Metrics:  metrics-record --label=<name> [--loss=<f>] [--eval-loss=<f>]")
     print("          metrics-compare --label=<name>  metrics-regression --label=<name>")
@@ -813,9 +826,14 @@ def main(argv: list[str]) -> int:
     cmd = argv[1] if len(argv) > 1 else "help"
     cfg = load()
     label = _parse_label(argv)
-    from src.locking import (ResourceBusy, active_owner_records, command_leases,
-                             command_resources, lock_dir,
-                             unmanaged_training_processes)
+    from src.locking import (
+        ResourceBusy,
+        active_owner_records,
+        command_leases,
+        command_resources,
+        lock_dir,
+        unmanaged_training_processes,
+    )
 
     if cmd == "coordination-status":
         owners = active_owner_records(lock_dir(cfg))

@@ -161,7 +161,7 @@ def command_resources(cmd: str, label: str | None = None,
                "bench-matrix"}:
         # CPU-only / remote-endpoint runners never contend for the local GPU,
         # so benchmarking an edge model can proceed during a training run.
-        gpu_free_runners = {"api", "lfm25"}
+        gpu_free_runners = {"api", "lfm25", "minicpm5"}
         reqs = [ResourceRequest("datasets", shared=True)]
         if runner not in gpu_free_runners:
             reqs.append(ResourceRequest("gpu"))
