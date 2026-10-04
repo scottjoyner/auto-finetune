@@ -15,6 +15,7 @@ import os
 import time
 from dataclasses import asdict, dataclass
 
+from src import flags
 from src.config import Config
 from src.locking import atomic_write_json
 
@@ -253,35 +254,29 @@ def main(cfg: Config, argv: list[str]) -> int:
 
     if cmd == "metrics-record":
         kwargs: dict = {}
-        # name -> (coercer, TrainingMetrics field). Validated explicitly: the
-        # raw int()/float() raised a bare ValueError traceback on bad input.
+        # Numeric flags go through the shared validating parser; each of these
+        # used to call int()/float() directly and raise a ValueError traceback.
         numeric = {
             "--version": (int, "version"),
             "--loss": (float, "train_loss"),
             "--eval-loss": (float, "eval_loss"),
-            # Was missing entirely, so eval_perplexity could not be recorded
-            # through the documented CLI even though the dataclass, the
-            # direction table and compare_versions all referenced it.
             "--eval-perplexity": (float, "eval_perplexity"),
             "--tool-exact": (float, "tool_exact_match"),
             "--dataset-size": (int, "dataset_size"),
             "--runtime": (float, "train_runtime_seconds"),
         }
-        for arg in argv:
-            if arg.startswith("--label="):
-                kwargs["label"] = arg.split("=", 1)[1]
-            elif arg.startswith("--gpu-name="):
-                kwargs["gpu_name"] = arg.split("=", 1)[1]
-            else:
-                for flag, (coerce, field) in numeric.items():
-                    if arg.startswith(flag + "="):
-                        raw = arg.split("=", 1)[1]
-                        try:
-                            kwargs[field] = coerce(raw)
-                        except ValueError:
-                            print(f"[error] {flag} must be numeric, got {raw!r}")
-                            return 2
-                        break
+        for flag, (cast, field) in numeric.items():
+            value, err = flags.parse_number(argv, flag, cast=cast)
+            if err:
+                print(f"[error] {err}")
+                return 2
+            if value is not None:
+                kwargs[field] = value
+
+        if flags.flag_value(argv, "--label") is not None:
+            kwargs["label"] = flags.flag_value(argv, "--label")
+        if flags.flag_value(argv, "--gpu-name") is not None:
+            kwargs["gpu_name"] = flags.flag_value(argv, "--gpu-name")
 
         if "label" not in kwargs:
             print("[error] metrics-record requires --label=<name>")
@@ -342,7 +337,13 @@ def main(cfg: Config, argv: list[str]) -> int:
             if arg.startswith("--label="):
                 label = arg.split("=", 1)[1]
             elif arg.startswith("--limit="):
-                limit = int(arg.split("=", 1)[1])
+                value, err = flags.parse_number(argv, "--limit", cast=int,
+                                                minimum=1)
+                if err:
+                    print(f"[error] {err}")
+                    return 2
+                if value is not None:
+                    limit = value
 
         history = tracker.get_history(label, limit)
         if not history:

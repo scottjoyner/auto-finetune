@@ -16,6 +16,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
 
+from src import flags
 from src.config import Config
 
 
@@ -157,9 +158,19 @@ def main(cfg: Config, argv: list[str]) -> int:
         if arg.startswith("--label="):
             label = arg.split("=", 1)[1]
         elif arg.startswith("--hours="):
-            training_hours = float(arg.split("=", 1)[1])
+            value, err = flags.parse_number(argv, "--hours", cast=float,
+                                            minimum=0)
+            if err:
+                print(f"[error] {err}")
+                return 2
+            training_hours = value
         elif arg.startswith("--eval-hours="):
-            eval_hours = float(arg.split("=", 1)[1])
+            value, err = flags.parse_number(argv, "--eval-hours", cast=float,
+                                            minimum=0)
+            if err:
+                print(f"[error] {err}")
+                return 2
+            eval_hours = value
         elif arg.startswith("--notes="):
             notes = arg.split("=", 1)[1]
         elif arg.startswith("--gpu="):
@@ -217,9 +228,12 @@ def main(cfg: Config, argv: list[str]) -> int:
 
     if cmd == "cost-history":
         limit = 20
-        for arg in argv:
-            if arg.startswith("--limit="):
-                limit = int(arg.split("=", 1)[1])
+        value, err = flags.parse_number(argv, "--limit", cast=int, minimum=1)
+        if err:
+            print(f"[error] {err}")
+            return 2
+        if value is not None:
+            limit = value
 
         history = tracker.get_history(label, limit)
         if not history:

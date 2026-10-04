@@ -19,6 +19,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
 
+from src import flags
 from src.config import Config
 from src.locking import atomic_write_json
 
@@ -624,9 +625,12 @@ def main(cfg: Config, argv: list[str]) -> int:
             return 2
         if nodes:
             quorum = 0
-            for arg in argv:
-                if arg.startswith("--quorum="):
-                    quorum = int(arg.split("=", 1)[1])
+            value, err = flags.parse_number(argv, "--quorum", cast=int, minimum=1)
+            if err:
+                print(f"[error] {err}")
+                return 2
+            if value is not None:
+                quorum = value
             results = multi_deploy(cfg, label, nodes, quorum=quorum)
             if not quorum_met(results, quorum):
                 successful = sum(1 for r in results if r.success)

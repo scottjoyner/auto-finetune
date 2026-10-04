@@ -24,6 +24,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any
 
+from src import flags
 from src.config import Config
 from src.locking import (atomic_write_json, lock_dir,
                          unmanaged_training_processes)
@@ -671,9 +672,13 @@ def main(cfg: Config, argv: list[str]) -> int:
 
     if cmd == "scheduler-loop":
         interval = 3600
-        for arg in argv:
-            if arg.startswith("--interval="):
-                interval = int(arg.split("=", 1)[1])
+        value, err = flags.parse_number(argv, "--interval", cast=int,
+                                        minimum=1)
+        if err:
+            print(f"[error] {err}")
+            return 2
+        if value is not None:
+            interval = value
         scheduler.loop(interval)
         return 0
 

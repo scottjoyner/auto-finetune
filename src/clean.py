@@ -14,6 +14,7 @@ import os
 import re
 from typing import Any
 
+from src.locking import atomic_write_json
 from src.config import Config
 
 # Patterns that look like secrets / credentials. Matched case-insensitively and
@@ -179,8 +180,7 @@ def _clean_dir(src: str, dst: str, cfg: Config, keep_reasoning: bool = False) ->
             if h in seen:
                 continue
             seen.add(h)
-        with open(os.path.join(dst, fn), "w") as f:
-            json.dump(out, f)
+        atomic_write_json(os.path.join(dst, fn), out)
         written += 1
     print(f"[clean] wrote {written} cleaned sessions to {dst}")
     return written

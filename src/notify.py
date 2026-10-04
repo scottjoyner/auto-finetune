@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+from src import flags
 from src.config import Config
 
 
@@ -244,17 +245,12 @@ def main(cfg: Config, argv: list[str]) -> int:
 
     if cmd == "notify-history":
         limit = 50
-        for arg in argv:
-            if arg.startswith("--limit="):
-                raw = arg.split("=", 1)[1]
-                try:
-                    limit = int(raw)
-                except ValueError:
-                    print(f"[error] --limit must be an integer, got {raw!r}")
-                    return 2
-                if limit <= 0:
-                    print("[error] --limit must be positive")
-                    return 2
+        value, err = flags.parse_number(argv, "--limit", cast=int, minimum=1)
+        if err:
+            print(f"[error] {err}")
+            return 2
+        if value is not None:
+            limit = value
 
         history = get_notification_history(cfg, limit)
         if not history:

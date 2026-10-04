@@ -2,6 +2,9 @@
 """Deploy and test MiniCPM5-1B on destroyer node continuously."""
 import json, urllib.request, time, subprocess, sys, os
 
+sys.path.insert(0, "/home/scott/git/auto-finetune")
+from src.locking import atomic_write_json
+
 DESTROYER_IP = "100.81.57.77"
 PASSWORD = "gluhlaf8"
 SERVER_URL = f"http://{DESTROYER_IP}:8300/v1/chat/completions"
@@ -97,6 +100,5 @@ if __name__ == "__main__":
             "destroyer_status": "DEPLOYED" if destroyer_res["success"] else "FAILED",
         }
     }
-    with open("/tmp/destroyer_deploy_results.json", "w") as f:
-        json.dump(results, f, indent=2)
+    atomic_write_json("/tmp/destroyer_deploy_results.json", results)
     print("\nResults saved to /tmp/destroyer_deploy_results.json")

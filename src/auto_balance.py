@@ -16,6 +16,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from src.locking import atomic_write_json
 from src.config import Config
 
 
@@ -202,14 +203,13 @@ def main(cfg: Config, label: str | None = None, cap: int = 500,
 
     # Write metadata
     meta_path = os.path.join(out_dir, "balance-meta.json")
-    with open(meta_path, "w") as f:
-        json.dump({
-            "cap": cap,
-            "seed": seed,
-            "source_stats": stats,
-            "balanced_stats": write_stats,
-            "bucket_weights": BUCKET_WEIGHTS,
-        }, f, indent=2)
+    atomic_write_json(meta_path, {
+        "cap": cap,
+        "seed": seed,
+        "source_stats": stats,
+        "balanced_stats": write_stats,
+        "bucket_weights": BUCKET_WEIGHTS,
+    })
 
     print(f"[auto-balance] metadata written to {meta_path}")
     return 0

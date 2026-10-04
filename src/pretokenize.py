@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from src.locking import atomic_write_json
 from src.config import Config
 
 
@@ -245,8 +246,7 @@ def main(
 
     # Save stats
     stats_path = os.path.join(out_dir, "tokenization-stats.json")
-    with open(stats_path, "w") as f:
-        json.dump(stats, f, indent=2)
+    atomic_write_json(stats_path, stats)
 
     # Print summary
     print(f"[pretokenize] tokenized {stats['n_tokenized']} sessions")

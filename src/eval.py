@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from src.locking import atomic_write_json
+
 # ── tool_call parsing ──────────────────────────────────────────────────────────
 # Format seen in the datasets:
 #   <tool_call name="read" call_id="...">
@@ -210,7 +212,6 @@ def build_disjoint_partition(source_path: str | Path, out_dir: str | Path,
     _atomic_text(eval_path, encode(eval_rows))
     result = PartitionResult(src, train_path, eval_path, train_rows, eval_rows,
                              _sha256_bytes(raw), seed, frac)
-    from src.locking import atomic_write_json
     atomic_write_json(root / "partition.json", {
         "source": str(src.resolve()), "source_sha256": result.source_sha256,
         "seed": seed, "requested_fraction": frac, "n_source": len(rows),
@@ -699,8 +700,7 @@ def write_report(
         "probe_base": probe_base.as_dict() if probe_base else None,
         "probe_adapter": probe_adapter.as_dict() if probe_adapter else None,
     }
-    with open(json_path, "w") as f:
-        json.dump(payload, f, indent=2)
+    atomic_write_json(json_path, payload)
     return md_path
 
 

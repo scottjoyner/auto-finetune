@@ -16,6 +16,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from src.locking import atomic_write_json
 from src.config import Config
 
 
@@ -307,8 +308,7 @@ def main(cfg: Config, label: str | None = None, out_dir: str | None = None) -> i
     os.makedirs(out_dir, exist_ok=True)
 
     out_path = os.path.join(out_dir, "dataset-profile.json")
-    with open(out_path, "w") as f:
-        json.dump(profile, f, indent=2)
+    atomic_write_json(out_path, profile)
 
     # Print summary
     stats = profile["length_stats"]

@@ -15,6 +15,7 @@ import shutil
 import time
 from dataclasses import dataclass
 
+from src import flags
 from src.config import Config
 
 
@@ -275,28 +276,26 @@ def main(cfg: Config, argv: list[str]) -> int:
     for arg in argv:
         if arg.startswith("--label="):
             label = arg.split("=", 1)[1]
-        elif arg.startswith("--bits="):
-            raw_bits = arg.split("=", 1)[1]
-            # Unvalidated int() here raised a bare ValueError traceback.
-            try:
-                bits = int(raw_bits)
-            except ValueError:
-                print(f"[error] --bits must be an integer, got {raw_bits!r}")
-                return 2
-        elif arg.startswith("--calibration-size="):
-            raw_size = arg.split("=", 1)[1]
-            try:
-                dataset_size = int(raw_size)
-            except ValueError:
-                print(f"[error] --calibration-size must be an integer, got {raw_size!r}")
-                return 2
-            if dataset_size <= 0:
-                print("[error] --calibration-size must be positive")
-                return 2
         elif arg.startswith("--method="):
             method = arg.split("=", 1)[1]
         elif arg.startswith("--output="):
             output_base = arg.split("=", 1)[1]
+
+    # Numeric flags go through the shared validating parser: a bare int() here
+    # raised a ValueError traceback on --bits=abc.
+    for name, cast, choices, minimum, dest in (
+            ("--bits", int, (2, 3, 4, 8), None, "bits"),
+            ("--calibration-size", int, None, 1, "dataset_size")):
+        value, err = flags.parse_number(argv, name, cast=cast,
+                                        choices=choices, minimum=minimum)
+        if err:
+            print(f"[error] {err}")
+            return 2
+        if value is not None:
+            if dest == "bits":
+                bits = value
+            else:
+                dataset_size = value
 
     if method not in ("gptq", "awq"):
         print(f"[error] --method must be gptq or awq, got {method!r}")
@@ -305,10 +304,6 @@ def main(cfg: Config, argv: list[str]) -> int:
     if cmd == "quantize":
         if not label:
             print("[error] quantize requires --label=<name>")
-            return 2
-        if bits not in (2, 3, 4, 8):
-            print(f"[error] --bits must be one of 2, 3, 4, 8 (got {bits}); "
-                  f"other widths are not supported by GPTQ/AWQ")
             return 2
 
         out_base = cfg.get("train", "output_dir",

@@ -17,6 +17,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from src.locking import atomic_write_json
 from src.config import Config
 
 
@@ -297,8 +298,7 @@ def main(cfg: Config, label: str | None = None, threshold: float = 0.85) -> int:
             source = rec.get("source", "unknown")
             out_path = os.path.join(out_dir, source, f"{sid}.json")
             os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        with open(out_path, "w") as f:
-            json.dump(rec, f)
+        atomic_write_json(out_path, rec)
         written += 1
 
     # Write removed sessions to a separate file for inspection
