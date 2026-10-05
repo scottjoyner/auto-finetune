@@ -131,6 +131,8 @@ def decontaminate(train_rows: list[dict], bench_rows: list[dict],
     origin = list(range(len(train_rows)))
     result = audit_leakage(kept, bench_rows, min_len=min_len)
     unresolvable: list = []
+    if result["status"] != "contaminated":
+        return train_rows, [], dict(result, n_dropped=0)
 
     for _ in range(max_rounds):
         if result["status"] != "contaminated":
@@ -145,15 +147,18 @@ def decontaminate(train_rows: list[dict], bench_rows: list[dict],
         if unresolvable or not drop:
             # Either rows are identified by task_id, not position, or we made
             # no progress. Keep everything and let the caller fail closed.
-            return train_rows, [], result
+            return train_rows, [], dict(result, n_dropped=0)
         drop_original.update(origin[i] for i in drop)
         kept = [r for i, r in enumerate(kept) if i not in drop]
         origin = [origin[i] for i in range(len(origin)) if i not in drop]
         result = audit_leakage(kept, bench_rows, min_len=min_len)
 
     if unresolvable:
-        return train_rows, [], result
-    return kept, sorted(drop_original), result
+        return train_rows, [], dict(result, n_dropped=0)
+    # `result` is the audit of the KEPT rows, so it reads "clean" exactly when
+    # rows were dropped. Callers that branch on status first will skip writing
+    # the cleaned rows out, so surface the count in the result itself.
+    return kept, sorted(drop_original), dict(result, n_dropped=len(drop_original))
 
 
 def _load_jsonl(path: str) -> list[dict]:

@@ -146,3 +146,26 @@ def test_decontaminate_terminates_on_pathological_input():
     kept, dropped, res = decontaminate(train, bench, max_rounds=5)
     assert res["status"] in {"clean", "contaminated"}
     assert len(kept) <= len(train)
+
+
+def test_decontaminate_result_reports_n_dropped():
+    """n_dropped must be in the result: status reads clean after dropping.
+
+    A caller branching on status first would otherwise skip writing the
+    cleaned rows out and silently keep the contaminated corpus.
+    """
+    from src.audit import decontaminate
+    bench = [_bench("install the signal cli and verify")]
+    train = [_train("unrelated"), _train("install the signal cli and verify")]
+    kept, dropped, res = decontaminate(train, bench)
+    assert res["status"] == "clean"          # post-state
+    assert res["n_dropped"] == 1             # and the count is right there
+    assert len(dropped) == 1
+    assert len(kept) == 1
+
+
+def test_decontaminate_n_dropped_zero_when_clean():
+    from src.audit import decontaminate
+    bench = [_bench("an unrelated instruction entirely")]
+    _, dropped, res = decontaminate([_train("nothing")], bench)
+    assert res["n_dropped"] == 0 and dropped == []
