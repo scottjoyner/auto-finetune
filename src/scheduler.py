@@ -180,6 +180,7 @@ class Scheduler:
                 shutil.copytree(src, staged / dataset_label, dirs_exist_ok=True)
 
     def _format_candidate(self, plan, root: Path) -> dict[str, Path]:
+        from src.analyze import benchmark_session_ids
         from src.format_dataset import main as format_main
 
         candidate_cfg = Config(raw=dict(self.cfg.raw))
@@ -187,16 +188,32 @@ class Scheduler:
         candidate_cfg.raw["paths"]["dataset_dir"] = str(root / "datasets")
         datasets = root / "datasets"
         datasets.mkdir(parents=True, exist_ok=True)
+        # Every candidate is held out from the benchmark suite, not just the
+        # main corpus: an earlier holdout recovered nothing because the suite
+        # stores its id under `id` rather than `task_id`.
+        held_out = benchmark_session_ids(
+            Path(self.repo) / "eval" / "tasks" / "auto-verified.jsonl")
         outputs: dict[str, Path] = {}
         for source_name, dataset_label in zip(plan.harvest_labels, plan.dataset_labels or plan.harvest_labels):
             source = next((s for s in plan.sources if s.name == source_name), None)
             if source is None:
                 continue
-            count = format_main(candidate_cfg, label=dataset_label)
+            count = format_main(candidate_cfg, label=dataset_label, exclude=held_out)
             output = datasets / f"train.{dataset_label}.jsonl"
             if count <= 0 or not output.is_file():
                 raise RuntimeError(f"candidate format produced no rows for {dataset_label}")
             outputs[dataset_label] = output
+        if held_out:
+            from src.format_dataset import verify_holdout
+            v = verify_holdout(str(datasets), held_out)
+            if v["status"] == "contaminated":
+                raise RuntimeError(
+                    f"candidate corpus contains {len(v['leaked'])} held-out benchmark "
+                    f"sessions: {v['leaked'][:5]}")
+            if v["status"] == "unverifiable":
+                raise RuntimeError(
+                    "candidate corpus has no provenance sidecars; cannot confirm the "
+                    "benchmark holdout held")
         return outputs
 
     def _partition_candidate(self, datasets: dict[str, Path], root: Path) -> dict[str, dict]:

@@ -419,3 +419,105 @@ def test_emit_strata_provenance_survives_balancing(tmp_root):
             continue
         assert sum(1 for _ in ds.open()) == sum(1 for _ in pf.open()), b
     assert verify_holdout(str(out), {"nothing"})["status"] == "clean"
+
+
+# ── format_main holdout (this path previously had none) ──────────────────────
+
+def _cfg_for(tmp_root, cleaned):
+    return make_cfg(paths={
+        "raw_dir": str(tmp_root / "data" / "raw"),
+        "cleaned_dir": str(cleaned),
+        "dataset_dir": str(tmp_root / "data" / "datasets")})
+
+
+def test_format_main_holds_out_benchmark_sessions(tmp_root):
+    cleaned = tmp_root / "data" / "cleaned" / "hermes"
+    cleaned.mkdir(parents=True)
+    _write_session(cleaned / "a.json", "s_keep", "shell",
+                   [_text("user", "keep me"),
+                    {"role": "assistant", "parts": [_tool("bash", {"command": "true"}, "ok")]}])
+    _write_session(cleaned / "b.json", "s_bench", "shell",
+                   [_text("user", "benchmark only"),
+                    {"role": "assistant", "parts": [_tool("bash", {"command": "true"}, "ok")]}])
+    cfg = _cfg_for(tmp_root, tmp_root / "data" / "cleaned")
+    n = main(cfg, label="hermes", exclude={"s_bench"})
+    out = tmp_root / "data" / "datasets" / "train.hermes.jsonl"
+    assert n == 1 and out.is_file()
+    assert "benchmark only" not in out.read_text()
+
+    from src.format_dataset import verify_holdout
+    ds_dir = tmp_root / "data" / "datasets"
+    assert verify_holdout(str(ds_dir), {"s_bench"})["status"] == "clean"
+
+
+def test_format_main_writes_provenance_aligned_with_rows(tmp_root):
+    cleaned = tmp_root / "data" / "cleaned" / "hermes"
+    cleaned.mkdir(parents=True)
+    # Two windows from one session: provenance must repeat, not collapse.
+    msgs = []
+    for i in range(4):
+        msgs.append(_text("user", f"step {i}"))
+        msgs.append({"role": "assistant", "parts": [
+            _tool("bash", {"command": f"echo {i}"}, "ok")]})
+    _write_session(cleaned / "a.json", "s1", "shell", msgs)
+    cfg = _cfg_for(tmp_root, tmp_root / "data" / "cleaned")
+    cfg.raw["format"]["max_turns_per_example"] = 2
+    main(cfg, label="hermes", exclude=set())
+    ds = tmp_root / "data" / "datasets" / "train.hermes.jsonl"
+    pf = tmp_root / "data" / "datasets" / "train.hermes.provenance.jsonl"
+    assert pf.is_file()
+    ds_rows = [json.loads(l) for l in ds.open() if l.strip()]
+    pf_rows = [json.loads(l) for l in pf.open() if l.strip()]
+    assert len(ds_rows) == len(pf_rows) > 1, "windows must stay distinct rows"
+    assert all(r["session_id"] == "s1" for r in pf_rows)
+    assert [r["row"] for r in pf_rows] == list(range(len(pf_rows)))
+
+
+def test_format_main_training_rows_stay_messages_only(tmp_root):
+    cleaned = tmp_root / "data" / "cleaned" / "hermes"
+    cleaned.mkdir(parents=True)
+    _write_session(cleaned / "a.json", "s1", "shell",
+                   [_text("user", "hi"),
+                    {"role": "assistant", "parts": [_tool("bash", {"command": "x"}, "ok")]}])
+    cfg = _cfg_for(tmp_root, tmp_root / "data" / "cleaned")
+    main(cfg, label="hermes", exclude=set())
+    ds = tmp_root / "data" / "datasets" / "train.hermes.jsonl"
+    for line in ds.open():
+        if line.strip():
+            assert sorted(json.loads(line)) == ["messages"]
+
+
+def test_format_main_falls_back_to_filename_for_session_id(tmp_path):
+    """Records without session_id still get provenance from the filename."""
+    cleaned = tmp_path / "data" / "cleaned" / "hermes"
+    cleaned.mkdir(parents=True)
+    (cleaned / "s_from_name.json").write_text(json.dumps({
+        "source": "hermes", "messages": [
+            {"role": "user", "parts": [_text("user", "hello")]},
+            {"role": "assistant", "parts": [_tool("bash", {"command": "x"}, "ok")]}]}))
+    cfg = make_cfg(paths={"raw_dir": str(tmp_path / "data" / "raw"),
+                          "cleaned_dir": str(tmp_path / "data" / "cleaned"),
+                          "dataset_dir": str(tmp_path / "data" / "datasets")})
+    assert main(cfg, label="hermes", exclude={"s_from_name"}) == 0
+    assert main(cfg, label="hermes", exclude=set()) == 1
+
+
+def test_format_main_merged_output_is_verifiable(tmp_root):
+    """The merged train.jsonl must be covered too, not just per-label files."""
+    cleaned = tmp_root / "data" / "cleaned"
+    (cleaned / "hermes").mkdir(parents=True)
+    (cleaned / "opencode").mkdir(parents=True)
+    _write_session(cleaned / "hermes" / "a.json", "h1", "shell",
+                   [_text("user", "h"), {"role": "assistant", "parts": [
+                       _tool("bash", {"command": "x"}, "ok")]}])
+    _write_session(cleaned / "opencode" / "b.json", "o1", "shell",
+                   [_text("user", "o"), {"role": "assistant", "parts": [
+                       _tool("bash", {"command": "y"}, "ok")]}])
+    cfg = _cfg_for(tmp_root, cleaned)
+    main(cfg, exclude={"h1"})
+    ds_dir = tmp_root / "data" / "datasets"
+    assert (ds_dir / "train.provenance.jsonl").is_file(), "merged output needs provenance"
+    from src.format_dataset import verify_holdout
+    r = verify_holdout(str(ds_dir), {"h1"})
+    assert r["status"] == "clean", r["leaked"]
+    assert "h1" not in (ds_dir / "train.jsonl").read_text()

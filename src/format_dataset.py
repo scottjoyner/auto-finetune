@@ -138,7 +138,31 @@ def to_hermes(messages: list[dict], system: str) -> dict:
     return {"messages": out}
 
 
-def main(cfg: Config, source: str | None = None, label: str | None = None) -> int:
+def _write_dataset(out_path: str, rows: list, sids: list[str]) -> None:
+    """Write a dataset plus its provenance sidecar, row-aligned.
+
+    Training rows carry only ``messages``; the sidecar is what makes it possible
+    to confirm later that no held-out benchmark session is inside them. A
+    session may contribute several rows (one per window), so ``sids`` repeats.
+    """
+    with open(out_path, "w") as f:
+        for ex in rows:
+            f.write(json.dumps(ex) + "\n")
+    base = out_path[:-len(".jsonl")] if out_path.endswith(".jsonl") else out_path
+    with open(base + ".provenance.jsonl", "w") as pf:
+        for i, sid in enumerate(sids):
+            pf.write(json.dumps({"row": i, "session_id": sid}) + "\n")
+
+
+def main(cfg: Config, source: str | None = None, label: str | None = None,
+         exclude: set[str] | None = None) -> int:
+    """Emit training datasets from the cleaned corpus.
+
+    ``exclude`` is a set of session ids held out of every output (used for
+    benchmark sessions). This path previously had no holdout at all, so
+    candidate corpora contained the eval set regardless of what the analyzer
+    resolved.
+    """
     cleaned_dir = cfg.path("cleaned_dir")
     dataset_dir = cfg.path("dataset_dir")
     os.makedirs(dataset_dir, exist_ok=True)
@@ -152,10 +176,13 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
     exclude_sources = set(cfg.get("format", "exclude_sources", default=[]) or [])
     kept_counts: dict[str, int] = {}
     dropped_counts: dict[str, int] = {}
+    held_out_totals = [0]
 
     def _format_one(src_dir: str, out_path: str, filter_source: str | None) -> int:
         examples: list[Any] = []
+        sids: list[str] = []
         sources_seen: set[str] = set()
+        held_out = 0
         for fn in sorted(os.listdir(src_dir)):
             if not fn.endswith(".json"):
                 continue
@@ -164,6 +191,10 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
             src = rec.get("source", "")
             agent = str(rec.get("agent") or "")
             sources_seen.add(src)
+            sid = str(rec.get("session_id") or os.path.basename(fn)[:-5])
+            if exclude and sid in exclude:
+                held_out += 1
+                continue
             # Exclusion matches the session's source OR its agent kind
             # (automated Hermes cron runs carry source='hermes' but
             # agent='cron').
@@ -180,14 +211,17 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
                 if len(w) < 2:
                     continue
                 examples.append(_format_window(w, template, system))
-        with open(out_path, "w") as f:
-            for ex in examples:
-                f.write(json.dumps(ex) + "\n")
+                sids.append(sid)
+        # A session may contribute one row per window, so sids repeats; no
+        # deduping here, as that would collapse legitimate windows.
+        _write_dataset(out_path, examples, sids)
+        held_out_totals[0] += held_out
         return len(examples)
 
     def _collect_examples(src_dir: str, max_turns: int, max_chars: int,
-                          template: str, system: str) -> list[Any]:
+                          template: str, system: str) -> tuple[list, list[str]]:
         examples: list[Any] = []
+        sids: list[str] = []
         for fn in sorted(os.listdir(src_dir)):
             if not fn.endswith(".json"):
                 continue
@@ -195,19 +229,25 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
                 rec = json.load(f)
             if rec.get("source") != "opencode":
                 continue
+            sid = str(rec.get("session_id") or os.path.basename(fn)[:-5])
+            if exclude and sid in exclude:
+                held_out_totals[0] += 1
+                continue
             msgs = rec.get("messages", [])
             windows = _window_messages(msgs, max_turns, max_chars)
             for w in windows:
                 if len(w) < 2:
                     continue
                 examples.append(_format_window(w, template, system))
-        return examples
+                sids.append(sid)
+        return examples, sids
 
     if label == "opencode-all":
         # Merge every opencode source subdir (ssd, nas5-*, opencode-<project>)
         # into one corpus. Identified by peeking each cleaned subdir's records.
         out_path = os.path.join(dataset_dir, "train.opencode-all.jsonl")
         examples: list[Any] = []
+        sids: list[str] = []
         for entry in sorted(os.listdir(cleaned_dir)):
             src_dir = os.path.join(cleaned_dir, entry)
             if not os.path.isdir(src_dir):
@@ -226,10 +266,11 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
                 break
             if not is_opencode:
                 continue
-            examples.extend(_collect_examples(src_dir, max_turns, max_chars, template, system))
-        with open(out_path, "w") as f:
-            for ex in examples:
-                f.write(json.dumps(ex) + "\n")
+            got, got_sids = _collect_examples(src_dir, max_turns, max_chars,
+                                              template, system)
+            examples.extend(got)
+            sids.extend(got_sids)
+        _write_dataset(out_path, examples, sids)
         print(f"[format] opencode-all: {len(examples)} examples -> {out_path}")
         return len(examples)
     if label:
@@ -269,6 +310,9 @@ def main(cfg: Config, source: str | None = None, label: str | None = None) -> in
             n = _format_one(cleaned_dir, out_path, source)
             print(f"[format] {source}: {n} examples -> {out_path}")
             total += n
+    if exclude:
+        print(f"[format] held out {held_out_totals[0]} benchmark session(s) "
+              f"(recorded per row in *.provenance.jsonl)")
     if exclude_sources:
         print(f"[format] excluded sources: "
               + ", ".join(f"{k}={v} sessions dropped" for k, v in sorted(dropped_counts.items()))
@@ -471,7 +515,8 @@ def verify_holdout(out_dir: str, held_out: set[str] | None) -> dict:
     leaked: list[dict] = []
     n_rows = 0
     n_sessions = 0
-    files = sorted(root.glob("train.*.provenance.jsonl"))
+    # `train.provenance.jsonl` (merged) alongside `train.<label>.provenance.jsonl`
+    files = sorted(root.glob("train*.provenance.jsonl"))
     if not files:
         return {"status": "unverifiable", "leaked": [], "n_rows": 0,
                 "n_sessions": 0, "checked": []}

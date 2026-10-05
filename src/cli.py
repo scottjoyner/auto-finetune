@@ -137,15 +137,33 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             return 0
         if cmd == "format":
             from src.format_dataset import main as run
+            from src.format_dataset import verify_holdout
+            # Hold benchmark sessions out of the emitted datasets unless the
+            # caller explicitly opts out. This path had no holdout at all.
+            holdout = _parse_str_flag(argv, "--holdout")
+            holdout_out = _parse_str_flag(argv, "--no-holdout")
+            exclude = set()
+            if holdout_out != "1":
+                from src.analyze import benchmark_session_ids
+                exclude = benchmark_session_ids(
+                    holdout or "eval/tasks/auto-verified.jsonl")
             # --all-split: produce hermes-only, opencode-only, and merged
             if "--all-split" in argv:
                 n = 0
                 for s in ("hermes", "opencode", None):
-                    n += run(cfg, source=s, label=label)
+                    n += run(cfg, source=s, label=label, exclude=exclude)
                 print(f"[format] wrote {n} examples")
                 return 0
-            count = run(cfg, source=source, label=label)
+            count = run(cfg, source=source, label=label, exclude=exclude)
             print(f"[format] wrote {count} examples")
+            if exclude:
+                v = verify_holdout(cfg.path("dataset_dir"), exclude)
+                print(f"[format] holdout verify: {v['status']} "
+                      f"({v['n_rows']} rows / {v['n_sessions']} sessions)")
+                if v["status"] == "contaminated":
+                    for h in v["leaked"][:10]:
+                        print(f"  LEAK {h}")
+                    return 3
             return 0
         if cmd == "combine":
             from src.format_dataset import combine as run
@@ -178,12 +196,33 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             if holdout:
                 from src.analyze import benchmark_session_ids
                 exclude = benchmark_session_ids(holdout)
+                if not exclude:
+                    # An empty holdout silently trains on the benchmark itself.
+                    print(f"[error] no benchmark sessions recovered from {holdout}; "
+                          "refusing to emit a mix that may contain the eval set")
+                    return 2
             counts = emit_strata(cfg, bucket_map, out, balance=balance, cap=cap, exclude=exclude)
             print(f"[strata] wrote {len(counts)} strata -> {out}")
             if exclude is not None:
                 print(f"[strata] held out {counts.get('excluded', 0)} benchmark sessions")
             for b, n in sorted(counts.items()):
                 print(f"  {b:<22} {n}")
+            if exclude is not None:
+                # Verify against what was actually written, not just that the
+                # filter ran: emit_strata records provenance per emitted row.
+                from src.format_dataset import verify_holdout
+                v = verify_holdout(out, exclude)
+                print(f"[strata] holdout verify: {v['status']} "
+                      f"({v['n_rows']} rows / {v['n_sessions']} sessions)")
+                if v["status"] == "contaminated":
+                    for h in v["leaked"][:10]:
+                        print(f"  LEAK {h}")
+                    print("[error] emitted corpus contains held-out benchmark sessions")
+                    return 3
+                if v["status"] == "unverifiable":
+                    print("[error] emitted corpus has no provenance sidecars; "
+                          "cannot confirm the holdout held")
+                    return 3
             return 0
         if cmd == "verify":
             from src.verify import summarize, verify_all
