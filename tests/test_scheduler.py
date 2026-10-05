@@ -13,11 +13,10 @@ import os
 from pathlib import Path
 
 import pytest
+from conftest import make_cfg
 
 from src.harvest import HarvestPlan, SourceStats
 from src.scheduler import Scheduler
-
-from conftest import make_cfg
 
 
 def _source(name: str, total: int = 10, label: str = "") -> SourceStats:
@@ -334,3 +333,101 @@ def test_pipeline_picks_lowest_loss_as_winner(sched, monkeypatch, tmp_path):
     manifest = sched._candidate_pipeline(_plan(), tmp_path / "root")
     assert manifest["winner"] == "a"
     assert manifest["eval_losses"] == {"a": 0.1, "b": 0.9}
+
+
+# --- dry-run pre-validation ------------------------------------------------
+
+def _stub_candidate_stages(sched, monkeypatch, *, partitions=None, audits=None):
+    monkeypatch.setattr(sched, "_stage_cleaned", lambda *a: None)
+    monkeypatch.setattr(sched, "_format_candidate",
+                        lambda p, root: {"ssd": root / "train.ssd.jsonl"})
+    monkeypatch.setattr(
+        sched, "_partition_candidate",
+        lambda ds, root: partitions if partitions is not None else {
+            "ssd": {"train_path": "t", "eval_path": "e", "source_sha256": "abc",
+                    "seed": 42, "frac": 0.1, "n_train": 90, "n_eval": 10}})
+    monkeypatch.setattr(
+        sched, "_audit_candidate",
+        lambda ds: audits if audits is not None else {"ssd": {"status": "clean"}})
+
+
+def test_run_candidate_dry_run_skips_gpu_stages(sched, monkeypatch):
+    plan = _plan()
+    _stub_candidate_stages(sched, monkeypatch)
+    called = []
+    for stage in ("_train_candidate", "_eval_candidate", "_merge_candidate",
+                  "_benchmark_candidate", "_promote_candidate"):
+        monkeypatch.setattr(sched, stage,
+                            lambda *a, _s=stage, **k: called.append(_s))
+    ok, info = sched.run_candidate(plan, dry_run=True)
+    assert ok is True
+    assert info["dry_run"] is True
+    assert called == [], f"dry-run executed GPU/promotion stages: {called}"
+    assert info["skipped_stages"] == ["train", "eval", "merge", "benchmark",
+                                      "promote"]
+
+
+def test_dry_run_reports_partition_and_audit(sched, monkeypatch):
+    _stub_candidate_stages(sched, monkeypatch)
+    _, info = sched.run_candidate(_plan(), dry_run=True)
+    assert info["partitions"]["ssd"]["n_train"] == 90
+    assert info["partitions"]["ssd"]["source_sha256"] == "abc"
+    assert info["audits"]["ssd"]["status"] == "clean"
+
+
+def test_dry_run_writes_a_separate_manifest(sched, monkeypatch):
+    # It must not write candidate.json: a later real run would then promote a
+    # pipeline that never trained anything.
+    _stub_candidate_stages(sched, monkeypatch)
+    ok, info = sched.run_candidate(_plan(), dry_run=True)
+    root = sched._candidate_root(info["candidate_id"])
+    assert (root / "candidate-dryrun.json").is_file()
+    assert not (root / "candidate.json").exists()
+
+
+def test_dry_run_does_not_set_pending_state(sched, monkeypatch):
+    _stub_candidate_stages(sched, monkeypatch)
+    sched.run_candidate(_plan(), dry_run=True)
+    assert sched.state.pending_candidate is None
+
+
+def test_dry_run_still_fails_closed_on_contamination(sched, monkeypatch):
+    _stub_candidate_stages(sched, monkeypatch,
+                           partitions={"ssd": {"contamination": "bad"}})
+    def boom(*a, **k):
+        raise RuntimeError("partition contamination for ssd")
+    monkeypatch.setattr(sched, "_partition_candidate", boom)
+    with pytest.raises(RuntimeError, match="contamination"):
+        sched.run_candidate(_plan(), dry_run=True)
+
+
+def test_run_once_dry_run_prevalidates_candidate(sched, monkeypatch):
+    plan = _plan()
+    monkeypatch.setattr("src.harvest.plan_harvest", lambda cfg: plan)
+    _stub_candidate_stages(sched, monkeypatch)
+    result = sched.run_once(dry_run=True)
+    assert result.phase == "dry-run"
+    assert result.success is True
+    assert "pre-validated" in result.message
+    assert result.train_stats is None, "dry-run must not train"
+
+
+def test_run_once_dry_run_reports_prevalidation_failure(sched, monkeypatch):
+    plan = _plan()
+    monkeypatch.setattr("src.harvest.plan_harvest", lambda cfg: plan)
+
+    def boom(self, *a, **k):
+        raise RuntimeError("candidate ssd failed contamination audit")
+    monkeypatch.setattr(Scheduler, "_dry_run_candidate", boom)
+    result = sched.run_once(dry_run=True)
+    assert result.success is False
+    assert result.phase == "dry-run"
+    assert "contamination" in result.message
+
+
+def test_run_once_dry_run_skips_validation_when_not_training(sched, monkeypatch):
+    plan = _plan(should_train=False)
+    monkeypatch.setattr("src.harvest.plan_harvest", lambda cfg: plan)
+    result = sched.run_once(dry_run=True)
+    assert result.success is True
+    assert "pre-validated" not in result.message

@@ -20,15 +20,12 @@ import os
 import shutil
 import subprocess
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
 
 from src import flags
 from src.config import Config
-from src.locking import (atomic_write_json, lock_dir,
-                         unmanaged_training_processes)
-
+from src.locking import atomic_write_json, lock_dir, unmanaged_training_processes
 
 SCHEDULER_STATE_FILE = "scheduler-state.json"
 
@@ -60,6 +57,9 @@ class RunResult:
     harvest_stats: dict | None = None
     train_stats: dict | None = None
     deploy_stats: dict | None = None
+    # Set only by --dry-run: the candidate pipeline's pre-validation preview
+    # (datasets, partitions, audits) for the plan that would have run.
+    candidate_stats: dict | None = None
 
 
 class Scheduler:
@@ -336,9 +336,49 @@ class Scheduler:
         record_harvest(self.cfg, selected, plan_id=plan.plan_id)
         self._save_pending(None, plan)
 
-    def run_candidate(self, plan) -> tuple[bool, dict]:
+    def _dry_run_candidate(self, plan, candidate_id: str, root: Path) -> dict:
+        """Run the candidate pipeline's cheap stages and stop.
+
+        Validates everything that can fail before the GPU is committed: corpus
+        staging, formatting, the disjoint held-out split (which fails closed on
+        contamination) and the bench leakage audit. Skips train/eval/merge/
+        benchmark/promote.
+
+        Deliberately writes candidate-dryrun.json rather than candidate.json,
+        and does not touch pending state, so a later real run neither mistakes
+        this for a finished pipeline nor resumes from it.
+        """
+        root.mkdir(parents=True, exist_ok=True)
+        self._stage_cleaned(plan, root)
+        datasets = self._format_candidate(plan, root)
+        partitions = self._partition_candidate(datasets, root)
+        audits = self._audit_candidate(datasets)
+        preview = {
+            "schema_version": 0,
+            "dry_run": True,
+            "candidate_id": candidate_id,
+            "plan_id": plan.plan_id,
+            "dataset_labels": list(plan.dataset_labels or []),
+            "datasets": {label: str(path) for label, path in datasets.items()},
+            "partitions": {
+                label: {"n_train": part["n_train"], "n_eval": part["n_eval"],
+                        "source_sha256": part["source_sha256"],
+                        "seed": part["seed"], "frac": part["frac"]}
+                for label, part in partitions.items()
+            },
+            "audits": audits,
+            "skipped_stages": ["train", "eval", "merge", "benchmark", "promote"],
+        }
+        path = root / "candidate-dryrun.json"
+        atomic_write_json(path, preview)
+        return {"dry_run": True, "candidate_id": candidate_id,
+                "manifest": str(path), **preview}
+
+    def run_candidate(self, plan, dry_run: bool = False) -> tuple[bool, dict]:
         candidate_id = self.state.pending_candidate or self._candidate_id(plan)
         root = self._candidate_root(candidate_id)
+        if dry_run:
+            return True, self._dry_run_candidate(plan, candidate_id, root)
         manifest_path = root / "candidate.json"
         if manifest_path.is_file():
             manifest = json.loads(manifest_path.read_text())
@@ -484,12 +524,33 @@ class Scheduler:
         plan = plan_harvest(self.cfg)
 
         if dry_run:
-            return RunResult(
-                success=True, phase="dry-run",
-                message=f"would harvest: {plan.should_harvest}, train: {plan.should_train}",
-                duration_seconds=0,
-                harvest_stats={"plan": plan.reason},
-            )
+            preview: dict = {
+                "success": True, "phase": "dry-run",
+                "message": (f"would harvest: {plan.should_harvest}, "
+                            f"train: {plan.should_train}"),
+                "duration_seconds": 0,
+                "harvest_stats": {"plan": plan.reason},
+            }
+            # Pre-validate the candidate pipeline's cheap stages, so a bad
+            # corpus, a contaminated split or bench leakage surfaces now rather
+            # than after the GPU hours are spent. Anything that raises here is
+            # the fail-closed behaviour being reported, not a new failure mode.
+            if plan.should_train:
+                try:
+                    candidate_id = self.state.pending_candidate or self._candidate_id(plan)
+                    _, details = self.run_candidate(plan, dry_run=True)
+                    preview["message"] += (
+                        f"; candidate {candidate_id} pre-validated "
+                        f"(train/eval/merge/benchmark/promote skipped)")
+                    preview["candidate_stats"] = details
+                except Exception as exc:  # noqa: BLE001
+                    return RunResult(
+                        False, "dry-run",
+                        f"candidate pre-validation failed: {exc}",
+                        time.time() - start,
+                        harvest_stats={"plan": plan.reason},
+                    )
+            return RunResult(**preview)
 
         source_errors = [s.error for s in plan.sources if s.error]
         if source_errors:
@@ -664,6 +725,14 @@ def main(cfg: Config, argv: list[str]) -> int:
         print(f"  message: {result.message}")
         if result.harvest_stats:
             print(f"  harvest: {result.harvest_stats}")
+        if result.candidate_stats:
+            cand = result.candidate_stats
+            print(f"  candidate {cand.get('candidate_id')} (pre-validated)")
+            for label, part in (cand.get("partitions") or {}).items():
+                audit = (cand.get("audits") or {}).get(label, {})
+                print(f"    {label}: train={part['n_train']} eval={part['n_eval']} "
+                      f"contamination={audit.get('status', '?')}")
+            print(f"    skipped: {', '.join(cand.get('skipped_stages', []))}")
         if result.train_stats:
             print(f"  train: {result.train_stats}")
         if result.deploy_stats:
