@@ -76,6 +76,23 @@ class VerifyResult:
     detail: str
 
 
+# A verify check runs arbitrary shell. Without a bound, one slow command (a
+# sleep, a network call, anything reading stdin) wedges the whole benchmark --
+# and bench_suite is what _candidate_pipeline calls to build the promotion
+# manifest, so the stall happens with no timeout anywhere above it either.
+CHECK_COMMAND_TIMEOUT = 30
+
+
+def _check_timeout(check: dict) -> float:
+    """Timeout for a command check; overridable per check with "timeout"."""
+    raw = check.get("timeout", CHECK_COMMAND_TIMEOUT)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return float(CHECK_COMMAND_TIMEOUT)
+    return value if value > 0 else float(CHECK_COMMAND_TIMEOUT)
+
+
 def verify_check(sandbox: Path, check: dict) -> VerifyResult:
     """Evaluate one check dict against the sandbox dir.
 
@@ -105,13 +122,27 @@ def verify_check(sandbox: Path, check: dict) -> VerifyResult:
             ok = p.is_file() and re.search(check["pattern"], p.read_text(errors="ignore")) is not None
             return VerifyResult(ok, f"file_regex {check['path']} ~ /{check['pattern']}/")
         if kind == "command_exit":
-            rc = subprocess.run(check["cmd"], shell=True, cwd=str(sandbox),
-                                capture_output=True, text=True).returncode
+            timeout = _check_timeout(check)
+            try:
+                rc = subprocess.run(check["cmd"], shell=True, cwd=str(sandbox),
+                                    capture_output=True, text=True,
+                                    timeout=timeout).returncode
+            except subprocess.TimeoutExpired:
+                return VerifyResult(False,
+                                    f"command_exit timed out after {timeout}s: "
+                                    f"{check['cmd']}")
             want = int(check.get("expect_code", 0))
             return VerifyResult(rc == want, f"command_exit rc={rc} (want {want}): {check['cmd']}")
         if kind == "command_output":
-            out = subprocess.run(check["cmd"], shell=True, cwd=str(sandbox),
-                                 capture_output=True, text=True).stdout
+            timeout = _check_timeout(check)
+            try:
+                out = subprocess.run(check["cmd"], shell=True, cwd=str(sandbox),
+                                     capture_output=True, text=True,
+                                     timeout=timeout).stdout
+            except subprocess.TimeoutExpired:
+                return VerifyResult(False,
+                                    f"command_output timed out after {timeout}s: "
+                                    f"{check['cmd']}")
             ok = check["expect"] in out
             return VerifyResult(ok, f"command_output ~ {check['expect']!r}")
     except Exception as e:  # noqa: BLE001
