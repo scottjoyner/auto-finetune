@@ -13,12 +13,16 @@ Usage:
 
 import subprocess, json, socket, time
 from pathlib import Path
+
+from src.config import scratch_dir
 from datetime import datetime
 
 NODE_IP = "100.81.57.77"
 NODE_NAME = "destroyer"
 SSH_KEY = "~/.ssh/id_ed25519"
-DEPLOY_DIR = "/tmp/destroyer_deploy"
+# Local staging for the package that gets scp'd to the node. Was /tmp,
+# which is reboot-volatile, so a redeploy after a reboot found it empty.
+DEPLOY_DIR = scratch_dir("destroyer_deploy")
 
 # Deploy package files
 DEPLOY_FILES = [

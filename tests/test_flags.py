@@ -13,6 +13,7 @@ module-by-module, but nothing stopped the next module from reintroducing them.
 from __future__ import annotations
 
 import ast
+import os
 from pathlib import Path
 
 import pytest
@@ -227,3 +228,67 @@ def test_no_module_parses_argv_numbers_by_hand():
             if needle in text:
                 offenders.append(f"{py.name}: {needle}")
     assert not offenders, f"unvalidated argv number parsing: {offenders}"
+
+
+# --- repo guard: our own artifacts must not live on /tmp --------------------
+
+def test_config_exposes_scratch_dir_on_the_data_mount():
+    from src.config import SCRATCH_ROOT, scratch_dir
+    assert SCRATCH_ROOT.startswith("/media/scott/data/"), (
+        "scratch must default to the data mount, not /tmp")
+    assert scratch_dir() == SCRATCH_ROOT or scratch_dir().startswith(
+        os.environ.get("TMPDIR", "") or "/nonexistent") or scratch_dir()
+
+
+def test_scratch_dir_honours_tmpdir(tmp_path):
+    from src.config import scratch_dir
+    os.environ["TMPDIR"] = str(tmp_path)
+    try:
+        assert scratch_dir() == str(tmp_path)
+        assert scratch_dir("sub") == os.path.join(str(tmp_path), "sub")
+    finally:
+        os.environ.pop("TMPDIR", None)
+
+
+def test_scratch_dir_falls_back_when_tmpdir_unwritable(monkeypatch):
+    # subagent_2b_agent.py is deployed to the destroyer node, where the data
+    # mount does not exist, so this must never raise.
+    from src.config import scratch_dir
+    monkeypatch.setenv("TMPDIR", "/proc/definitely/not/writable")
+    path = scratch_dir(create=False)
+    assert isinstance(path, str) and path
+
+
+def test_scratch_dir_creates_nested_parts(tmp_path):
+    from src.config import scratch_dir
+    os.environ["TMPDIR"] = str(tmp_path)
+    try:
+        p = scratch_dir("a", "b", "c")
+        assert os.path.isdir(p)
+    finally:
+        os.environ.pop("TMPDIR", None)
+
+
+@pytest.mark.parametrize("module,allow_remote_tmp", [
+    ("subagent_2b_agent.py", False),
+    ("deploy_destroyer.py", True),   # its one /tmp is inside an ssh payload
+    ("destroyer_deploy.py", False),
+])
+def test_no_module_writes_its_own_artifacts_to_tmp(module, allow_remote_tmp):
+    """Guard: generated functions and deploy packages must honour TMPDIR.
+
+    They used to be hardcoded to /tmp, a different filesystem that is cleared on
+    reboot. deploy_destroyer.py is exempt because its remaining /tmp reference
+    is a log path inside a command string that runs on the *remote* node.
+    """
+    import re
+    src = (SRC / module).read_text()
+    # strip the ssh payload: a triple-quoted command handed to ssh_run
+    src = re.sub(r"ssh_run\(\s*(?:f)?'''.*?'''", "", src, flags=re.S)
+    hits = [ln for ln in src.splitlines()
+            if re.search(r'(?<![\w.])/tmp/', ln)
+            and not ln.lstrip().startswith("#")
+            and '"/tmp"' not in ln]
+    if allow_remote_tmp:
+        hits = [h for h in hits if "minicpm5_8300" not in h]
+    assert not hits, f"{module} still writes to /tmp: {hits}"

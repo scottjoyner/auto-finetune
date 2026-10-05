@@ -3,9 +3,14 @@
 import json, urllib.request, time, subprocess, sys, os
 
 sys.path.insert(0, "/home/scott/git/auto-finetune")
+from src.config import scratch_dir
 from src.locking import atomic_write_json
 
 DESTROYER_IP = "100.81.57.77"
+# Local artifact: honour TMPDIR / the data mount rather than /tmp, which is a
+# separate filesystem cleared on reboot. (The server log inside the ssh command
+# stays on the remote node's own /tmp -- that path belongs to the destroyer.)
+RESULTS_PATH = os.path.join(scratch_dir(), "destroyer_deploy_results.json")
 PASSWORD = "gluhlaf8"
 SERVER_URL = f"http://{DESTROYER_IP}:8300/v1/chat/completions"
 LOCAL_URL = "http://127.0.0.1:38899/v1/chat/completions"
@@ -100,5 +105,5 @@ if __name__ == "__main__":
             "destroyer_status": "DEPLOYED" if destroyer_res["success"] else "FAILED",
         }
     }
-    atomic_write_json("/tmp/destroyer_deploy_results.json", results)
-    print("\nResults saved to /tmp/destroyer_deploy_results.json")
+    atomic_write_json(RESULTS_PATH, results)
+    print(f"\nResults saved to {RESULTS_PATH}")

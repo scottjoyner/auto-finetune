@@ -12,7 +12,11 @@ for port in 8094 8095; do
   echo "=== $tag (:8094/:8095 -> $port) ==="
   # 2026-08-25: keep per-task rows, not just the completion headline —
   # partial-pass detail is where finetune-vs-stock knowledge gains show.
-  DETAIL=/tmp/showdown-detail-$tag.txt
+  # Scratch honours TMPDIR and defaults to the staging tmp on the data mount;
+  # /tmp is a separate filesystem that is cleared on reboot.
+  DETAIL_DIR=${TMPDIR:-/media/scott/data/finetune-staging/tmp}
+  mkdir -p "$DETAIL_DIR" 2>/dev/null || DETAIL_DIR=/tmp
+  DETAIL="$DETAIL_DIR/showdown-detail-$tag.txt"
   python -m src.cli bench --runner=lfm25 --base-url=http://127.0.0.1:$port \
     --tasks=$TASKS 2>&1 | tee "$DETAIL" | grep -E "completion:" || true
   grep -E "task|PASS|FAIL|✓|✗|passed" "$DETAIL" | grep -v "completion:" | head -40 || true

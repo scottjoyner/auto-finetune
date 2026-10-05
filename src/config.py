@@ -12,6 +12,44 @@ def project_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+# Scratch lives on the data mount, not /tmp. /tmp is a separate filesystem that
+# is cleared on reboot, so generated shell functions and deploy packages written
+# there did not survive. This is the same path the docs and cron already export
+# as TMPDIR.
+SCRATCH_ROOT = "/media/scott/data/finetune-staging/tmp"
+
+
+def scratch_dir(*parts: str, create: bool = True) -> str:
+    """Return a writable scratch directory, preferring TMPDIR.
+
+    Resolution order: $TMPDIR, then the staging tmp on the data mount, then
+    tempfile's default. The last fallback matters because this module is also
+    imported by subagent_2b_agent.py, which is deployed to the destroyer node,
+    where the data mount does not exist -- so this must never raise.
+    """
+    import tempfile
+
+    candidates = [os.environ.get("TMPDIR"), SCRATCH_ROOT,
+                  tempfile.gettempdir(), "/tmp"]
+    for base in candidates:
+        if not base:
+            continue
+        path = os.path.join(base, *parts) if parts else base
+        if not create:
+            return path
+        try:
+            os.makedirs(path, exist_ok=True)
+            probe = os.path.join(path, ".writable")
+            with open(probe, "w"):
+                pass
+            os.remove(probe)
+            return path
+        except OSError:
+            continue
+    # Nothing was writable; hand back the last resort without creating it.
+    return os.path.join(tempfile.gettempdir(), *parts) if parts else tempfile.gettempdir()
+
+
 def _deep_merge(base: dict, override: dict) -> dict:
     out = dict(base)
     for k, v in override.items():

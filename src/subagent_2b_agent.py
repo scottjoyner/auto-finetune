@@ -8,6 +8,8 @@ import json
 import os
 import re
 import subprocess
+
+from src.config import scratch_dir
 import time
 import urllib.request
 
@@ -157,7 +159,7 @@ def run_2b_agent(task, model="minicpm5-2b", max_steps=5):
             fallback = extract_fallback(content)
             func_name, func_code = extract_function(content)
             if func_code:
-                path = f"/tmp/{func_name}.sh"
+                path = os.path.join(scratch_dir(), f"{func_name}.sh")
                 with open(path, "w") as f:
                     f.write(func_code + "\n")
                 os.chmod(path, 0o755)
@@ -223,7 +225,8 @@ def run_2b_agent(task, model="minicpm5-2b", max_steps=5):
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("--task", default="echo v5_test > /tmp/v5.txt")
+    p.add_argument("--task",
+                   default=f"echo v5_test > {os.path.join(scratch_dir(), 'v5.txt')}")
     p.add_argument("--model", default="minicpm5-2b")
     a = p.parse_args()
     r = run_2b_agent(a.task, a.model)
