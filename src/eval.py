@@ -169,12 +169,16 @@ class PartitionResult:
 
 def build_disjoint_partition(source_path: str | Path, out_dir: str | Path,
                              frac: float = 0.1, seed: int = 42,
-                             label: str | None = None) -> PartitionResult:
+                             label: str | None = None,
+                             held_out: set[str] | None = None) -> PartitionResult:
     """Write a deterministic, duplicate-safe train/eval pair for a future run.
 
     The source is read-only. Identical canonical rows are grouped before seeded
     selection, so duplicates can never land on opposite sides of the boundary.
     Both outputs preserve source order and are replaced atomically.
+
+    ``held_out`` session ids are dropped before splitting, and provenance is
+    carried through to both outputs so the partition stays auditable.
     """
     src = Path(source_path)
     if not src.is_file():
@@ -183,6 +187,30 @@ def build_disjoint_partition(source_path: str | Path, out_dir: str | Path,
         raise ValueError("held-out fraction must be between 0 and 1")
     raw = src.read_bytes()
     rows = [json.loads(line) for line in raw.decode().splitlines() if line.strip()]
+
+    # A split of a contaminated source is still contaminated: this function's
+    # job is to separate train from eval, not to sanitize against the benchmark.
+    # Drop held-out benchmark sessions here so `eval-split` cannot launder them.
+    held_out = held_out or set()
+    # Local import: src.format_dataset pulls in clean/config, and keeping
+    # this out of module scope avoids any import cycle as it grows.
+    from src.format_dataset import read_provenance, write_provenance
+
+    sids = read_provenance(src)
+    if sids is not None:
+        if len(sids) != len(rows):
+            raise ValueError(
+                f"provenance has {len(sids)} rows but {src.name} has {len(rows)}")
+        held = {i for i, s in enumerate(sids) if s and s in held_out}
+        if held:
+            rows = [r for i, r in enumerate(rows) if i not in held]
+            sids = [s for i, s in enumerate(sids) if i not in held]
+            print(f"[eval-split] dropped {len(held)} held-out benchmark "
+                  f"session row(s) from {src.name}")
+    else:
+        sids = ["" for _ in rows]
+        print(f"[eval-split] WARNING no provenance sidecar for {src.name}; "
+              "cannot confirm the benchmark holdout held")
     groups: dict[str, list[int]] = {}
     for index, row in enumerate(rows):
         groups.setdefault(_canonical_row(row), []).append(index)
@@ -201,6 +229,9 @@ def build_disjoint_partition(source_path: str | Path, out_dir: str | Path,
         held_indexes.update(groups[key])
     train_rows = [row for i, row in enumerate(rows) if i not in held_indexes]
     eval_rows = [row for i, row in enumerate(rows) if i in held_indexes]
+    # Provenance follows the same index partition, so both halves stay auditable.
+    train_sids = [s for i, s in enumerate(sids) if i not in held_indexes]
+    eval_sids = [s for i, s in enumerate(sids) if i in held_indexes]
 
     inferred = src.stem.removeprefix("train.") or "dataset"
     label = label or inferred
@@ -210,6 +241,8 @@ def build_disjoint_partition(source_path: str | Path, out_dir: str | Path,
     encode = lambda values: "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in values)
     _atomic_text(train_path, encode(train_rows))
     _atomic_text(eval_path, encode(eval_rows))
+    write_provenance(train_path, train_sids)
+    write_provenance(eval_path, eval_sids)
     result = PartitionResult(src, train_path, eval_path, train_rows, eval_rows,
                              _sha256_bytes(raw), seed, frac)
     atomic_write_json(root / "partition.json", {

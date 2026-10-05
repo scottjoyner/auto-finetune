@@ -166,8 +166,28 @@ def _dispatch(argv: list[str], cfg=None) -> int:
                     return 3
             return 0
         if cmd == "combine":
+            from src.analyze import benchmark_session_ids
             from src.format_dataset import combine as run
-            run(cfg)
+            exclude = set()
+            if _parse_str_flag(argv, "--no-holdout") != "1":
+                exclude = benchmark_session_ids(
+                    _parse_str_flag(argv, "--holdout")
+                    or "eval/tasks/auto-verified.jsonl")
+            run(cfg, exclude=exclude)
+            if exclude:
+                from src.format_dataset import verify_dataset
+                out = os.path.join(cfg.path("dataset_dir"), "train.combined.jsonl")
+                v = verify_dataset(out, exclude)
+                print(f"[combine] holdout verify: {v['status']} "
+                      f"({v['n_rows']} rows / {v['n_sessions']} sessions)")
+                if v["status"] == "contaminated":
+                    for h in v["leaked"][:10]:
+                        print(f"  LEAK {h}")
+                    return 3
+                if v["status"] == "unverifiable":
+                    print("[error] merged corpus has no provenance; cannot "
+                          "confirm the benchmark holdout held")
+                    return 3
             return 0
         if cmd == "analyze":
             from src.analyze import analyze_all
@@ -418,6 +438,7 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             from src.verify_gap import main as run
             return run(cfg, argv)
         if cmd == "eval-split":
+            from src.analyze import benchmark_session_ids
             from src.eval import build_disjoint_partition
             frac = float(_parse_str_flag(argv, "--frac") or "0.1")
             seed = _parse_int_flag(argv, "--seed") or 42
@@ -429,11 +450,29 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             out = (_parse_str_flag(argv, "--out")
                    or os.path.join(Path(cfg.path("dataset_dir")).parent,
                                    "future-runs", f"{label}-seed{seed}"))
+            # Splitting a contaminated source leaves it contaminated, so the
+            # benchmark holdout is applied here too.
+            held = set()
+            if _parse_str_flag(argv, "--no-holdout") != "1":
+                held = benchmark_session_ids(
+                    _parse_str_flag(argv, "--holdout")
+                    or "eval/tasks/auto-verified.jsonl")
             result = build_disjoint_partition(source_path, out, frac=frac,
-                                              seed=seed, label=label)
+                                              seed=seed, label=label,
+                                              held_out=held)
             print(f"[eval-split] source unchanged: {result.source_path}")
             print(f"[eval-split] future train: {result.train_path}")
             print(f"[eval-split] held-out eval: {result.eval_path}")
+            if held:
+                from src.format_dataset import verify_dataset
+                v = verify_dataset(result.train_path, held)
+                print(f"[eval-split] holdout verify: {v['status']} "
+                      f"({v['n_rows']} rows / {v['n_sessions']} sessions)")
+                if v["status"] != "clean":
+                    for h in v["leaked"][:10]:
+                        print(f"  LEAK {h}")
+                    print("[error] partition contains held-out benchmark sessions")
+                    return 3
             return 0
         if cmd == "eval":
             from src.eval import evaluate, evaluate_baseline
@@ -534,7 +573,23 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             general = [s.strip() for s in (
                 _parse_str_flag(argv, "--general")
                 or os.path.join(dset, "general-norobots.jsonl")).split(",") if s.strip()]
-            mix_corpus(tool, out, general, general_ratio=ratio, seed=seed)
+            exclude = set()
+            if _parse_str_flag(argv, "--no-holdout") != "1":
+                from src.analyze import benchmark_session_ids
+                exclude = benchmark_session_ids(
+                    _parse_str_flag(argv, "--holdout")
+                    or "eval/tasks/auto-verified.jsonl")
+            mix_corpus(tool, out, general, general_ratio=ratio, seed=seed,
+                       exclude=exclude)
+            if exclude:
+                from src.format_dataset import verify_dataset
+                v = verify_dataset(out, exclude)
+                print(f"[mixcorpus] holdout verify: {v['status']} "
+                      f"({v['n_rows']} rows / {v['n_sessions']} sessions)")
+                if v["status"] == "contaminated":
+                    for h in v["leaked"][:10]:
+                        print(f"  LEAK {h}")
+                    return 3
             return 0
 
         if cmd == "merge":

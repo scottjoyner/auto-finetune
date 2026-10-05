@@ -322,6 +322,50 @@ def _output_dir(t: dict) -> str:
     return t.get("output_dir", "outputs/checkpoints")
 
 
+def _reject_held_out(data_path: str) -> str:
+    """Refuse to train on a corpus containing held-out benchmark sessions.
+
+    Fails closed on a missing sidecar by default: an unverifiable corpus is not
+    a clean one. ``TRAIN_ALLOW_UNVERIFIED=1`` downgrades that to a warning for
+    legacy artifacts, and an empty ``held_out`` skips the check entirely.
+    """
+    import os as _os
+
+    if _os.environ.get("TRAIN_SKIP_HOLDOUT_CHECK") == "1":
+        print("[train] holdout check skipped by TRAIN_SKIP_HOLDOUT_CHECK=1")
+        return "skipped"
+    from src.analyze import benchmark_session_ids
+    from src.format_dataset import verify_dataset
+
+    held = benchmark_session_ids("eval/tasks/auto-verified.jsonl")
+    if not held:
+        print("[train] no benchmark sessions resolved; holdout check inactive")
+        return "inactive"
+    v = verify_dataset(data_path, held)
+    if v["status"] == "contaminated":
+        leaked = sorted({h.get("session_id") for h in v["leaked"] if h.get("session_id")})
+        print(f"[train] REFUSING: {v['n_rows']} rows contain {len(leaked)} "
+              f"held-out benchmark session(s): {leaked[:10]}")
+        print(f"[train] dataset: {data_path}")
+        print("[train] rebuild with `cli format` / `cli combine` / `cli mixcorpus` "
+              "(each holds the benchmark out). This check is not waivable: "
+              "training on the eval set makes every later number meaningless.")
+        return "contaminated"
+    if v["status"] == "unverifiable":
+        msg = (f"[train] no provenance sidecar for {data_path}; cannot confirm "
+               "the benchmark holdout held")
+        if _os.environ.get("TRAIN_ALLOW_UNVERIFIED") == "1":
+            print(f"[train] WARNING: {msg} (allowed by TRAIN_ALLOW_UNVERIFIED=1)")
+            return "unverifiable"
+        print(f"[train] REFUSING: {msg}")
+        print("[train] rebuild the corpus, or set TRAIN_ALLOW_UNVERIFIED=1 to "
+              "train on an unverifiable dataset.")
+        return "unverifiable"
+    print(f"[train] holdout verify: clean ({v['n_rows']} rows / "
+          f"{v['n_sessions']} sessions)")
+    return "clean"
+
+
 def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: str | None = None, max_examples: int | None = None, tokenized_dir: str | None = None) -> int:
     dataset_dir = os.environ.get("TRAIN_DATASET_DIR") or cfg.path("dataset_dir")
     tokenized_dir = tokenized_dir or os.environ.get("TRAIN_TOKENIZED_DIR")
@@ -331,6 +375,12 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
     if source:
         fn_parts.append(source)
     data_path = os.path.join(dataset_dir, ".".join(fn_parts) + ".jsonl")
+    # Last line of defence: every emit path now holds out the benchmark, but
+    # train is the only place that knows what is actually being fitted. A
+    # dataset assembled before that enforcement can still be contaminated.
+    # Contaminated is never waivable; unverifiable is, via TRAIN_ALLOW_UNVERIFIED.
+    if _reject_held_out(data_path) == "contaminated":
+        return 3
     data = validate_dataset(data_path)
     if max_examples is not None and max_examples > 0:
         data = data[:max_examples]

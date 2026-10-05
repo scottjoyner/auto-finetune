@@ -17,6 +17,27 @@ from src.config import Config
 from src.locking import atomic_write_json
 
 
+def _atomic_text(path: "str | Path", text: str) -> None:
+    """Replace a text file atomically (tmp file in the same dir, then rename)."""
+    import tempfile
+
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{p.name}.", suffix=".tmp",
+                                    dir=str(p.parent))
+    try:
+        with os.fdopen(fd, "w") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_name, p)
+    finally:
+        try:
+            os.unlink(tmp_name)
+        except FileNotFoundError:
+            pass
+
+
 def _render_part(p: dict) -> str:
     t = p.get("type")
     if t == "text":
@@ -370,36 +391,55 @@ _COMBINE_LABELS = (
 )
 
 
-def combine(cfg: Config) -> int:
+def combine(cfg: Config, exclude: set[str] | None = None) -> int:
     """Merge all per-source datasets into one train.combined.jsonl.
 
     This is the "finetune them all together" equivalent: a single corpus over
     the union of sources, ready for one LoRA run with --label=combined.
+
+    Carries each source row's provenance through the dedupe so the merged corpus
+    stays auditable, and drops any held-out benchmark session. Sources lacking a
+    sidecar are merged but reported unverifiable rather than assumed clean.
     """
     dataset_dir = cfg.path("dataset_dir")
     out_path = os.path.join(dataset_dir, "train.combined.jsonl")
     seen: set[str] = set()
+    out_rows: list[str] = []
+    out_sids: list[str] = []
+    missing_provenance: list[str] = []
     total = 0
-    with open(out_path, "w") as out:
-        for label in _COMBINE_LABELS:
-            src = os.path.join(dataset_dir, f"train.{label}.jsonl")
-            if not os.path.exists(src):
-                print(f"[combine] skip missing {src}")
+    for label in _COMBINE_LABELS:
+        src = os.path.join(dataset_dir, f"train.{label}.jsonl")
+        if not os.path.exists(src):
+            print(f"[combine] skip missing {src}")
+            continue
+        sids = read_provenance(src)
+        if sids is None:
+            missing_provenance.append(label)
+            sids = ["" for _ in range(sum(1 for _ in open(src)))]
+        n = 0
+        for i, line in enumerate(open(src)):
+            line = line.strip()
+            if not line:
                 continue
-            n = 0
-            for line in open(src):
-                line = line.strip()
-                if not line:
-                    continue
-                # de-dupe identical examples across sources
-                if line in seen:
-                    continue
-                seen.add(line)
-                out.write(line + "\n")
-                n += 1
-            print(f"[combine] {label}: {n} examples")
-            total += n
+            # de-dupe identical examples across sources
+            if line in seen:
+                continue
+            sid = sids[i] if i < len(sids) else ""
+            if exclude and sid and sid in exclude:
+                continue
+            seen.add(line)
+            out_rows.append(line)
+            out_sids.append(sid)
+            n += 1
+        print(f"[combine] {label}: {n} examples")
+        total += n
+    _atomic_text(out_path, "".join(r + "\n" for r in out_rows))
+    write_provenance(out_path, out_sids)
     print(f"[combine] wrote {total} unique examples -> {out_path}")
+    if missing_provenance:
+        print(f"[combine] WARNING no provenance sidecar for: "
+              f"{', '.join(missing_provenance)} (holdout unverifiable for those)")
     return total
 
 
@@ -500,6 +540,68 @@ def emit_strata(cfg: "Config", bucket_map: dict, out_dir: str,
                       {"counts": counts, "strata": provenance,
                        "excluded_sessions": sorted(exclude) if exclude else []})
     return counts
+
+
+def read_provenance(dataset_path: str | Path) -> list[str] | None:
+    """Return the session id per row for a dataset, or None if unavailable.
+
+    Sidecars are written by :func:`_write_dataset` and :func:`emit_strata`. A
+    dataset emitted before provenance existed has none, and callers must treat
+    that as unverifiable rather than clean.
+    """
+    p = Path(dataset_path)
+    sidecar = p.with_suffix(".provenance.jsonl")
+    if not sidecar.is_file():
+        return None
+    sids: list[str] = []
+    for line in sidecar.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        sids.append(str(json.loads(line).get("session_id") or ""))
+    return sids
+
+
+def write_provenance(dataset_path: str | Path, sids: list[str]) -> None:
+    """Write the row-aligned provenance sidecar for an already-written dataset.
+
+    Raises on a row-count mismatch: a sidecar that does not match its dataset
+    would make every later verification meaningless.
+    """
+    dataset_path = Path(dataset_path)
+    n_rows = sum(1 for line in dataset_path.open() if line.strip())
+    if len(sids) != n_rows:
+        raise ValueError(
+            f"provenance length {len(sids)} does not match "
+            f"{dataset_path.name} row count {n_rows}")
+    tmp = dataset_path.with_suffix(".provenance.jsonl.tmp")
+    with open(tmp, "w") as f:
+        for i, sid in enumerate(sids):
+            f.write(json.dumps({"row": i, "session_id": sid}) + "\n")
+    os.replace(tmp, dataset_path.with_suffix(".provenance.jsonl"))
+
+
+def verify_dataset(dataset_path: str | Path, held_out: set[str] | None) -> dict:
+    """Check one dataset's provenance sidecar for held-out sessions.
+
+    Returns ``{"status", "leaked", "n_rows", "n_sessions"}`` where status is
+    ``clean``, ``contaminated``, or ``unverifiable`` when no sidecar exists.
+    """
+    held_out = held_out or set()
+    path = Path(dataset_path)
+    sids = read_provenance(path)
+    if sids is None:
+        return {"status": "unverifiable", "leaked": [], "n_rows": 0, "n_sessions": 0}
+    n_rows = sum(1 for _ in path.open())
+    if len(sids) != n_rows:
+        return {"status": "contaminated", "n_rows": n_rows, "n_sessions": 0,
+                "leaked": [{"reason": f"provenance has {len(sids)} rows, "
+                                      f"dataset has {n_rows}"}]}
+    leaked = [{"row": i, "session_id": sid} for i, sid in enumerate(sids)
+              if sid and sid in held_out]
+    return {"status": "contaminated" if leaked else "clean",
+            "leaked": leaked[:50], "n_rows": n_rows,
+            "n_sessions": len({s for s in sids if s})}
 
 
 def verify_holdout(out_dir: str, held_out: set[str] | None) -> dict:

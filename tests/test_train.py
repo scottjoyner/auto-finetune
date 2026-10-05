@@ -209,3 +209,65 @@ def test_main_uses_label_dataset_path(tmp_path, monkeypatch):
 
     assert T.main(cfg, label="ssd") == 0
     assert seen["path"].endswith("train.ssd.jsonl")
+
+
+# ── train-time holdout gate ─────────────────────────────────────────────────
+
+def _mk(path, n, sessions=None):
+    from src.format_dataset import _write_dataset
+    rows = [{"messages": [{"role": "user", "content": f"r{i}"}]} for i in range(n)]
+    _write_dataset(str(path), rows, sessions or [f"s_{i}" for i in range(n)])
+    return path
+
+
+def test_train_gate_allows_clean_dataset(tmp_path, monkeypatch):
+    import src.train as T
+    ds = _mk(tmp_path / "train.x.jsonl", 4)
+    monkeypatch.setattr("src.analyze.benchmark_session_ids", lambda p: {"held"})
+    assert T._reject_held_out(str(ds)) == "clean"
+
+
+def test_train_gate_blocks_contaminated_and_is_not_waivable(tmp_path, monkeypatch):
+    import src.train as T
+    ds = _mk(tmp_path / "train.x.jsonl", 4, ["s_0", "held", "s_2", "s_3"])
+    monkeypatch.setattr("src.analyze.benchmark_session_ids", lambda p: {"held"})
+    monkeypatch.setenv("TRAIN_ALLOW_UNVERIFIED", "1")
+    assert T._reject_held_out(str(ds)) == "contaminated", (
+        "contamination must not be waivable -- it invalidates every eval")
+
+
+def test_train_gate_blocks_unverifiable_by_default(tmp_path, monkeypatch):
+    import src.train as T
+    ds = tmp_path / "train.x.jsonl"
+    ds.write_text('{"messages": []}\n')
+    monkeypatch.setattr("src.analyze.benchmark_session_ids", lambda p: {"held"})
+    monkeypatch.delenv("TRAIN_ALLOW_UNVERIFIED", raising=False)
+    assert T._reject_held_out(str(ds)) == "unverifiable"
+
+
+def test_train_gate_allows_unverifiable_when_waived(tmp_path, monkeypatch):
+    import src.train as T
+    ds = tmp_path / "train.x.jsonl"
+    ds.write_text('{"messages": []}\n')
+    monkeypatch.setattr("src.analyze.benchmark_session_ids", lambda p: {"held"})
+    monkeypatch.setenv("TRAIN_ALLOW_UNVERIFIED", "1")
+    assert T._reject_held_out(str(ds)) == "unverifiable"
+    # waived: still unverifiable, but main() lets it through
+
+
+def test_train_gate_inactive_when_no_bench_sessions(tmp_path, monkeypatch):
+    import src.train as T
+    ds = _mk(tmp_path / "train.x.jsonl", 2)
+    monkeypatch.setattr("src.analyze.benchmark_session_ids", lambda p: set())
+    monkeypatch.delenv("TRAIN_ALLOW_UNVERIFIED", raising=False)
+    assert T._reject_held_out(str(ds)) == "inactive"
+
+
+def test_train_main_refuses_contaminated_dataset(tmp_path, monkeypatch, cfg):
+    """The gate is wired into main, not just available as a helper."""
+    import src.train as T
+    ds = _mk(tmp_path / "train.x.jsonl", 4, ["s_0", "held", "s_2", "s_3"])
+    monkeypatch.setenv("TRAIN_DATASET_DIR", str(tmp_path))
+    monkeypatch.setattr("src.analyze.benchmark_session_ids", lambda p: {"held"})
+    monkeypatch.setattr(T, "validate_dataset", lambda p: [])
+    assert T.main(cfg, label="x") == 3

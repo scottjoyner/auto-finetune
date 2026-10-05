@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from conftest import make_cfg
 
 from src.format_dataset import (
@@ -521,3 +523,99 @@ def test_format_main_merged_output_is_verifiable(tmp_root):
     r = verify_holdout(str(ds_dir), {"h1"})
     assert r["status"] == "clean", r["leaked"]
     assert "h1" not in (ds_dir / "train.jsonl").read_text()
+
+
+# ── provenance helpers shared by combine / mixcorpus / eval-split ────────────
+
+def test_read_provenance_none_when_absent(tmp_path):
+    from src.format_dataset import read_provenance
+    (tmp_path / "train.x.jsonl").write_text("{}\n")
+    assert read_provenance(tmp_path / "train.x.jsonl") is None
+
+
+def test_write_provenance_roundtrip(tmp_path):
+    from src.format_dataset import read_provenance, write_provenance
+    ds = tmp_path / "train.x.jsonl"
+    ds.write_text('{"messages": []}\n{"messages": []}\n')
+    write_provenance(ds, ["a", "b"])
+    assert read_provenance(ds) == ["a", "b"]
+
+
+def test_write_provenance_rejects_length_mismatch(tmp_path):
+    from src.format_dataset import write_provenance
+    ds = tmp_path / "train.x.jsonl"
+    ds.write_text('{"messages": []}\n')
+    with pytest.raises(ValueError, match="row count 1"):
+        write_provenance(ds, ["a", "b"])
+
+
+def test_verify_dataset_flags_row_drift(tmp_path):
+    """A dataset that outgrew its sidecar must not read as clean.
+
+    Written via replace rather than write_provenance, which refuses to produce
+    a mismatched sidecar in the first place.
+    """
+    from src.format_dataset import verify_dataset, write_provenance
+    ds = tmp_path / "train.x.jsonl"
+    ds.write_text('{"messages": []}\n{"messages": []}\n')
+    write_provenance(ds, ["a", "b"])
+    ds.write_text(ds.read_text() + '{"messages": []}\n')  # dataset grew
+    v = verify_dataset(ds, set())
+    assert v["status"] == "contaminated"
+    assert "reason" in v["leaked"][0]
+
+
+def test_verify_dataset_unverifiable_without_sidecar(tmp_path):
+    from src.format_dataset import verify_dataset
+    ds = tmp_path / "train.x.jsonl"
+    ds.write_text('{"messages": []}\n')
+    assert verify_dataset(ds, {"h"})["status"] == "unverifiable"
+
+
+# ── combine carries provenance and honours the holdout ──────────────────────
+
+def _seed_corpus(tmp_path, n_per_label=2):
+    from src.format_dataset import _write_dataset
+    d = tmp_path / "data" / "datasets"
+    d.mkdir(parents=True, exist_ok=True)
+    labels = []
+    for label in ("ssd", "nas5-main", "opencode-portfolio", "hermes-reasoning"):
+        labels.append(label)
+        rows = [{"messages": [{"role": "user", "content": f"{label}-{i}"}]}
+                for i in range(n_per_label)]
+        _write_dataset(str(d / f"train.{label}.jsonl"), rows,
+                       [f"sess_{label}_{i}" for i in range(n_per_label)])
+    return d, labels
+
+
+def test_combine_writes_aligned_provenance(tmp_path):
+    from src.format_dataset import combine, read_provenance
+    import src.format_dataset as fd
+    d, labels = _seed_corpus(tmp_path)
+    cfg = make_cfg(paths={"dataset_dir": str(d)})
+    n = combine(cfg)
+    out = d / "train.combined.jsonl"
+    assert out.is_file()
+    sids = read_provenance(out)
+    assert sids is not None
+    assert len(sids) == n == sum(1 for _ in out.open())
+
+
+def test_combine_holds_out_benchmark_sessions(tmp_path):
+    from src.format_dataset import combine, read_provenance
+    d, _ = _seed_corpus(tmp_path)
+    cfg = make_cfg(paths={"dataset_dir": str(d)})
+    combine(cfg, exclude={"sess_ssd_0"})
+    out = d / "train.combined.jsonl"
+    assert "sess_ssd_0" not in read_provenance(out)
+    assert "ssd-0" not in out.read_text()
+
+
+def test_combine_flags_missing_sidecars(tmp_path, capsys):
+    from src.format_dataset import combine
+    d, labels = _seed_corpus(tmp_path)
+    # strip one label's provenance
+    (d / "train.ssd.provenance.jsonl").unlink()
+    cfg = make_cfg(paths={"dataset_dir": str(d)})
+    combine(cfg)
+    assert "no provenance sidecar" in capsys.readouterr().out

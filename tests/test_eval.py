@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import pytest
 
 from src.eval import (build_disjoint_partition, build_held_out, parse_tool_calls,
                       score_tool_calls)
@@ -389,3 +390,63 @@ def test_compare_probes_and_format(tmp_path, monkeypatch):
     md = EV.format_probe_comparison(results)
     assert "base" in md and "ssd" in md and "nas5-main" in md
     assert "75.0%" in md  # ssd 3/4
+
+
+# ── benchmark holdout + provenance through the partition ─────────────────────
+
+def _dataset(path, n, prefix, sessions=None):
+    from src.format_dataset import _write_dataset
+    rows = [{"messages": [{"role": "user", "content": f"{prefix}-{i}"}]}
+            for i in range(n)]
+    _write_dataset(str(path), rows, sessions or [f"s_{prefix}_{i}" for i in range(n)])
+    return path
+
+
+def test_partition_drops_held_out_benchmark_sessions(tmp_path):
+    from src.eval import build_disjoint_partition
+    src = _dataset(tmp_path / "train.x.jsonl", 20, "x")
+    r = build_disjoint_partition(src, tmp_path / "out", frac=0.3, seed=1,
+                                 label="x", held_out={"s_x_4", "s_x_7"})
+    from src.format_dataset import read_provenance
+    sids = read_provenance(r.train_path) + read_provenance(r.eval_path)
+    assert "s_x_4" not in sids and "s_x_7" not in sids
+    assert len(r.train_rows) + len(r.eval_rows) == 18
+
+
+def test_partition_writes_provenance_for_both_halves(tmp_path):
+    from src.eval import build_disjoint_partition
+    from src.format_dataset import read_provenance
+    src = _dataset(tmp_path / "train.x.jsonl", 20, "x")
+    r = build_disjoint_partition(src, tmp_path / "out", frac=0.3, seed=1, label="x")
+    for path, rows in ((r.train_path, r.train_rows), (r.eval_path, r.eval_rows)):
+        sids = read_provenance(path)
+        assert sids is not None and len(sids) == len(rows)
+
+
+def test_partition_warns_when_source_has_no_provenance(tmp_path, capsys):
+    from src.eval import build_disjoint_partition
+    src = tmp_path / "train.x.jsonl"
+    src.write_text('{"messages": [{"role": "user", "content": "a"}]}\n'
+                   '{"messages": [{"role": "user", "content": "b"}]}\n')
+    build_disjoint_partition(src, tmp_path / "out", frac=0.5, seed=1, label="x")
+    assert "no provenance sidecar" in capsys.readouterr().out
+
+
+def test_partition_rejects_mismatched_provenance(tmp_path):
+    from src.eval import build_disjoint_partition
+    from src.format_dataset import _write_dataset
+    src = _dataset(tmp_path / "train.x.jsonl", 5, "x")
+    # grow the dataset behind the sidecar's back
+    with src.open("a") as f:
+        f.write('{"messages": [{"role": "user", "content": "extra"}]}\n')
+    with pytest.raises(ValueError, match="provenance has"):
+        build_disjoint_partition(src, tmp_path / "out", frac=0.5, seed=1, label="x")
+
+
+def test_partition_result_is_clean_after_holdout(tmp_path):
+    from src.eval import build_disjoint_partition
+    from src.format_dataset import verify_dataset
+    src = _dataset(tmp_path / "train.x.jsonl", 20, "x")
+    r = build_disjoint_partition(src, tmp_path / "out", frac=0.3, seed=1,
+                                 label="x", held_out={"s_x_1"})
+    assert verify_dataset(r.train_path, {"s_x_1"})["status"] == "clean"

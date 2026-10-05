@@ -102,12 +102,29 @@ python -m src.cli format                 # train.jsonl (merged) + train.<subdir>
 python -m src.cli format --source=hermes # train.hermes.jsonl
 python -m src.cli format --label=opencode-all   # train.opencode-all.jsonl (merged opencode subdirs)
 python -m src.cli combine                # train.combined.jsonl (deduped union of all labels)
+python -m src.cli mixcorpus              # train.mixed.jsonl (tool + general blend)
 # carve held-out splits the evaluator expects, per label:
 for L in ssd nas5-main nas5-20260717 nas5-old-broken nas5-recover-old \
          opencode-portfolio hermes-reasoning opencode-all combined; do
   python -m src.cli eval-split --label=$L --frac=0.1 || true
 done
 ```
+
+Every one of these holds out the benchmark suite
+(`eval/tasks/auto-verified.jsonl`) by default and writes a
+`train.<label>.provenance.jsonl` sidecar recording the source session for each
+row. `cli train` refuses to start on a corpus that contains a held-out
+benchmark session, or that has no sidecar at all.
+
+Two env vars, both for legacy artifacts only:
+
+| var | effect |
+|---|---|
+| `TRAIN_ALLOW_UNVERIFIED=1` | train on a corpus with no provenance sidecar (contamination is **never** waivable) |
+| `TRAIN_SKIP_HOLDOUT_CHECK=1` | skip the train-time gate entirely |
+
+`cli format` / `combine` / `mixcorpus` / `eval-split` also take
+`--no-holdout=1` to skip the holdout at emit time.
 
 `launch-next.sh` then trains each label in turn
 (`ssd → nas5-main → nas5-20260717 → opencode-all → opencode-portfolio →
