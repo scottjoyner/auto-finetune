@@ -70,3 +70,79 @@ def test_audit_fails_closed_when_nonempty_benchmark_has_no_evaluable_text():
     res = audit_leakage([], [{"metadata": {"name": "opaque"}}])
     assert res["n_eligible"] == 0
     assert res["status"] == "not_evaluable"
+
+
+# ── decontaminate ────────────────────────────────────────────────────────────
+
+def _bench(instr: str, bid: str = "b1") -> dict:
+    return {"id": bid, "source": "hermes", "instruction": instr}
+
+
+def test_decontaminate_drops_leaking_rows():
+    from src.audit import decontaminate
+    # The bench instruction must appear verbatim inside a training row; the
+    # audit is a substring check, so a paraphrase does not count.
+    bench = [_bench("install the signal cli and verify")]
+    train = [_train("unrelated chatter about files"),
+             _train("install the signal cli and verify"),
+             _train("more unrelated text")]
+    kept, dropped, res = decontaminate(train, bench)
+    assert len(kept) == 2
+    assert dropped == [1]
+    assert res["status"] == "clean"
+
+
+def test_decontaminate_reaches_fixpoint():
+    """audit_leakage reports only the first matching row per bench task.
+
+    Dropping that row can expose another carrying the same text, so one pass
+    under-reports: on the real ssd candidate a single pass left 3 of 6 hits.
+    """
+    from src.audit import decontaminate
+    instr = "install the signal cli please"
+    bench = [_bench(instr)]
+    # Three separate rows all carry the same instruction.
+    train = [_train(instr), _train(f"prefix {instr}"), _train(f"suffix {instr}")]
+    kept, dropped, res = decontaminate(train, bench)
+    assert res["status"] == "clean", "must iterate until no leakage remains"
+    assert res["n_hits"] == 0
+    assert dropped == [0, 1, 2]
+    assert kept == []
+
+
+def test_decontaminate_noop_when_clean():
+    from src.audit import decontaminate
+    bench = [_bench("a completely unrelated instruction here")]
+    train = [_train("nothing to see"), _train("also nothing")]
+    kept, dropped, res = decontaminate(train, bench)
+    assert kept == train
+    assert dropped == []
+    assert res["status"] == "clean"
+
+
+def test_decontaminate_refuses_when_task_id_unresolvable():
+    """Rows keyed by task_id cannot be dropped by position; fail closed."""
+    from src.audit import decontaminate
+    bench = [_bench("install the signal cli please")]
+    train = [{"task_id": "t-1",
+              "messages": [{"role": "user", "content": "install the signal cli please"}]}]
+    kept, dropped, res = decontaminate(train, bench)
+    assert res["status"] == "contaminated", "must not claim clean"
+    assert kept == train, "must not silently drop keyed rows"
+    assert dropped == []
+
+
+def test_decontaminate_empty_bench_is_clean():
+    from src.audit import decontaminate
+    kept, dropped, res = decontaminate([_train("anything")], [])
+    assert len(kept) == 1 and dropped == []
+
+
+def test_decontaminate_terminates_on_pathological_input():
+    """max_rounds guard: a bench task matching every row must still stop."""
+    from src.audit import decontaminate
+    bench = [_bench("shared token phrase")]
+    train = [_train("shared token phrase %d" % i) for i in range(40)]
+    kept, dropped, res = decontaminate(train, bench, max_rounds=5)
+    assert res["status"] in {"clean", "contaminated"}
+    assert len(kept) <= len(train)

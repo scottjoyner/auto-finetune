@@ -250,11 +250,46 @@ def test_audit_rejects_leakage_into_bench(sched, monkeypatch, tmp_path):
     import src.audit as audit
     bench = Path(sched.repo) / "eval" / "tasks" / "auto-verified.jsonl"
     monkeypatch.setattr(audit, "_load_jsonl", lambda p: [{"id": "t"}])
+    # A non-clean status must fail closed even when nothing is droppable.
     monkeypatch.setattr(audit, "audit_leakage",
-                        lambda train, bench: {"status": "leaked"})
+                        lambda train, bench, **k: {"status": "contaminated", "hits": [],
+                                                   "n_hits": 0, "n_train": 1})
     with pytest.raises(RuntimeError, match="failed contamination audit"):
         sched._audit_candidate({"ssd": tmp_path / "train.ssd.jsonl"})
     assert bench.name == "auto-verified.jsonl"
+
+
+def test_audit_fails_closed_on_non_contaminated_non_clean_status(
+        sched, monkeypatch, tmp_path):
+    """Only special-casing "contaminated" would let these through untouched."""
+    import src.audit as audit
+    monkeypatch.setattr(audit, "_load_jsonl", lambda p: [{"id": "t"}])
+    for status in ("leaked", "not_evaluable"):
+        monkeypatch.setattr(audit, "audit_leakage",
+                            lambda train, bench, s=status, **k: {
+                                "status": s, "hits": [], "n_hits": 0, "n_train": 1})
+        with pytest.raises(RuntimeError, match="failed contamination audit"):
+            sched._audit_candidate({"ssd": tmp_path / "train.ssd.jsonl"})
+
+
+def test_audit_decontaminates_and_continues(sched, monkeypatch, tmp_path):
+    """Contamination that can be dropped is cleaned, not fatal."""
+    src = tmp_path / "train.ssd.jsonl"
+    leak = "install the signal cli and verify"
+    src.write_text('{"messages":[{"role":"user","content":"clean row"}]}\n'
+                   + json.dumps({"messages": [{"role": "user", "content": leak}]}) + "\n")
+    import src.audit as audit
+    bench = [{"id": "b1", "instruction": "install the signal cli and verify"}]
+    real_load = audit._load_jsonl  # bound before patching, or the lambda recurses
+    monkeypatch.setattr(audit, "_load_jsonl",
+                        lambda p: bench if "auto-verified" in str(p) else real_load(p))
+    audits, datasets = sched._audit_candidate({"ssd": src})
+    assert audits["ssd"]["status"] == "clean"
+    assert audits["ssd"]["n_dropped"] == 1
+    clean = Path(datasets["ssd"])
+    assert clean.name == "train.ssd.decontaminated.jsonl"
+    assert clean.is_file()
+    assert "signal cli" not in clean.read_text()
 
 
 def test_audit_requires_bench_suite(sched, monkeypatch, tmp_path):
@@ -317,7 +352,7 @@ def test_pipeline_picks_lowest_loss_as_winner(sched, monkeypatch, tmp_path):
     monkeypatch.setattr(sched, "_partition_candidate",
                         lambda ds, root: {"a": {"train_path": "t", "eval_path": "e"},
                                           "b": {"train_path": "t", "eval_path": "e"}})
-    monkeypatch.setattr(sched, "_audit_candidate", lambda ds: {})
+    monkeypatch.setattr(sched, "_audit_candidate", lambda ds: ({}, ds))
     monkeypatch.setattr(sched, "_train_candidate",
                         lambda p, root, parts: {"a": "adapter-a", "b": "adapter-b"})
 
@@ -348,7 +383,7 @@ def _stub_candidate_stages(sched, monkeypatch, *, partitions=None, audits=None):
                     "seed": 42, "frac": 0.1, "n_train": 90, "n_eval": 10}})
     monkeypatch.setattr(
         sched, "_audit_candidate",
-        lambda ds: audits if audits is not None else {"ssd": {"status": "clean"}})
+        lambda ds: (audits if audits is not None else {"ssd": {"status": "clean"}}, ds))
 
 
 def test_run_candidate_dry_run_skips_gpu_stages(sched, monkeypatch):

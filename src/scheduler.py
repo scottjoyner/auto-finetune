@@ -221,21 +221,52 @@ class Scheduler:
             }
         return partitions
 
-    def _audit_candidate(self, datasets: dict[str, Path]) -> dict[str, dict]:
-        from src.audit import _load_jsonl, audit_leakage
+    def _audit_candidate(self, datasets: dict[str, Path]) -> tuple[dict[str, dict],
+                                                                  dict[str, Path]]:
+        """Audit each mix against the bench suite, decontaminating if needed.
+
+        Returns ``(audits, datasets)`` where ``datasets`` may point at
+        rewritten, decontaminated files. A candidate that cannot reach clean
+        still raises -- decontamination drops rows, it never relaxes the
+        standard.
+        """
+        from src.audit import _load_jsonl, audit_leakage, decontaminate
 
         bench_path = Path(self.repo) / "eval" / "tasks" / "auto-verified.jsonl"
         if not bench_path.is_file():
             raise RuntimeError(f"benchmark suite not found: {bench_path}")
         bench_rows = _load_jsonl(str(bench_path))
         audits: dict[str, dict] = {}
+        out: dict[str, Path] = {}
         for label, train_path in datasets.items():
-            result = audit_leakage(_load_jsonl(str(train_path)), bench_rows)
+            rows = _load_jsonl(str(train_path))
+            result = audit_leakage(rows, bench_rows)
             if result["status"] != "clean":
-                raise RuntimeError(
-                    f"candidate {label} failed contamination audit: {result['status']}")
+                # Any non-clean status is handled the same way: try to drop the
+                # offending rows, and still raise unless that reaches clean.
+                # Only special-casing "contaminated" would let "leaked" and
+                # "not_evaluable" pass through untouched.
+                kept, dropped, result = decontaminate(rows, bench_rows)
+                if result["status"] != "clean":
+                    raise RuntimeError(
+                        f"candidate {label} failed contamination audit: "
+                        f"{result['status']} ({result['n_hits']} hits in "
+                        f"{result['n_train']} rows)")
+                clean_path = Path(str(train_path).replace(".jsonl", ".decontaminated.jsonl"))
+                with open(clean_path, "w") as f:
+                    for row in kept:
+                        f.write(json.dumps(row) + "\n")
+                result = dict(result, n_dropped=len(dropped),
+                              dropped_refs=dropped,
+                              cleaned_path=str(clean_path))
+                print(f"[audit] decontaminated {label}: dropped {len(dropped)} of "
+                      f"{len(rows)} rows that carried benchmark text verbatim "
+                      f"({result['hit_rate']:.1%} of bench tasks affected)")
+                out[label] = clean_path
+            else:
+                out[label] = train_path
             audits[label] = result
-        return audits
+        return audits, out
 
     def _train_candidate(self, plan, root: Path, partitions: dict[str, dict]) -> dict[str, str]:
         outputs: dict[str, str] = {}
@@ -299,8 +330,8 @@ class Scheduler:
     def _candidate_pipeline(self, plan, root: Path) -> dict:
         self._stage_cleaned(plan, root)
         datasets = self._format_candidate(plan, root)
+        audits, datasets = self._audit_candidate(datasets)
         partitions = self._partition_candidate(datasets, root)
-        audits = self._audit_candidate(datasets)
         adapters = self._train_candidate(plan, root, partitions)
         losses = self._eval_candidate(root, partitions, adapters)
         winner = min(losses, key=losses.get)
@@ -360,8 +391,8 @@ class Scheduler:
         root.mkdir(parents=True, exist_ok=True)
         self._stage_cleaned(plan, root)
         datasets = self._format_candidate(plan, root)
+        audits, datasets = self._audit_candidate(datasets)
         partitions = self._partition_candidate(datasets, root)
-        audits = self._audit_candidate(datasets)
         preview = {
             "schema_version": 0,
             "dry_run": True,

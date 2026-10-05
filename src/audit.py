@@ -102,6 +102,60 @@ def audit_leakage(train_rows: list[dict], bench_rows: list[dict],
     }
 
 
+def decontaminate(train_rows: list[dict], bench_rows: list[dict],
+                  min_len: int = 12, max_rounds: int = 25
+                  ) -> tuple[list[dict], list[int], dict]:
+    """Drop training rows that contain a benchmark instruction verbatim.
+
+    Session-level holdout (``benchmark_session_ids``) removes the sessions the
+    tasks were mined from, but a *different* session can still quote them --
+    in practice dev sessions about building the benchmark itself. Those rows
+    are a small fraction of the mix, so dropping them is cheap; leaving them in
+    would let the model train on eval text.
+
+    This iterates to a fixpoint. ``audit_leakage`` reports only the first
+    matching row per bench task, so one pass under-reports: dropping that row
+    can expose another row carrying the same instruction. A single pass left 3
+    of 6 hits behind on the ssd candidate.
+
+    Only positional ``train_ref`` values are droppable. When a row carries a
+    ``task_id`` the audit reports that instead of an index, and we refuse to
+    guess -- we keep the contaminated rows and the caller fails closed.
+
+    Returns ``(kept_rows, dropped_original_indices, final_audit_result)``.
+    """
+    kept = list(train_rows)
+    # Original positional indices, so callers can trace what was removed.
+    drop_original: set[int] = set()
+    # Original index for each currently-kept row, for the same reason.
+    origin = list(range(len(train_rows)))
+    result = audit_leakage(kept, bench_rows, min_len=min_len)
+    unresolvable: list = []
+
+    for _ in range(max_rounds):
+        if result["status"] != "contaminated":
+            break
+        drop: set[int] = set()
+        for hit in result["hits"]:
+            ref = hit["train_ref"]
+            if isinstance(ref, int):
+                drop.add(ref)
+            else:
+                unresolvable.append(ref)
+        if unresolvable or not drop:
+            # Either rows are identified by task_id, not position, or we made
+            # no progress. Keep everything and let the caller fail closed.
+            return train_rows, [], result
+        drop_original.update(origin[i] for i in drop)
+        kept = [r for i, r in enumerate(kept) if i not in drop]
+        origin = [origin[i] for i in range(len(origin)) if i not in drop]
+        result = audit_leakage(kept, bench_rows, min_len=min_len)
+
+    if unresolvable:
+        return train_rows, [], result
+    return kept, sorted(drop_original), result
+
+
 def _load_jsonl(path: str) -> list[dict]:
     if not os.path.exists(path):
         raise FileNotFoundError(f"not found: {path}")
