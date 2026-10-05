@@ -273,3 +273,149 @@ def test_emit_strata_excludes_holdout(tmp_root):
     assert counts["file-edit"] >= 1
     assert not (out / "train.shell.jsonl").exists()
     assert (out / "train.file-edit.jsonl").exists()
+
+
+# ── provenance sidecars + holdout verification ───────────────────────────────
+
+def _write_stratum(out, bucket, sessions, rows_per_session=1):
+    """Mimic emit_strata's output: dataset file plus provenance sidecar."""
+    (out / f"train.{bucket}.jsonl").write_text(
+        "".join(json.dumps({"messages": [{"role": "user", "content": f"{bucket} {i}"}]}) + "\n"
+                for i in range(len(sessions) * rows_per_session)))
+    (out / f"train.{bucket}.provenance.jsonl").write_text(
+        "".join(json.dumps({"row": i, "session_id": sid}) + "\n"
+                for i, sid in enumerate(sessions)))
+
+
+def test_verify_holdout_clean(tmp_path):
+    from src.format_dataset import verify_holdout
+    _write_stratum(tmp_path, "debug", ["s1", "s2"])
+    r = verify_holdout(str(tmp_path), {"held_out"})
+    assert r["status"] == "clean"
+    assert r["n_rows"] == 2 and r["n_sessions"] == 2
+
+
+def test_verify_holdout_detects_leaked_session(tmp_path):
+    """The point of the sidecar: catch a held-out session after the fact."""
+    from src.format_dataset import verify_holdout
+    _write_stratum(tmp_path, "debug", ["s1", "held_out"])
+    r = verify_holdout(str(tmp_path), {"held_out"})
+    assert r["status"] == "contaminated"
+    assert r["leaked"][0]["session_id"] == "held_out"
+    assert r["leaked"][0]["row"] == 1
+
+
+def test_verify_holdout_flags_row_count_mismatch(tmp_path):
+    """A sidecar that drifts from its dataset must not read as clean."""
+    from src.format_dataset import verify_holdout
+    _write_stratum(tmp_path, "debug", ["s1", "s2"])
+    with (tmp_path / "train.debug.provenance.jsonl").open("a") as f:
+        f.write(json.dumps({"row": 9, "session_id": "s3"}) + "\n")
+    r = verify_holdout(str(tmp_path), set())
+    assert r["status"] == "contaminated"
+    assert any("reason" in h for h in r["leaked"])
+
+
+def test_verify_holdout_unverifiable_without_sidecars(tmp_path):
+    """Pre-existing strata have no sidecar; say so rather than claim clean."""
+    from src.format_dataset import verify_holdout
+    (tmp_path / "train.debug.jsonl").write_text('{"messages": []}\n')
+    r = verify_holdout(str(tmp_path), {"x"})
+    assert r["status"] == "unverifiable"
+
+
+def test_verify_holdout_orphaned_provenance(tmp_path):
+    from src.format_dataset import verify_holdout
+    (tmp_path / "train.debug.provenance.jsonl").write_text(
+        json.dumps({"row": 0, "session_id": "s1"}) + "\n")
+    r = verify_holdout(str(tmp_path), set())
+    assert r["status"] == "contaminated"
+
+
+def test_emit_strata_writes_provenance_and_manifest(tmp_root):
+    cleaned = tmp_root / "data" / "cleaned"
+    out = tmp_root / "data" / "analysis"
+    bm = _write_session(
+        cleaned / "s.json", "s1", "shell",
+        [_text("user", "run the tests"),
+         {"role": "assistant", "parts": [_tool("bash", {"command": "pytest"}, "ok")] * 3}])
+    bm.update(_write_session(
+        cleaned / "b.json", "s_bench", "shell",
+        [_text("user", "bench only"),
+         {"role": "assistant", "parts": [_tool("bash", {"command": "true"}, "ok")]}]))
+    cfg = make_cfg(paths={
+        "raw_dir": str(tmp_root / "data" / "raw"),
+        "cleaned_dir": str(cleaned),
+        "dataset_dir": str(tmp_root / "data" / "datasets")})
+    counts = emit_strata(cfg, bm, str(out), exclude={"s_bench"})
+
+    m = json.loads((out / "strata-manifest.json").read_text())
+    assert m["excluded_sessions"] == ["s_bench"]
+    assert m["counts"] == counts
+    assert counts["excluded"] == 1
+    for b in counts:
+        if b == "excluded":
+            continue
+        ds = out / f"train.{b}.jsonl"
+        pf = out / f"train.{b}.provenance.jsonl"
+        assert pf.is_file(), f"no provenance sidecar for {b}"
+        assert sum(1 for _ in ds.open()) == sum(1 for _ in pf.open())
+
+    from src.format_dataset import verify_holdout
+    r = verify_holdout(str(out), {"s_bench"})
+    assert r["status"] == "clean"
+    assert "s_bench" not in {s for st in m["strata"].values() for s in st["sessions"]}
+
+
+def test_emit_strata_provenance_stays_out_of_training_rows(tmp_root):
+    """Provenance belongs in the sidecar; the trainer reads only `messages`."""
+    cleaned = tmp_root / "data" / "cleaned"
+    out = tmp_root / "data" / "analysis"
+    bm = _write_session(
+        cleaned / "s.json", "s1", "shell",
+        [_text("user", "run the tests"),
+         {"role": "assistant", "parts": [_tool("bash", {"command": "pytest"}, "ok")] * 3}])
+    cfg = make_cfg(paths={
+        "raw_dir": str(tmp_root / "data" / "raw"),
+        "cleaned_dir": str(cleaned),
+        "dataset_dir": str(tmp_root / "data" / "datasets")})
+    emit_strata(cfg, bm, str(out), exclude=set())
+    for ds in out.glob("train.*.jsonl"):
+        if ds.name == "train.balanced.jsonl" or ds.name.endswith(".provenance.jsonl"):
+            continue
+        row = json.loads(ds.open().readline())
+        assert sorted(row) == ["messages"], f"{ds.name} gained keys: {sorted(row)}"
+
+
+def test_emit_strata_provenance_survives_balancing(tmp_root):
+    """Upsample/downsample reorders and repeats rows; sidecars must stay aligned."""
+    from src.format_dataset import verify_holdout
+    cleaned = tmp_root / "data" / "cleaned"
+    out = tmp_root / "data" / "analysis"
+    bm = {}
+    shell_msgs = []
+    for i in range(6):
+        shell_msgs.append(_text("user", f"step {i}"))
+        shell_msgs.append({"role": "assistant", "parts": [
+            _tool("bash", {"command": f"echo {i}"}, "ok")]})
+    bm.update(_write_session(cleaned / "s.json", "s1", "shell", shell_msgs))
+    bm.update(_write_session(
+        cleaned / "e.json", "e1", "file-edit",
+        [_text("user", "create module"),
+         {"role": "assistant", "parts": [
+             _tool("write", {"filePath": "/repo/x.py", "content": "x=1"}, "ok")]},
+         _text("assistant", "ok")]))
+    cfg = make_cfg(
+        paths={"raw_dir": str(tmp_root / "data" / "raw"),
+               "cleaned_dir": str(cleaned),
+               "dataset_dir": str(tmp_root / "data" / "datasets")},
+        format={"max_turns_per_example": 2, "template": "chatml",
+                "max_chars_per_example": 0})
+    counts = emit_strata(cfg, bm, str(out), balance=True, cap=2)
+    for b in counts:
+        ds = out / f"train.{b}.jsonl"
+        pf = out / f"train.{b}.provenance.jsonl"
+        if ds.name == "train.balanced.jsonl" or not pf.is_file():
+            continue
+        assert sum(1 for _ in ds.open()) == sum(1 for _ in pf.open()), b
+    assert verify_holdout(str(out), {"nothing"})["status"] == "clean"

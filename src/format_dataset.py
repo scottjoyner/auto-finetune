@@ -1,5 +1,4 @@
 """Reconstruct cleaned sessions into training examples.
-
 Each cleaned session is turned into one (or several, if windowed) conversation
 following a chat template: chatml | alpaca | sharegpt | hermes.
 
@@ -15,6 +14,7 @@ from typing import Any
 
 from src.clean import _dedup_by_session
 from src.config import Config
+from src.locking import atomic_write_json
 
 
 def _render_part(p: dict) -> str:
@@ -395,6 +395,11 @@ def emit_strata(cfg: "Config", bucket_map: dict, out_dir: str,
     max_chars = cfg.get("format", "max_chars_per_example", default=24000) or 0
 
     unique = _dedup_by_session(iter_cleaned_records(cfg.path("cleaned_dir")))
+    # Rows carry only `messages`, so once emitted there is no way to tell which
+    # session an example came from -- which is why a held-out benchmark session
+    # can end up back in the mix unnoticed. Carry the session id alongside each
+    # example as a sidecar instead of inside the training row: same provenance,
+    # no change to what the trainer reads.
     buckets: dict[str, list] = defaultdict(list)
     excluded = 0
     for sid, rec in unique.items():
@@ -408,34 +413,92 @@ def emit_strata(cfg: "Config", bucket_map: dict, out_dir: str,
         for w in _window_messages(rec.get("messages", []), max_turns, max_chars):
             if len(w) < 2:
                 continue
-            buckets[b].append(_format_window(w, template, system))
+            buckets[b].append((_format_window(w, template, system), sid))
 
     target = cap if cap else (max(len(v) for v in buckets.values()) if buckets else 0)
     counts: dict[str, int] = {}
-    for b, exs in sorted(buckets.items()):
+    provenance: dict[str, dict] = {}
+    for b, rows in sorted(buckets.items()):
         if balance and target:
-            if len(exs) < target:
+            if len(rows) < target:
                 # upsample by repetition
-                reps = target // len(exs)
-                exs = exs * reps + exs[: target - len(exs) * reps]
-            elif len(exs) > target:
+                reps = target // len(rows)
+                rows = rows * reps + rows[: target - len(rows) * reps]
+            elif len(rows) > target:
                 # downsample the dominant buckets by even stride sampling
-                step = len(exs) / target
-                exs = [exs[int(i * step)] for i in range(target)]
-            buckets[b] = exs
-        counts[b] = len(exs)
-        with open(os.path.join(out_dir, f"train.{b}.jsonl"), "w") as f:
-            for ex in exs:
+                step = len(rows) / target
+                rows = [rows[int(i * step)] for i in range(target)]
+            buckets[b] = rows
+        counts[b] = len(rows)
+        # Balance transforms run on (example, session_id) pairs, so row order
+        # stays aligned with the provenance sidecar written below.
+        sessions = sorted({sid for _, sid in rows})
+        provenance[b] = {"path": os.path.join(out_dir, f"train.{b}.jsonl"),
+                         "rows": len(rows), "sessions": sessions}
+        with open(os.path.join(out_dir, f"train.{b}.jsonl"), "w") as f, \
+             open(os.path.join(out_dir, f"train.{b}.provenance.jsonl"), "w") as pf:
+            for i, (ex, sid) in enumerate(rows):
                 f.write(json.dumps(ex) + "\n")
+                pf.write(json.dumps({"row": i, "session_id": sid}) + "\n")
 
     if balance and buckets:
         total = 0
         with open(os.path.join(out_dir, "train.balanced.jsonl"), "w") as f:
-            for b, exs in buckets.items():
-                for ex in exs:
+            for b, rows in buckets.items():
+                for ex, _sid in rows:
                     f.write(json.dumps(ex) + "\n")
                     total += 1
         counts["balanced"] = total
     if exclude is not None:
         counts["excluded"] = excluded
+    from src.locking import atomic_write_json
+    atomic_write_json(os.path.join(out_dir, "strata-manifest.json"),
+                      {"counts": counts, "strata": provenance,
+                       "excluded_sessions": sorted(exclude) if exclude else []})
     return counts
+
+
+def verify_holdout(out_dir: str, held_out: set[str] | None) -> dict:
+    """Check that no emitted stratum row came from a held-out session.
+
+    Reads the ``*.provenance.jsonl`` sidecars written by :func:`emit_strata`.
+    Returns ``{"status", "leaked", "n_rows", "n_sessions", "checked"}``; ``status``
+    is ``"clean"``, ``"contaminated"``, or ``"unverifiable"`` when a sidecar is
+    missing (which is the case for strata emitted before this existed).
+    """
+    held_out = held_out or set()
+    root = Path(out_dir)
+    leaked: list[dict] = []
+    n_rows = 0
+    n_sessions = 0
+    files = sorted(root.glob("train.*.provenance.jsonl"))
+    if not files:
+        return {"status": "unverifiable", "leaked": [], "n_rows": 0,
+                "n_sessions": 0, "checked": []}
+    for pf in files:
+        target = root / pf.name.replace(".provenance.jsonl", ".jsonl")
+        if not target.is_file():
+            leaked.append({"file": target.name, "reason": "provenance without dataset"})
+            continue
+        checked = 0
+        sessions: set[str] = set()
+        rows_in_dataset = sum(1 for _ in target.open())
+        for line in pf.open():
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            sid = rec.get("session_id") or ""
+            checked += 1
+            n_rows += 1
+            sessions.add(sid)
+            if sid and sid in held_out:
+                leaked.append({"file": target.name, "row": rec.get("row"),
+                               "session_id": sid})
+        if checked != rows_in_dataset:
+            leaked.append({"file": target.name, "reason":
+                           f"provenance has {checked} rows, dataset has {rows_in_dataset}"})
+        n_sessions += len(sessions)
+    return {"status": "contaminated" if leaked else "clean",
+            "leaked": leaked[:50], "n_rows": n_rows, "n_sessions": n_sessions,
+            "checked": [p.name for p in files]}
