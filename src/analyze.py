@@ -357,6 +357,11 @@ def benchmark_session_ids(tasks_path: str | Path) -> set[str]:
     out of the training mix for a true benchmark -- otherwise the
     49-task eval would overlap the SFT corpus.
 
+    The id lives under ``task_id`` in freshly derived tasks but under ``id``
+    in the committed suite (``eval/tasks/auto-verified.jsonl``). Reading only
+    ``task_id`` made this return an empty set, so the holdout silently did
+    nothing and the audit caught the resulting contamination downstream.
+
     Returns an empty set (not an error) when ``tasks_path`` is absent.
     """
     ids: set[str] = set()
@@ -368,7 +373,7 @@ def benchmark_session_ids(tasks_path: str | Path) -> set[str]:
         if not line:
             continue
         t = json.loads(line)
-        tid = t.get("task_id", "")
+        tid = t.get("task_id") or t.get("id") or ""
         if not tid.startswith("auto-"):
             continue
         prefix = f"auto-{t.get('source', '')}-"

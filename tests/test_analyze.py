@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+
+import pytest
 
 from src import analyze as A
 
@@ -246,3 +249,42 @@ def test_benchmark_session_ids(tmp_path):
 
 def test_benchmark_session_ids_missing_file():
     assert A.benchmark_session_ids("/no/such/file.jsonl") == set()
+
+
+def test_benchmark_session_ids_accepts_id_key(tmp_path):
+    """The committed suite stores the id under `id`, not `task_id`.
+
+    Reading only `task_id` returned an empty set, so the session holdout was a
+    silent no-op and the 49-task eval overlapped the SFT corpus.
+    """
+    tasks = tmp_path / "suite.jsonl"
+    tasks.write_text("\n".join([
+        json.dumps({"id": "auto-hermes-20260512_104527_d992b7", "source": "hermes"}),
+        json.dumps({"id": "manual-foo", "source": "hermes"}),  # not an auto-task
+    ]) + "\n")
+    assert A.benchmark_session_ids(tasks) == {"20260512_104527_d992b7"}
+
+
+def test_benchmark_session_ids_mixed_keys(tmp_path):
+    tasks = tmp_path / "mixed.jsonl"
+    tasks.write_text("\n".join([
+        json.dumps({"task_id": "auto-hermes-aaa", "source": "hermes"}),
+        json.dumps({"id": "auto-hermes-bbb", "source": "hermes"}),
+    ]) + "\n")
+    assert A.benchmark_session_ids(tasks) == {"aaa", "bbb"}
+
+
+def test_committed_suite_holdout_is_not_a_noop():
+    """Guard the real artifact: if this returns 0, the eval is not held out."""
+    suite = Path(__file__).resolve().parents[1] / "eval" / "tasks" / "auto-verified.jsonl"
+    if not suite.is_file():
+        pytest.skip(f"no committed suite at {suite}")
+    ids = A.benchmark_session_ids(suite)
+    rows = [json.loads(l) for l in suite.read_text().splitlines() if l.strip()]
+    auto = [r for r in rows
+            if (r.get("task_id") or r.get("id") or "").startswith("auto-")]
+    assert auto, "suite contains no auto-tasks to hold out"
+    assert len(ids) == len({(r.get("task_id") or r.get("id"))[len("auto-" + (r.get("source") or "") + "-"):]
+                            for r in auto}), "id recovery lost sessions"
+    assert len(ids) >= len(auto) * 0.9, (
+        f"holdout recovered only {len(ids)}/{len(auto)} sessions")

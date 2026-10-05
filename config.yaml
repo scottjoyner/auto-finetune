@@ -7,21 +7,33 @@ sources:
     # the database updated by the currently running OpenCode session.
     db_path: /home/scott/.local/share/opencode/opencode.db
     # Archives/snapshots. Each gets its own immutable extraction label.
+    #
+    # 2026-10-05: all five below were disabled. Harvest fails closed on an
+    # enabled-but-unreadable source, so these were blocking every run, not just
+    # warning. Two distinct causes:
+    #   NAS5      - the mount has been offline since June and has no fstab
+    #               entry, so it cannot be remounted from here. The mountpoint
+    #               dir survives but nothing is mounted on it.
+    #   ssd-archive - the file is 0 bytes (created Aug 26, never populated).
+    #                There is no other OpenCode DB anywhere on SSD_4TB.
+    # Re-enable once the underlying storage is actually present. Check the DB
+    # is non-empty first: `sqlite3 <path> 'select count(*) from session'`.
+    # A 0-byte file passes an existence check but has no `session` table.
     extra_dbs:
       - path: /media/scott/SSD_4TB/opencode/opencode.db
-        enabled: true
+        enabled: false
         label: ssd-archive
       - path: /media/scott/NAS5/opencode/opencode.db
-        enabled: true
+        enabled: false
         label: nas5-main
       - path: /media/scott/NAS5/opencode/opencode_20260717.db
-        enabled: true
+        enabled: false
         label: nas5-20260717
       - path: /media/scott/NAS5/opencode/opencode_old_broken.db
-        enabled: true
+        enabled: false
         label: nas5-old-broken
       - path: /media/scott/NAS5/opencode_recover_old.db
-        enabled: true
+        enabled: false
         label: nas5-recover-old
   hermes:
     # Hermes canonical session store is the SQLite state.db (system of record),
