@@ -323,21 +323,27 @@ def _dispatch(argv: list[str], cfg=None) -> int:
         if cmd in ("deploy", "deploy-status", "rollback", "multi-deploy-status", "discover-nodes"):
             from src.deploy import main as run
             return run(cfg, argv)
+        # Pass the full argv, like deploy/notify/metrics/quantize above. These
+        # five used to pass [cmd] + argv[2:], which put the command at argv[0]
+        # while their main() reads argv[1] -- so `scheduler-run` fell through to
+        # the default and ran scheduler-status instead, and any form carrying a
+        # flag (`scheduler-run --dry-run`, `scheduler-loop --interval=N`,
+        # `registry-add --label=x`) printed the help text and exited 0.
         if cmd == "registry-list":
             from src.registry import main as run
-            return run(cfg, ["registry-list"] + argv[2:])
+            return run(cfg, argv)
         if cmd == "registry-add":
             from src.registry import main as run
-            return run(cfg, ["registry-add"] + argv[2:])
+            return run(cfg, argv)
         if cmd == "scheduler-status":
             from src.scheduler import main as run
-            return run(cfg, ["scheduler-status"] + argv[2:])
+            return run(cfg, argv)
         if cmd == "scheduler-run":
             from src.scheduler import main as run
-            return run(cfg, ["scheduler-run"] + argv[2:])
+            return run(cfg, argv)
         if cmd == "scheduler-loop":
             from src.scheduler import main as run
-            return run(cfg, ["scheduler-loop"] + argv[2:])
+            return run(cfg, argv)
         if cmd == "subagent-harness":
             from src.subagent_harness import main as run
             return run(argv[2:])
