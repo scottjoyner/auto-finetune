@@ -61,5 +61,32 @@ for label in "$CKPT"/*/; do
   rsync -a --exclude 'checkpoint-*' "$label" "$RUN/adapters/$name/"
 done
 
+# 2b) adapters from the candidate pipeline.
+#
+# Since the scheduler was wired to run_candidate, adapters are trained inside
+# analysis/candidates/<id>/adapters/<label>/ and only the *merged* winner is
+# published to outputs/checkpoints. So step 2 no longer sees the adapter behind
+# a promotion, and a merged model cannot be re-derived without it. Back up the
+# adapters of candidates that actually completed (candidate.json present), which
+# bounds this to real promotions rather than every abandoned attempt.
+CANDS="$STAGING/data/analysis/candidates"
+if [ -d "$CANDS" ]; then
+  for cand in "$CANDS"/*/; do
+    [ -d "$cand" ] || continue
+    [ -f "$cand/candidate.json" ] || continue
+    cid=$(basename "$cand")
+    for adir in "$cand"adapters/*/; do
+      [ -f "$adir/adapter_model.safetensors" ] || continue
+      label=$(basename "$adir")
+      dest="$RUN/candidates/$cid/$label"
+      mkdir -p "$dest"
+      rsync -a --exclude 'checkpoint-*' "$adir" "$dest/"
+    done
+    # The manifest is the only record of which candidate won and why.
+    [ -f "$cand/candidate.json" ] && cp "$cand/candidate.json" \
+      "$RUN/candidates/$cid/" 2>/dev/null || true
+  done
+fi
+
 echo "$STAMP" > "$DEST_ROOT/xwing/latest.txt"
 du -sh "$RUN" | awk '{print "[ml-backup] "$0}'

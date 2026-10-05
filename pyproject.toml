@@ -11,12 +11,12 @@ requires-python = ">=3.10"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Ratchet, not aspiration. The original 80% gate had been failing for weeks,
-# which trains everyone to ignore it. This is the honest current floor (61%)
+# which trains everyone to ignore it. 69% is the honest current floor (69.8%)
 # so any *regression* is caught immediately; raise it as coverage improves
-# rather than lowering it to make a run green. Reaching 80% needs roughly
-# 1,450 more covered statements; cli.py (51%), get_deployed_models and
-# multi_rollback in deploy.py, and metrics.py (45%) are the largest gaps.
-addopts = "-q --cov=src --cov-report=term-missing --cov-fail-under=60"
+# rather than lowering it to make a run green. Reaching 80% still needs roughly
+# 800 more covered statements; cli.py (51%) and scheduler.py's main() are the
+# largest remaining gaps, both largely argument parsing and dispatch.
+addopts = "-q --cov=src --cov-report=term-missing --cov-fail-under=69"
 # Deliberately no pythonpath = ["src"]. Putting the src/ directory itself on
 # sys.path shadowed part of transformers' import machinery, so
 # `from transformers import AutoTokenizer` failed with "cannot import name
