@@ -431,3 +431,158 @@ def test_run_once_dry_run_skips_validation_when_not_training(sched, monkeypatch)
     result = sched.run_once(dry_run=True)
     assert result.success is True
     assert "pre-validated" not in result.message
+
+
+# --- run_once wiring: candidate pipeline replaces train + eval_and_select ---
+
+def _wire_run_once(sched, monkeypatch, *, candidate, harvest_ok=True,
+                   deploy_ok=True):
+    """Stub everything run_once touches except the phase under test."""
+    plan = _plan()
+    monkeypatch.setattr("src.harvest.plan_harvest", lambda cfg: plan)
+    monkeypatch.setattr("src.harvest.record_extraction", lambda *a, **k: None)
+    # scheduler.py imports this at module level, so the name to patch is the
+    # one bound in src.scheduler, not the attribute on src.locking.
+    monkeypatch.setattr("src.scheduler.unmanaged_training_processes",
+                        lambda *a, **k: [])
+    calls = {"candidate": 0, "deploy": [], "train": 0, "eval_select": 0}
+
+    def fake_harvest(p):
+        return harvest_ok, {"sources": p.harvest_labels}
+
+    def fake_run_candidate(p, dry_run=False):
+        calls["candidate"] += 1
+        if isinstance(candidate, Exception):
+            raise candidate
+        return candidate
+
+    def fake_deploy(label):
+        calls["deploy"].append(label)
+        return deploy_ok, {"message": "ok"}
+
+    monkeypatch.setattr(sched, "harvest", fake_harvest)
+    monkeypatch.setattr(sched, "run_candidate", fake_run_candidate)
+    monkeypatch.setattr(sched, "deploy", fake_deploy)
+    monkeypatch.setattr(sched, "train",
+                        lambda *a: calls.__setitem__("train", calls["train"] + 1))
+    monkeypatch.setattr(sched, "eval_and_select",
+                        lambda: calls.__setitem__("eval_select",
+                                                  calls["eval_select"] + 1))
+    return calls
+
+
+def test_run_once_uses_the_candidate_pipeline(sched, monkeypatch):
+    calls = _wire_run_once(
+        sched, monkeypatch,
+        candidate=(True, {"winner": "ssd", "eval_losses": {"ssd": 0.5},
+                          "benchmark": {"pass_rate": 1.0}}))
+    result = sched.run_once()
+    assert result.success is True
+    assert result.phase == "complete"
+    assert calls["candidate"] == 1
+    assert calls["deploy"] == ["ssd"], "winner not passed to deploy"
+
+
+def test_run_once_no_longer_calls_legacy_train_or_eval(sched, monkeypatch):
+    calls = _wire_run_once(
+        sched, monkeypatch,
+        candidate=(True, {"winner": "ssd", "eval_losses": {}, "benchmark": {}}))
+    sched.run_once()
+    assert calls["train"] == 0, "legacy train() is still being used"
+    assert calls["eval_select"] == 0, "legacy eval_and_select() is still being used"
+
+
+def test_candidate_exception_fails_the_run_without_deploying(sched, monkeypatch):
+    calls = _wire_run_once(
+        sched, monkeypatch,
+        candidate=RuntimeError("candidate ssd failed contamination audit"))
+    result = sched.run_once()
+    assert result.success is False
+    assert result.phase == "candidate"
+    assert "contamination" in result.message
+    assert calls["deploy"] == [], "deployed despite a failed candidate"
+
+
+def test_candidate_failure_does_not_deploy(sched, monkeypatch):
+    calls = _wire_run_once(sched, monkeypatch, candidate=(False, {"error": "boom"}))
+    result = sched.run_once()
+    assert result.success is False
+    assert calls["deploy"] == []
+
+
+def test_candidate_without_winner_fails_closed(sched, monkeypatch):
+    calls = _wire_run_once(sched, monkeypatch, candidate=(True, {}))
+    result = sched.run_once()
+    assert result.success is False
+    assert result.phase == "candidate"
+    assert "no winner" in result.message
+    assert calls["deploy"] == []
+
+
+def test_successful_run_records_state(sched, monkeypatch):
+    _wire_run_once(sched, monkeypatch,
+                   candidate=(True, {"winner": "ssd", "eval_losses": {},
+                                     "benchmark": {}}))
+    sched.run_once()
+    assert sched.state.runs_completed == 1
+    assert sched.state.runs_failed == 0
+    assert sched.state.current_phase == "idle"
+    assert sched.state.last_error is None
+
+
+def test_failed_candidate_increments_failures_and_keeps_error(sched, monkeypatch):
+    _wire_run_once(sched, monkeypatch,
+                   candidate=RuntimeError("partition contamination for ssd"))
+    sched.run_once()
+    assert sched.state.runs_failed == 1
+    assert "contamination" in sched.state.last_error
+    assert sched.state.current_phase == "idle"
+
+
+def test_candidate_stats_are_reported_on_success(sched, monkeypatch):
+    _wire_run_once(
+        sched, monkeypatch,
+        candidate=(True, {"winner": "ssd", "eval_losses": {"ssd": 0.42},
+                          "audits": {"ssd": {"status": "clean"}},
+                          "benchmark": {"pass_rate": 0.8}}))
+    result = sched.run_once()
+    assert result.train_stats["candidate"]["winner"] == "ssd"
+    # The candidate detail (losses, audits, benchmark) rides on candidate_stats;
+    # deploy_stats belongs to the deploy phase.
+    assert result.candidate_stats["eval_losses"] == {"ssd": 0.42}
+    assert result.candidate_stats["benchmark"]["pass_rate"] == 0.8
+    assert result.candidate_stats["audits"]["ssd"]["status"] == "clean"
+
+
+def test_harvest_failure_short_circuits_before_the_candidate(sched, monkeypatch):
+    calls = _wire_run_once(sched, monkeypatch,
+                           candidate=(True, {"winner": "ssd"}),
+                           harvest_ok=False)
+    result = sched.run_once()
+    assert result.success is False
+    assert result.phase == "harvest"
+    assert calls["candidate"] == 0
+
+
+def test_promote_lands_where_deploy_looks(tmp_path, monkeypatch):
+    """Regression: promotion used os.path.dirname(output_dir), putting the
+    merged model one level above the directory deploy.py and quantize.py read.
+    """
+    ckpt = tmp_path / "outputs" / "checkpoints"
+    cfg = make_cfg(train={"output_dir": str(ckpt)},
+                   paths={"analysis_dir": str(tmp_path / "analysis")})
+    sched = Scheduler(cfg)
+    (tmp_path / "analysis").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr("src.harvest.record_harvest", lambda *a, **k: None)
+
+    merged = tmp_path / "cand" / "merged"
+    merged.mkdir(parents=True)
+    (merged / "config.json").write_text("{}")
+
+    plan = _plan()
+    sched._promote_candidate(plan, {"winner": "ssd", "merged": str(merged)})
+
+    expected = ckpt / "toolcall-v5-3b-ssd-merged"
+    assert expected.is_dir(), f"merged model not where deploy.py looks ({expected})"
+    assert (expected / "config.json").is_file()
+    assert not (tmp_path / "outputs" / "toolcall-v5-3b-ssd-merged").exists()

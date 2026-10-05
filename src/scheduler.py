@@ -327,9 +327,18 @@ class Scheduler:
     def _promote_candidate(self, plan, manifest: dict) -> None:
         winner = manifest["winner"]
         merged = manifest["merged"]
-        output_root = Path(os.path.dirname(str(self.cfg.get(
-            "train", "output_dir", default="outputs/checkpoints"))))
+        # Into train.output_dir itself, NOT its parent. This used to take
+        # os.path.dirname(output_dir), landing the merged model one level up
+        # (outputs/ rather than outputs/checkpoints/), while every consumer --
+        # deploy.py, quantize.py, merge -- looks for
+        # <output_dir>/toolcall-v5-3b-<label>-merged. Since the pipeline was
+        # never wired into run_once this never surfaced; with it wired, deploy
+        # would have run straight after promotion and not found the model.
+        output_root = Path(str(self.cfg.get(
+            "train", "output_dir",
+            default="/media/scott/data/finetune-staging/outputs/checkpoints")))
         target = output_root / f"toolcall-v5-3b-{winner}-merged"
+        target.parent.mkdir(parents=True, exist_ok=True)
         self._atomic_replace_dir(Path(merged), target)
         from src.harvest import record_harvest
         selected = [source for source in plan.sources if source.name in plan.harvest_labels]
@@ -393,6 +402,8 @@ class Scheduler:
             self._promote_candidate(plan, manifest)
             return True, {"candidate_id": candidate_id, "promoted": True,
                           "winner": manifest["winner"],
+                          "eval_losses": manifest.get("eval_losses"),
+                          "audits": manifest.get("audits"),
                           "benchmark": manifest["benchmark"]}
         except Exception as exc:
             self.state.last_error = str(exc)
@@ -600,40 +611,70 @@ class Scheduler:
                     harvest_stats=harvest_stats,
                 )
 
-            # Phase 2: Train using the immutable plan from before baseline update.
+            # Phases 2+3: the candidate pipeline.
+            #
+            # This replaces the legacy train() + eval_and_select() pair, which
+            # wrote adapters straight into outputs/checkpoints and picked the
+            # winner by regex-parsing the stdout of `src.cli best`. The candidate
+            # pipeline instead stages, formats, partitions, audits, trains,
+            # evals, merges and benchmarks inside a candidate root, and only
+            # then promotes atomically and records the harvest watermark -- so a
+            # failure at any stage leaves the live artifacts untouched and the
+            # source eligible for the next run.
+            #
+            # Consequences to be aware of:
+            #  * adapters now land in the candidate root, not
+            #    outputs/checkpoints/<label>/, so the weekly ml-state backup
+            #    (which walks outputs/checkpoints) sees only promoted merges;
+            #  * a promotion now additionally requires the bench suite to run,
+            #    so a candidate that trains cleanly but benchmarks badly will
+            #    not be promoted.
             self.state.current_phase = "training"
             self._save_state()
-            print("[scheduler] === TRAIN ===")
-            ok, train_stats = self.train(plan.batch_labels)
-            if not ok:
+            print("[scheduler] === CANDIDATE PIPELINE ===")
+            try:
+                ok, candidate_stats = self.run_candidate(plan)
+            except Exception as exc:  # noqa: BLE001
                 self.state.current_phase = "idle"
                 self.state.runs_failed += 1
-                self.state.last_error = train_stats.get("error")
+                self.state.last_error = str(exc)
                 self._save_state()
                 return RunResult(
-                    success=False, phase="train",
-                    message=train_stats.get("error", "train failed"),
+                    success=False, phase="candidate",
+                    message=f"candidate pipeline failed: {exc}",
                     duration_seconds=time.time() - start,
                     harvest_stats=harvest_stats,
-                    train_stats=train_stats,
                 )
 
-            # Phase 3: Eval and select
-            print("[scheduler] === EVAL ===")
-            ok, winner, eval_stats = self.eval_and_select()
             if not ok:
                 self.state.current_phase = "idle"
                 self.state.runs_failed += 1
-                self.state.last_error = eval_stats.get("error")
+                self.state.last_error = str(candidate_stats.get("error")
+                                            or "candidate pipeline failed")
                 self._save_state()
                 return RunResult(
-                    success=False, phase="eval",
-                    message=eval_stats.get("error", "eval failed"),
+                    success=False, phase="candidate",
+                    message=self.state.last_error,
                     duration_seconds=time.time() - start,
                     harvest_stats=harvest_stats,
-                    train_stats=train_stats,
-                    deploy_stats=eval_stats,
+                    candidate_stats=candidate_stats,
                 )
+
+            winner = candidate_stats.get("winner", "")
+            train_stats = {"candidate": candidate_stats}
+            if not winner:
+                self.state.current_phase = "idle"
+                self.state.runs_failed += 1
+                self.state.last_error = "candidate produced no winner"
+                self._save_state()
+                return RunResult(
+                    success=False, phase="candidate",
+                    message="candidate produced no winner",
+                    duration_seconds=time.time() - start,
+                    harvest_stats=harvest_stats,
+                    candidate_stats=candidate_stats,
+                )
+            print(f"[scheduler] candidate winner: {winner}")
 
             # Phase 4: Deploy
             self.state.current_phase = "deploying"
@@ -672,6 +713,7 @@ class Scheduler:
                 harvest_stats=harvest_stats,
                 train_stats=train_stats,
                 deploy_stats=deploy_stats,
+                candidate_stats=candidate_stats,
             )
 
         except Exception as e:
