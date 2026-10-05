@@ -2,12 +2,18 @@
 # Mirror the irreplaceable parts of finetune-staging to the NAS (/nas, CIFS).
 # Safe to cron: exits 0 silently if the NAS is unavailable or too full.
 #
-# Why this is scoped so tightly: /nas is write-limited to roughly 1.7-4.3 MB/s
-# (measured 2026-10-04, CIFS 3.0 to the 100.85.72.121 fileserver; dd probe said
-# 2.0-2.2, the real transfer averaged 1.7 and peaked at 4.3). The full staging
-# tree is 240G, which would take well over a day to push. So this mirrors only
-# what cannot be regenerated from raw stores + base weights (~5.3G, ~50min), and
-# leaves the bulk alone:
+# Throughput RE-MEASURED 2026-10-05: 58-66 MB/s (dd probe, 500MB direct +
+# cached read-back), not the 1.7-4.3 MB/s recorded on 2026-10-04. The NAS is
+# also 53T free against a 1.6T /data at 81% capacity.
+#
+# The old rate is why this stayed scoped so tightly: at 2 MB/s the full 240G
+# staging tree was a multi-day job. At 60 MB/s it is ~70min, so bulk that is
+# genuinely regenerable is now handled separately by
+# scripts/offload_cold_models_to_nas.sh, which verifies before deleting.
+# This script keeps mirroring only what cannot be regenerated: run manifests,
+# logs, queue state, built corpora and final adapters.
+#
+# Scope (~5.3G, ~2min at the current rate; converged runs take ~25s):
 #
 #   * provenance/                    run manifests (the audit trail)
 #   * launch-next.state               queue progress markers
@@ -15,11 +21,14 @@
 #   * launch/*.sh, launch/*.py        the scripts cron actually invokes
 #   * outputs/checkpoints/*/          final adapters, NOT checkpoint-N/*
 #   * data/datasets/*.jsonl           built training corpora
+#   * data/clean-rebuild/             the benchmark-held-out rebuild
 #   * data/eval/, data/future-runs/   eval reports + disjoint eval partitions
 #
 # Deliberately NOT mirrored:
-#   models/ (187G)         regenerable from base weights; the k2-horizon
-#                          offload track owns /nas/models for this instead
+#   models/                base weights for in-flight runs (Qwen3-8B now,
+#                          Ornith-1.5-9B next) plus regenerable downloads.
+#                          Superseded iterations are handled by
+#                          offload_cold_models_to_nas.sh -> /nas/archive/cold-models
 #   outputs/.../checkpoint-* (44G)  resumable training intermediates
 #   data/raw, data/cleaned, data/analysis, pip-cache, downloads, tmp,
 #   hf-home, torch-home, npu-xclbins, k2-tl-overlay   all regenerable
@@ -32,7 +41,7 @@ STAGING=/media/scott/data/finetune-staging
 DEST=/nas/finetune-staging
 LOG=/media/scott/data/fleet-power/nas-mirror.log
 
-# The scoped payload is ~5.3G and needs ~50min at the measured rate; converged
+# The scoped payload is ~5.3G, ~2min at the re-measured 58-66 MB/s; converged
 # incremental runs take ~25s. 12G of headroom covers a partial retry.
 MIN_FREE_KB=$(( 12 * 1024 * 1024 ))
 
