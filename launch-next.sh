@@ -59,9 +59,23 @@ QUEUE=(
   # completion (stock 21% vs finetuned 0%, loops without converging);
   # general-data mixing is the anti-overfit countermeasure.
   #
-  # 2026-10-05: qwen3-8b-sft-r1 SKIPPED by request (stopped at step 938/1886,
-  # 27 checkpoint-N dirs kept under outputs/checkpoints/qwen3-8b-sft-r1 if the
-  # partial run is ever wanted). Going straight to Ornith instead.
+  # 2026-10-05 history: qwen3-8b-sft-r1 was first skipped by request and Ornith
+  # promoted in its place. Ornith then turned out to be untrainable here (see
+  # below), so this entry is re-enabled and now runs FIRST, ahead of Ornith, and
+  # is where the master is actually produced.
+  #
+  # The first attempt at this run trained on datasets/train.mixed.jsonl, which
+  # contains all 49 held-out benchmark sessions, and was abandoned at step
+  # 938/1886. That output is preserved as
+  # outputs/checkpoints/qwen3-8b-sft-r1-ABORTED-contaminated (27 checkpoints,
+  # 5.6G) -- kept, not deleted, in case the decision is revisited. It is NOT
+  # resumed: there is no resume path in train.py, and its adapter has ~938 steps
+  # of benchmark text baked in, which would make any later eval meaningless.
+  #
+  # This run trains on the held-out-excluded partition at
+  # data/future-runs/mixed-seed42/ (20163 rows / 1450 sessions, verified clean
+  # against both the provenance and the content-level audit). src.train refuses
+  # the raw datasets/train.mixed.jsonl, so this is required.
   #
   # BLOCKED as of 2026-10-05: Ornith-1.5-9B cannot be quantized on this GPU.
   # bitsandbytes fails with `hipErrorInvalidImage` ("device kernel image is
@@ -88,7 +102,9 @@ QUEUE=(
   # The raw file contains all 49 held-out eval sessions; src.train refuses it
   # (rc=3, "REFUSING: ... contains held-out benchmark sessions"), and a master
   # merged from it would have made every later eval meaningless.
-  # mixed:qwen3-8b-sft-r1:done-qwen38b-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/Qwen3-8B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=1
+  "mixed:qwen3-8b-sft-r1:done-qwen38b-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/Qwen3-8B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=1:MERGE=1"
+  # Ornith stays queued behind it: it will pick up automatically if bitsandbytes
+  # ever ships gfx1100 kernels for the Qwen3_5 linear_attn weights.
   "mixed:ornith15-9b-sft-r1:done-ornith15b-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/Ornith-1.5-9B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=1:MERGE=1"
   # comparison-only (low priority) — uncomment to include
   # "nas5-old-broken:toolcall-v5-3b-nas5-old-broken:done-nas5-old-broken"
@@ -197,7 +213,10 @@ while true; do
   # actually blocks until training completes. Only one dataset trains at a
   # time. The whole launch-next.sh is itself started under `setsid` by the
   # caller, so it survives the launching tool session ending.
-  "$V/python" -m src.cli train --label="$label" \
+  # -u: stdout is block-buffered when redirected to a log file, so a run that
+  # dies mid-flight loses every buffered line and the log ends at the last
+  # flush -- which makes an unexplained death impossible to place.
+  "$V/python" -u -m src.cli train --label="$label" \
     > "$LOG" 2>&1 < /dev/null &
   TRAIN_PID=$!
   echo "[launch-next] train pid=$TRAIN_PID"
