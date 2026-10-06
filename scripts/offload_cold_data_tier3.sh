@@ -50,13 +50,19 @@ move_one() {   # src, dest, label
   local src="$1" dst="$2" label="$3"
   if [ ! -e "$src" ]; then
     log "SKIP $label: source missing"
-    return 0
+    return 2
   fi
-  # Never touch anything a running process has open or references on its cmdline.
-  if tr '\0' ' ' </proc/*/cmdline 2>/dev/null | grep -q -- "$src"; then
-    log "SKIP $label: referenced by a running process"
-    return 0
-  fi
+  # Never touch anything a running process references on its cmdline.
+  # /proc/*/cmdline expands to many files; shell redirection accepts one path,
+  # so inspect each readable PID separately instead of using an ambiguous glob.
+  local cmdline
+  for cmdline in /proc/[0-9]*/cmdline; do
+    [ -r "$cmdline" ] || continue
+    if tr '\0' ' ' <"$cmdline" 2>/dev/null | grep -Fq -- "$src"; then
+      log "SKIP $label: referenced by a running process"
+      return 2
+    fi
+  done
   # CIFS cannot store symlinks at all (rsync: "Operation not supported (95)").
   # Moving a directory that contains one would either fail mid-copy or, worse,
   # flatten the link into a copy of its target -- and if the link points into a
@@ -66,7 +72,7 @@ move_one() {   # src, dest, label
     nlinks=$(find "$src" -type l 2>/dev/null | head -1)
     if [ -n "$nlinks" ]; then
       log "SKIP $label: contains a symlink ($nlinks) that CIFS cannot represent"
-      return 0
+      return 2
     fi
   fi
   local srcarg="$src"
