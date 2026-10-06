@@ -63,6 +63,21 @@ QUEUE=(
   # 27 checkpoint-N dirs kept under outputs/checkpoints/qwen3-8b-sft-r1 if the
   # partial run is ever wanted). Going straight to Ornith instead.
   #
+  # BLOCKED as of 2026-10-05: Ornith-1.5-9B cannot be quantized on this GPU.
+  # bitsandbytes fails with `hipErrorInvalidImage` ("device kernel image is
+  # invalid") quantizing the Qwen3_5 `linear_attn.in_proj_*` weights, on this
+  # Radeon 8050S (rocminfo: gfx1100). Reproduced across transformers 5.17.0 and
+  # 5.18.0, bitsandbytes 0.50.1 and 0.50.2, and both nf4-4bit and int8. bf16
+  # loads fine but needs ~18GB against 15.31GB of GPU memory. So this is a
+  # ROCm kernel-availability problem, not a config or version issue, and no
+  # amount of retrying here will clear it. Left in the queue, uncommented, so it
+  # runs as soon as bitsandbytes ships gfx1100 kernels for these shapes.
+  #
+  # Note for whoever retries: a failed load leaves the python process ALIVE in
+  # teardown holding ~12GB of VRAM, so the next attempt dies with a misleading
+  # CUDA OOM that reports 0 bytes allocated by PyTorch. Check `rocm-smi
+  # --showpids` and kill the stale pid before each retry.
+  #
   # Ornith is `Qwen3_5ForConditionalGeneration`, which needs transformers>=5 --
   # the venv is now on 5.18.0 (was 4.57.6). That required fixing kernels/__init__.py,
   # which shadowed the HuggingFace `kernels` package and broke `import transformers`
