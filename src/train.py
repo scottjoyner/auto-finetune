@@ -267,7 +267,9 @@ def _training_args(t: dict, model=None, rocm: bool = False) -> "TrainingArgument
         gradient_accumulation_steps=t.get("gradient_accumulation_steps", 8),
         num_train_epochs=t.get("num_train_epochs", 3),
         learning_rate=float(t.get("learning_rate", 2e-4)),
-        warmup_ratio=t.get("warmup_ratio", 0.03),
+        # Transformers 5.x renamed warmup_ratio -> warmup_steps; values in
+        # [0,1) retain ratio semantics via TrainingArguments.get_warmup_steps().
+        warmup_steps=t.get("warmup_ratio", 0.03),
         weight_decay=t.get("weight_decay", 0.01),
         lr_scheduler_type="cosine",
         optim="adamw_torch" if not use_bnb_optim else "adamw_8bit",
