@@ -57,10 +57,24 @@ QUEUE=(
   # (train.mixed.jsonl = combined tool corpus + 35% no_robots general).
   # Rationale: LFM r1 showdown showed pure tool-dialect SFT regresses task
   # completion (stock 21% vs finetuned 0%, loops without converging);
-  # general-data mixing is the anti-overfit countermeasure. Ornith needs
-  # transformers>=5 (upgrade-gate fires after qwen38b completes).
-  "mixed:qwen3-8b-sft-r1:done-qwen38b-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/Qwen3-8B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=1"
-  "mixed:ornith15-9b-sft-r1:done-ornith15b-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/Ornith-1.5-9B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=1"
+  # general-data mixing is the anti-overfit countermeasure.
+  #
+  # 2026-10-05: qwen3-8b-sft-r1 SKIPPED by request (stopped at step 938/1886,
+  # 27 checkpoint-N dirs kept under outputs/checkpoints/qwen3-8b-sft-r1 if the
+  # partial run is ever wanted). Going straight to Ornith instead.
+  #
+  # Ornith is `Qwen3_5ForConditionalGeneration`, which needs transformers>=5 --
+  # the venv is now on 5.18.0 (was 4.57.6). That required fixing kernels/__init__.py,
+  # which shadowed the HuggingFace `kernels` package and broke `import transformers`
+  # once 5.x started probing for it.
+  #
+  # This run trains on the BENCHMARK-HELD-OUT partition at
+  # data/future-runs/mixed-seed42/, not the raw datasets/train.mixed.jsonl.
+  # The raw file contains all 49 held-out eval sessions; src.train refuses it
+  # (rc=3, "REFUSING: ... contains held-out benchmark sessions"), and a master
+  # merged from it would have made every later eval meaningless.
+  # mixed:qwen3-8b-sft-r1:done-qwen38b-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/Qwen3-8B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=1
+  "mixed:ornith15-9b-sft-r1:done-ornith15b-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/Ornith-1.5-9B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=1:MERGE=1"
   # comparison-only (low priority) — uncomment to include
   # "nas5-old-broken:toolcall-v5-3b-nas5-old-broken:done-nas5-old-broken"
   # "nas5-recover-old:toolcall-v5-3b-nas5-recover-old:done-nas5-recover-old"
@@ -97,14 +111,16 @@ PY
 
 while true; do
   # pick next undone item
-  # Entry format: label:out_name:done_marker[:KEY=VAL,KEY=VAL]
+  # Entry format: label:out_name:done_marker[:KEY=VAL,KEY=VAL[:MERGE=1]]
+  # MERGE=1 merges the LoRA adapter into a standalone full-weight master after a
+  # successful run, so the result loads without peft.
   NEXT=""
   for item in "${QUEUE[@]}"; do
     IFS=':' read -r -a parts <<< "$item"
     label="${parts[0]}"; out="${parts[1]}"; marker="${parts[2]}"
-    runenv="${parts[3]:-}"
+    runenv="${parts[3]:-}"; post="${parts[4]:-}"
     if [ ! -f "$STATE_FILE" ] || ! grep -qx "$marker" "$STATE_FILE" 2>/dev/null; then
-      NEXT="$label|$out|$marker|$runenv"; break
+      NEXT="$label|$out|$marker|$runenv|$post"; break
     fi
   done
 
@@ -114,7 +130,8 @@ while true; do
   fi
 
   label="${NEXT%%|*}"; rest="${NEXT#*|}"; out="${rest%%|*}"; rest="${rest#*|}"
-  marker="${rest%%|*}"; runenv="${rest#*|}"
+  marker="${rest%%|*}"; rest="${rest#*|}"
+  runenv="${rest%%|*}"; post="${rest#*|}"
 
   # stop file check
   if [ -f "$STOP_FILE" ]; then
@@ -177,6 +194,20 @@ while true; do
   if [ $RC -eq 0 ]; then
     echo "$marker" >> "$STATE_FILE"
     echo "[launch-next] $label finished OK (rc=$RC)."
+    case "$post" in
+      *MERGE=1*)
+        # TRAIN_OUTPUT_DIR and TRAIN_MODEL_NAME are still exported here, which is
+        # exactly what `cli merge` reads, so the master inherits the run's base.
+        MERGED_OUT="$OUT_BASE/${out}-master"
+        echo "[launch-next] merging adapter into master: $MERGED_OUT"
+        if TRAIN_MERGED_OUT="$MERGED_OUT" "$V/python" -m src.cli merge --label="$label"; then
+          echo "[launch-next] master written: $MERGED_OUT"
+          echo "$marker-master" >> "$STATE_FILE"
+        else
+          echo "[launch-next] MERGE FAILED for $out (rc=$?) — master not written"
+        fi
+        ;;
+    esac
   else
     echo "[launch-next] $label FAILED (rc=$RC) — stopping. See $LOG"
     exit $RC
