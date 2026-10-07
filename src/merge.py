@@ -32,12 +32,17 @@ def merge_adapter(
     os.makedirs(out_dir, exist_ok=True)
     dtype = torch.bfloat16 if rocm else torch.float16
 
+    # trust_remote_code matters in a batch context: bases that ship custom
+    # modeling files (e.g. K2-Horizon's modeling_k2_horizon.py) otherwise raise
+    # and, without it, prompt "Do you wish to run the custom code? [y/N]" on
+    # stdin -- which hangs the post-training merge hook with no terminal attached.
     base = AutoModelForCausalLM.from_pretrained(
-        base_model, torch_dtype=dtype, attn_implementation="sdpa", device_map=None
+        base_model, torch_dtype=dtype, attn_implementation="sdpa", device_map=None,
+        trust_remote_code=True,
     )
     model = PeftModel.from_pretrained(base, adapter_path)
     model = model.merge_and_unload()
-    tok = AutoTokenizer.from_pretrained(base_model)
+    tok = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
 
     model.save_pretrained(out_dir)
     tok.save_pretrained(out_dir)
