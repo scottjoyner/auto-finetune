@@ -63,3 +63,26 @@ def test_full_basis_structured_updates_track_two_step_backprop():
     assert exact["metrics"]["backward_calls"] == 2
     assert structured["metrics"]["backward_calls"] == 0
     assert torch.equal(frozen,model.model.layers[-1].self_attn.o_proj.weight)
+
+
+def test_batched_antithetic_matches_serial_full_basis():
+    torch.manual_seed(23)
+    model=TinyModel().eval().requires_grad_(False)
+    train=[
+        sample([1,4,8,3,12,6,9,2]),
+        sample([1,7,5,11,3,8,6,2]),
+    ]
+    held=[sample([1,6,10,2,13,4,7,2])]
+    serial=run_backend(
+        model,backend="orthogonal_antithetic",train=train,heldout=held,
+        device="cpu",seed=13,steps=2,population=8,sigma=.01,lr=.1,
+        max_seconds=30)
+    batched=run_backend(
+        model,backend="orthogonal_antithetic_batched",train=train,heldout=held,
+        device="cpu",seed=13,steps=2,population=8,sigma=.01,lr=.1,
+        max_seconds=30,direction_batch=4)
+    assert torch.allclose(serial["final_a"],batched["final_a"],atol=2e-6,rtol=2e-5)
+    assert torch.allclose(serial["final_b"],batched["final_b"],atol=2e-6,rtol=2e-5)
+    assert batched["metrics"]["history"][0]["forward_calls"] == 3
+    assert batched["metrics"]["history"][0]["chunks"] == 2
+    assert batched["metrics"]["backward_calls"] == 0
