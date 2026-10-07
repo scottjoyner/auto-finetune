@@ -123,6 +123,7 @@ def select_disjoint(train_file: Path, eval_file: Path, tokenizer, *,
             train_digests.append(digest)
     rejected_overlap = sum(
         user_hash in train_prompts for user_hash, _ in eval_entries.values())
+    eval_candidates = []
     for digest, (user_hash, pair) in sorted(eval_entries.items()):
         if user_hash in train_prompts:
             continue
@@ -131,22 +132,39 @@ def select_disjoint(train_file: Path, eval_file: Path, tokenizer, *,
         except (ValueError, TypeError, KeyError, AttributeError):
             row = None
         if row:
-            heldout.append(row)
-            eval_digests.append(digest)
+            eval_candidates.append((digest, user_hash, row))
+    prompt_counts: dict[str, int] = {}
+    for _, user_hash, _ in eval_candidates:
+        prompt_counts[user_hash] = prompt_counts.get(user_hash, 0) + 1
+    rejected_duplicate_prompt = sum(
+        count - 1 for count in prompt_counts.values() if count > 1)
+    selected_eval_prompts: set[str] = set()
+    for digest, user_hash, row in eval_candidates:
+        if user_hash in selected_eval_prompts:
+            continue
+        heldout.append(row)
+        eval_digests.append(digest)
+        selected_eval_prompts.add(user_hash)
         if len(heldout) == eval_count:
             break
     if len(train) != train_count or len(heldout) != eval_count:
         raise ValueError("Not enough disjoint, tokenizable examples")
     meta = {
-        "selection": "sha256-ranked-normalized-pair.v1",
+        "selection": "sha256-ranked-unique-normalized-prompt.v2",
         "train_source": train_stats, "eval_source": eval_stats,
         "train_rows": len(train), "eval_rows": len(heldout),
+        "eval_unique_prompt_hashes": len(selected_eval_prompts),
         "excluded_eval_prompts_shared_with_train_source": rejected_overlap,
+        "excluded_eval_pairs_repeating_selected_prompt": rejected_duplicate_prompt,
         "train_selected_pair_sha256": train_digests,
         "eval_selected_pair_sha256": eval_digests,
+        "eval_selected_prompt_sha256": sorted(selected_eval_prompts),
         "train_assistant_tokens": sum(r["assistant_tokens"] for r in train),
         "eval_assistant_tokens": sum(r["assistant_tokens"] for r in heldout),
         "train_max_seq_tokens": max_tokens, "eval_max_seq_tokens": eval_max_tokens,
-        "warning": "Exact normalized prompt separation only; semantic near-duplicates unproven",
+        "warning": (
+            "Exact normalized prompt separation and within-eval prompt uniqueness "
+            "only; semantic near-duplicates remain unproven"
+        ),
     }
     return train, heldout, meta
