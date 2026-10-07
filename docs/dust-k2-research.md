@@ -105,7 +105,7 @@ for the available AMD GPU. Do not use default `python3` for ROCm admission.
 - Existing ROCm venv: PyTorch 2.12.0+rocm7.14.0, HIP 7.14.60850,
   device `AMD Radeon 8050S Graphics`; upstream Dust compatibility unverified.
 - NAS mirror: **expected fail, exit 2**; 0/1 K2 indexed shards found.
-- `/nas` resolves to CIFS `//100.85.72.121/fileserver` on Xwing.
+- `/nas` resolves to CIFS on Xwing; mount identity is recorded locally.
   This identifies a mounted path, **not** verified physical NAS5 custody.
 - Full weight/dataset hashes above were measured live. These checks DO NOT
   validate model outputs, held-out separation, training success, or readiness.
