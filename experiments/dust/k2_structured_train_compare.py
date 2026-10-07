@@ -13,7 +13,7 @@ from pathlib import Path
 import time
 
 from experiments.dust.k2_data import select_disjoint
-from experiments.dust.k2_forward_only import FinalProjectionLoRA
+from experiments.dust.k2_forward_only import FinalProjectionLoRA, position_losses
 from experiments.dust.k2_matched_compare import (
     backprop_step, digest, load_base, loss_on_heldout, read_mem_available,
     score_one,
@@ -86,9 +86,92 @@ def structured_step(model, adapter: FinalProjectionLoRA, sample: dict, device: s
         }
 
 
+
+def structured_step_batched(
+    model, adapter: FinalProjectionLoRA, sample: dict, device: str, *,
+    seed: int, population: int, sigma: float, lr: float,
+    direction_batch: int,
+) -> dict:
+    """Vectorize ± orthogonal directions across the model batch dimension."""
+    import torch
+
+    if population > adapter.b.shape[0]:
+        raise ValueError("Orthogonal population cannot exceed output hidden size")
+    if direction_batch not in (1, 2, 4, 8, 16):
+        raise ValueError("direction_batch must be one of 1/2/4/8/16")
+    with torch.no_grad():
+        adapter.jitter = None
+        clean, mask = score_one(model, sample, device)
+        if not bool(torch.isfinite(clean).all()):
+            raise ArithmeticError("Nonfinite clean training CE")
+        if adapter.inputs is None:
+            raise AssertionError("Clean o_proj inputs were not captured")
+        clean_inputs = adapter.inputs.detach().clone()
+        hidden = adapter.b.shape[0]
+        seq = clean.shape[1]
+        gen = torch.Generator(device=device).manual_seed(seed)
+        raw = torch.randn(hidden, population, generator=gen,
+                          device=device, dtype=torch.float32)
+        directions = (
+            torch.linalg.qr(raw, mode="reduced").Q.T * math.sqrt(hidden)
+        ).contiguous()
+        del raw
+        estimate_sum = torch.zeros(
+            (*clean.shape, hidden), device=device, dtype=torch.float32)
+        base_ids = torch.tensor(
+            [sample["tokens"]], device=device, dtype=torch.long)
+        base_labels = torch.tensor(
+            [sample["labels"]], device=device, dtype=torch.long)
+        forward_calls = 1
+        chunks = 0
+        try:
+            for start in range(0, population, direction_batch):
+                if read_mem_available() < 1536 * 1024**2:
+                    raise MemoryError("Host memory below batched structured-step floor")
+                d = directions[start:start + direction_batch]
+                width = d.shape[0]
+                signed = torch.cat((d, -d), dim=0)
+                jitter = (
+                    signed[:, None, :].expand(2 * width, seq, hidden)
+                    * sigma
+                )
+                adapter.jitter = jitter
+                ids = base_ids.expand(2 * width, -1)
+                labels = base_labels.expand(2 * width, -1)
+                logits = model(
+                    input_ids=ids, use_cache=False, return_dict=True
+                ).logits
+                losses, masks = position_losses(logits, labels)
+                forward_calls += 1
+                chunks += 1
+                plus, minus = losses[:width].float(), losses[width:].float()
+                plus_mask, minus_mask = masks[:width], masks[width:]
+                expected = mask.expand(width, -1)
+                if not torch.equal(plus_mask, expected) or not torch.equal(minus_mask, expected):
+                    raise AssertionError("Causal mask changed in batched perturbation")
+                diff = (plus - minus) * expected.float()
+                estimate_sum += (
+                    diff.unsqueeze(-1) * d[:, None, :]
+                ).sum(dim=0, keepdim=True) / (2.0 * sigma * population)
+        finally:
+            adapter.jitter = None
+        # Perturbed batches overwrite the hook cache; restore the clean input
+        # used by the local LoRA update.
+        adapter.inputs = clean_inputs
+        adapter.apply(estimate_sum, count=int(mask.sum().item()), lr=lr)
+        return {
+            "tokens": int(mask.sum().item()),
+            "train_ce": float(clean.sum().item()/mask.sum().item()),
+            "population": population, "sigma": sigma,
+            "direction_batch": direction_batch,
+            "chunks": chunks, "forward_calls": forward_calls,
+        }
+
+
 def run_backend(model, *, backend: str, train: list[dict], heldout: list[dict],
                 device: str, seed: int, steps: int, population: int,
-                sigma: float, lr: float, max_seconds: int):
+                sigma: float, lr: float, max_seconds: int,
+                direction_batch: int = 1):
     import torch
     started = time.monotonic()
     adapter = FinalProjectionLoRA(model, rank=4, seed=seed + 17)
@@ -113,6 +196,12 @@ def run_backend(model, *, backend: str, train: list[dict], heldout: list[dict],
                     model, adapter, row, device,
                     seed=seed*100000 + step,
                     population=population, sigma=sigma, lr=lr)
+            elif backend == "orthogonal_antithetic_batched":
+                one = structured_step_batched(
+                    model, adapter, row, device,
+                    seed=seed*100000 + step,
+                    population=population, sigma=sigma, lr=lr,
+                    direction_batch=direction_batch)
             else:
                 raise ValueError("Unknown backend")
             if device == "cuda":
