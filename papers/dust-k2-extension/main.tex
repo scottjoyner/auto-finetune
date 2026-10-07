@@ -1,0 +1,537 @@
+\pdfoutput=1
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage{natbib}
+\usepackage{xcolor}
+
+\title{Forward-Only Adapter Fine-Tuning at 0.9B Parameters:\\
+A Systems Extension of Dust-Inspired Activation Perturbation}
+\author{Independent technical report\\
+Authors and affiliations to be finalized before submission}
+\date{Draft: October 2026}
+
+\newcommand{\dust}{\textsc{Dust}}
+\newcommand{\kmodel}{K2-Horizon-0.9B}
+\newcommand{\oproj}{\texttt{o\_proj}}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Dust recently demonstrated that activation-space zeroth-order optimization can
+train transformer language models without a backward pass, with gradient
+alignment to backpropagation improving as population grows
+\citep{dahal2026dust}. We study a complementary setting: adapting a
+\emph{pretrained} 0.9B-parameter decoder-only transformer using a rank-4
+low-rank adapter on the final attention output projection, while keeping all
+pretrained weights frozen. Our experiments are an independent
+\emph{Dust-inspired systems extension}, not a reproduction of the complete
+Dust pretraining algorithm.
+
+We first show that a naive one-sided Gaussian estimator can be too noisy for
+this setting. Antithetic orthogonal perturbations improve alignment
+substantially; a complete 1536-direction basis yields local LoRA-B gradient
+cosine 0.981 against exact autograd, and after two real adapter updates the
+resulting A/B update cosines reach 0.998/0.991. We then exploit the restricted
+fine-tuning site: because the adapter is attached to the final decoder
+layer's attention \oproj{}, the frozen prefix can be cached and only the
+downstream residual/MLP/norm/language-model-head tail replayed for each
+perturbation. This reduces a fixed four-step K=1024 three-seed protocol from
+347.4 seconds to 15.0 seconds on average, a 23.2$\times$ speedup over our
+serial structured implementation and approximately 2.1$\times$ the elapsed
+time of a matched adapter-only backpropagation control.
+
+The quality result remains negative/neutral: average heldout cross-entropy
+worsens slightly for both forward-only and backprop controls in the tiny
+protocol. Our results therefore support a narrower claim: forward-only
+activation perturbation can recover backprop-like adapter updates at this
+scale, and systems structure can remove much of the apparent execution cost,
+but update fidelity is not sufficient evidence of generalization. We outline
+a next experiment that brings the estimator closer to Dust's independent
+per-token perturbation semantics and evaluates quality over longer,
+predeclared training schedules.
+\end{abstract}
+
+\section{Introduction}
+
+Backpropagation is the dominant credit-assignment mechanism for modern neural
+networks, but it imposes differentiability and backward-graph requirements on
+the computation being optimized. Zeroth-order methods replace analytic
+gradients with loss evaluations under controlled perturbations, potentially
+making a broader class of systems trainable at the cost of additional forward
+compute \citep{salimans2017es,nesterov2017random,malladi2023zo}.
+
+\dust{} advances this direction by perturbing hidden activations rather than
+weights. Its central observation is that independent token-level activation
+perturbations can act as many virtual population members inside a transformer
+forward pass. The reported pretraining experiments show that larger
+populations improve gradient alignment and that activation-space
+zeroth-order training can approach or exceed backpropagation in selected
+settings, albeit with substantially more compute \citep{dahal2026dust}.
+The accompanying implementation exposes populations from 256 to 16,384 and
+uses multi-GPU runs for the larger settings \citep{qlabsdustcode}.
+
+We ask a different question: \emph{can the same broad idea be useful when
+adapting a pretrained language model rather than pretraining every weight?}
+Low-rank adaptation (LoRA) restricts fine-tuning to small trainable matrices
+inserted into an otherwise frozen model \citep{hu2021lora}. This creates a
+particularly favorable setting for forward-only learning: a perturbation
+estimator need only recover the local update for a small adapter, while the
+pretrained network remains fixed.
+
+Our study uses \kmodel{}, a 28-layer pretrained decoder-only transformer with
+hidden width 1536, and attaches a rank-4 LoRA to the final decoder layer's
+attention \oproj{}. We compare exact adapter-only autograd with several
+activation-perturbation estimators, measure update cosine directly, and then
+optimize the systems path by caching the frozen prefix.
+
+The main contributions of this draft are:
+\begin{itemize}
+    \item An independent evaluation of Dust-inspired activation-space
+    zeroth-order adapter tuning on a pretrained 0.9B-parameter transformer,
+    including AMD ROCm execution.
+    \item A gradient-calibration study showing that estimator fidelity rises
+    sharply with structured antithetic population size, reaching near-autograd
+    update direction at a complete hidden-space basis.
+    \item A cached-tail execution strategy that preserves the constrained
+    final-\oproj{} estimator while making the fixed K=1024 protocol roughly
+    23$\times$ faster than our initial serial implementation.
+    \item A deliberately negative quality result: high update cosine does not
+    yet translate into repeatable heldout improvement in our small protocol.
+    \item A concrete next experiment to test independent per-token
+    perturbations, bringing the fine-tuning study closer to Dust's estimator
+    semantics rather than conflating our current shared-direction estimator
+    with the full method.
+\end{itemize}
+
+\paragraph{Scope.}
+This paper is not a reproduction of the full Dust pretraining result. We do
+not perturb every linear layer, do not implement Dust's attention
+future-token credit assignment, and do not claim that our orthogonal
+shared-direction estimator is identical to Dust. The current result is best
+understood as an independent systems and fine-tuning extension motivated by
+the same activation-space zeroth-order principle.
+
+\section{Related Work}
+
+\paragraph{Dust.}
+\citet{dahal2026dust} perturb linear-layer outputs with Gaussian noise,
+independently at every token, and use token-local loss changes to estimate
+error signals. Attention internals receive specialized credit that includes
+future-token effects. Their experiments pretrain GPT-style transformers on
+FineWeb, report three seeds per setting, and study how population, model size,
+and token budget affect test loss and gradient alignment. The public code is a
+minimal implementation that preserves the estimator and tuned defaults while
+omitting some execution optimizations \citep{qlabsdustcode}.
+
+\paragraph{Evolution strategies and zeroth-order optimization.}
+Weight-space evolutionary strategies estimate gradients from loss differences
+under random parameter perturbations \citep{salimans2017es}. Structured and
+orthogonal directions can improve sampling efficiency and variance
+\citep{choromanski2018structured}. Random gradient-free optimization also has
+a classical theory connecting finite-difference estimates to smoothed
+objectives \citep{nesterov2017random}. More recently, forward-only
+fine-tuning has been studied directly for language models
+\citep{malladi2023zo}.
+
+\paragraph{Low-rank adaptation.}
+LoRA represents a parameter update to a weight matrix through low-rank factors,
+reducing trainable state while preserving the frozen pretrained weights
+\citep{hu2021lora}. Our setting uses LoRA not as a claim about the optimal
+fine-tuning method, but as a controlled substrate for directly measuring
+forward-only update fidelity.
+
+\section{Method}
+
+\subsection{Model and adapter}
+
+We freeze all pretrained parameters of \kmodel{}. The model has 28 decoder
+layers and hidden width $d=1536$. A rank-$r=4$ LoRA is attached only to the
+final decoder layer's attention output projection $W_o$.
+
+For input activation $x$, the adapted projection is
+\begin{equation}
+    h = x W_o^\top + (x A^\top) B^\top,
+\end{equation}
+where $A \in \mathbb{R}^{r\times d}$ and
+$B \in \mathbb{R}^{d\times r}$. The pretrained $W_o$ remains unchanged.
+
+\subsection{Forward-only local gradient estimator}
+
+For hidden output $h$, perturbation direction $u_k$, noise scale $\sigma$,
+and supervised loss $L$, our antithetic estimator is
+\begin{equation}
+\hat g_h =
+\frac{1}{2\sigma K}
+\sum_{k=1}^{K}
+\left[
+L(h+\sigma u_k)-L(h-\sigma u_k)
+\right] u_k.
+\label{eq:antithetic}
+\end{equation}
+
+The estimated local error is mapped into LoRA gradients using the captured
+\oproj{} input. With $z=xA^\top$,
+\begin{align}
+    \widehat{\nabla_B L} &= \hat g_h^\top z, \\
+    \widehat{\nabla_A L} &= (\hat g_h B)^\top x.
+\end{align}
+No backward pass is invoked in this path.
+
+Our initial experiments used Gaussian directions. We then use randomized
+orthogonal directions scaled by $\sqrt{d}$ so their second moment is
+comparable to isotropic Gaussian perturbations. When $K=d=1536$, the
+directions form a complete randomized orthogonal basis.
+
+\subsection{Difference from Dust}
+
+This distinction is central. Dust samples activation perturbations
+independently at each token position \citep{dahal2026dust}. Our current
+structured K2 estimator shares each direction across token positions within a
+draw. That choice made the gradient-calibration experiment simple and made a
+complete hidden-space basis possible, but it does not realize Dust's
+token-as-virtual-population mechanism.
+
+The next planned experiment therefore adds an independent per-token
+antithetic estimator and compares its compute/fidelity frontier with the
+shared-direction estimator. We retain the term Dust-inspired until that
+parity experiment is complete.
+
+\subsection{Cached final-tail replay}
+
+Because the adapter is attached only to the final attention \oproj{}, all
+computation upstream of that projection is invariant to the temporary LoRA
+factors and perturbations. We evaluate the frozen prefix once per example and
+cache the final decoder-layer input, the final \oproj{} input, and the clean
+final \oproj{} output.
+
+Every perturbation then replays only
+\begin{equation}
+\text{modified }\oproj{}
+\rightarrow \text{residual}
+\rightarrow \text{final MLP}
+\rightarrow \text{final norm}
+\rightarrow \text{LM head}
+\rightarrow L.
+\end{equation}
+
+Masked prompt positions are excluded from scored-tail replay. This
+optimization is exact only because the trainable/perturbed site is the final
+\oproj{}. It cannot be applied unchanged to earlier layers or q/k/v
+projections, where perturbations affect future attention states.
+
+\section{Experimental Setup}
+
+\paragraph{Hardware and software.}
+Primary GPU experiments ran on an AMD Radeon 8050S through PyTorch
+2.12.0+rocm7.14.0. The model was loaded in BF16 for the ROCm experiments.
+The base weight shard was pinned by SHA-256 for every run.
+
+\paragraph{Data.}
+Examples were selected deterministically by SHA-256 from an existing cleaned
+local corpus. Heldout selection rejects exact normalized prompt overlap with
+the training source. Raw prompts, responses, and token IDs are not serialized
+into public result manifests. The small quality protocol uses 16 training
+examples (864 supervised assistant tokens) and 12 prompt-disjoint heldout
+examples (624 supervised tokens).
+
+\paragraph{Controls.}
+The principal control is a fresh rank-4 LoRA with identical initialization,
+trained by exact \texttt{torch.autograd.grad} on the adapter factors only.
+All base-model parameters remain frozen. Reported comparisons use the same
+example order and fixed selection digests.
+
+\paragraph{Integrity.}
+Research runs do not merge or save trained adapters. Base weights are checked
+for equality, base gradients must remain absent, and the forward-only path
+reports zero backward calls. Immutable result manifests include source/model
+digests and are retained separately from private training text.
+
+\section{Results}
+
+\subsection{Gradient calibration}
+
+The first real-model pilot used one-sided Gaussian perturbations with
+$K=64$ and $\sigma=0.05$. On the calibration example, its LoRA-B gradient
+cosine against exact local autograd was only approximately 0.106. This
+motivated antithetic and structured perturbations.
+
+Table~\ref{tab:gradient} reports the antithetic orthogonal sweep at
+$\sigma=0.25$.
+
+\begin{table}[t]
+\centering
+\caption{Local gradient alignment as orthogonal population grows.}
+\label{tab:gradient}
+\begin{tabular}{rccc}
+\toprule
+Population $K$ & Output-grad cosine & LoRA-B cosine & LoRA-B rel. $\ell_2$ \\
+\midrule
+256  & 0.40162 & 0.40411 & 2.2518 \\
+512  & 0.56927 & 0.54898 & 1.4131 \\
+1024 & 0.79906 & 0.79675 & 0.7435 \\
+1536 & \textbf{0.98563} & \textbf{0.98125} & \textbf{0.1947} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The full 1536-direction basis required 3074 model forwards and approximately
+121.9 seconds in the original full-model calibration. The result shows that
+the local forward-only estimator can closely recover the analytic gradient
+direction when given sufficient structured population.
+
+\subsection{Multi-step update fidelity}
+
+We next compare actual adapter trajectories, not a single local gradient.
+After two updates, both $A$ and $B$ can move because $B$ is no longer zero
+after the first step.
+
+\begin{table}[t]
+\centering
+\caption{Two-step adapter update cosine versus matched backprop.}
+\label{tab:updates}
+\begin{tabular}{rccr}
+\toprule
+$K$ & LoRA-A cosine & LoRA-B cosine & Forward-only time (s) \\
+\midrule
+512  & 0.32584 & 0.60441 & 88.16 \\
+1024 & 0.93034 & 0.81621 & 177.29 \\
+1536 & \textbf{0.99796} & \textbf{0.99144} & 262.32 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The complete hidden-space basis nearly reproduces the matched backprop update
+after two real adapter updates. A separate four-step $K=1024$ run retains
+LoRA-A cosine 0.9936 and LoRA-B cosine 0.8552, showing that estimator
+coherence can persist after both factors have changed.
+
+\subsection{Systems optimization}
+
+Full-model microbatching reduces Python/model-call overhead but changes
+BF16/ROCm arithmetic slightly because repeated identical sequences are
+evaluated in a larger batch. Caching a single-example frozen prefix both
+reduces compute and avoids this source of estimator drift.
+
+For the formal $K=1024$, two-update comparison, the serial full-model path
+takes 154.24 seconds. Cached scored-tail replay takes 6.36 seconds for the
+update loop plus 0.80 seconds to cache the prefixes, while preserving A/B
+update cosine 0.9997/0.9996 versus the serial reference.
+
+\begin{table}[t]
+\centering
+\caption{K=1024 two-step systems comparison.}
+\label{tab:systems}
+\begin{tabular}{lrrrr}
+\toprule
+Method & Update time (s) & Prefix (s) & A cosine & B cosine \\
+\midrule
+Serial full model & 154.24 & -- & reference & reference \\
+Cached scored-tail & \textbf{6.36} & 0.80 & \textbf{0.9997} & \textbf{0.9996} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This is a 24.3$\times$ update-loop speedup and 21.5$\times$ including prefix
+construction.
+
+\subsection{Three-seed quality protocol}
+
+We then repeat the fixed four-step $K=1024$ protocol over seeds
+7, 42, and 1337.
+
+\begin{table}[t]
+\centering
+\caption{Four-step fixed quality protocol. Negative CE delta is improvement.}
+\label{tab:quality}
+\begin{tabular}{rrrrrr}
+\toprule
+Seed & Tail train $\Delta$ & Tail heldout $\Delta$ & Tail time & Serial time & BP time \\
+\midrule
+7    & -0.000011 & +0.000813 & 14.81 & 346.89 & 7.46 \\
+42   & -0.000858 & +0.001127 & 15.31 & 347.57 & 6.87 \\
+1337 & +0.000407 & -0.000177 & 14.87 & 347.80 & 6.86 \\
+\midrule
+Mean & -0.000154 & +0.000588 & \textbf{14.99} & 347.42 & 7.06 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The cached forward-only path is 23.2$\times$ faster than the earlier serial
+structured implementation and approximately 2.12$\times$ matched backprop
+for this tiny protocol. The mean train and heldout deltas closely track the
+serial structured reference, which is the expected behavior for a
+semantics-preserving systems optimization.
+
+The quality conclusion is intentionally conservative. One forward-only seed
+improves the tiny heldout set, but average heldout CE still worsens. Matched
+backprop also worsens average heldout CE in this protocol. These data do not
+support a claim of superior generalization.
+
+\section{Discussion}
+
+\subsection{What the results support}
+
+The strongest evidence is about \emph{credit assignment and execution}, not
+downstream model quality. A large structured perturbation population can
+recover a local adapter update that is nearly collinear with exact autograd.
+The effect survives multiple updates. When the trainable site is localized
+near the output, a systems implementation can exploit frozen-prefix structure
+to remove most of the redundant compute.
+
+These findings are consistent with Dust's broader argument that
+activation-space zeroth-order estimators can remain meaningful at transformer
+scale \citep{dahal2026dust}. They add evidence in a different regime:
+pretrained-model adapter tuning, a 0.9B-parameter base model, and AMD ROCm.
+
+\subsection{What the results do not support}
+
+We do not show that forward-only fine-tuning beats backpropagation. We do not
+show that our current shared-direction estimator is the same as Dust. We do
+not test attention future-credit, earlier layers, or full-model parameter
+updates. Our heldout set is intentionally small and is unsuitable for a broad
+generalization claim.
+
+The distinction matters because a method can produce an update highly aligned
+with backprop and still fail to improve task quality under a short schedule.
+In our current experiments, that is exactly what occurs.
+
+\subsection{Why the negative result is useful}
+
+A contribution to the Dust line of work is more credible if it reports where
+the forward-only estimator works and where the evidence stops. Our experiments
+suggest that the basic estimator is not obviously blocked by model scale or
+by AMD execution. Instead, the remaining research problem is a combination of
+population efficiency, estimator semantics, and optimization schedule.
+
+\section{Next Experiment: Tokenwise Virtual Population}
+
+The highest-value next experiment brings the fine-tuning estimator closer to
+Dust's defining tokenwise mechanism.
+
+For scored token $t$ and draw $k$, sample an independent direction
+$u_{k,t}$. The antithetic estimator becomes
+\begin{equation}
+\hat g_{h_t} =
+\frac{1}{2\sigma K}
+\sum_{k=1}^{K}
+\left[
+L_t(h_t+\sigma u_{k,t})-
+L_t(h_t-\sigma u_{k,t})
+\right]u_{k,t}.
+\end{equation}
+
+At the final \oproj{}, the downstream tail is position-local, so this test
+does not require the future-token attention credit used for earlier attention
+internals in Dust. That makes it a clean setting for comparing shared
+directions with truly independent tokenwise perturbations.
+
+We will compare:
+\begin{enumerate}
+    \item historical one-sided Gaussian $K=64$;
+    \item shared orthogonal antithetic $K\in\{256,512,1024\}$;
+    \item tokenwise Gaussian antithetic $K\in\{64,256,1024\}$.
+\end{enumerate}
+
+The estimator will be selected from train-side gradient fidelity and variance,
+not heldout loss. The chosen configuration will then be frozen for an
+8/16/32-update, multi-seed quality experiment with a larger heldout set and
+fixed tool-call/agentic evaluations.
+
+\section{Limitations}
+
+\begin{itemize}
+    \item The adapter modifies only the final attention \oproj{}. This is a
+    deliberately narrow setting.
+    \item Current structured perturbations are shared across token positions,
+    unlike Dust's independent per-token activation noise.
+    \item The cached-tail optimization depends on the trainable site being at
+    the final layer and cannot be generalized mechanically to earlier layers.
+    \item The quality protocol is small, and exact prompt-disjointness does
+    not guarantee semantic non-overlap.
+    \item Only a small number of seeds and one pretrained base model have been
+    studied.
+    \item Wall-time comparisons are systems-specific and should not be read
+    as universal hardware ratios.
+    \item We compare to adapter-only backpropagation, not full-model
+    backpropagation.
+\end{itemize}
+
+\section{Reproducibility and Release Plan}
+
+The intended public release contains estimator code, synthetic fixtures,
+manifest schemas, aggregate result tables, and pinned model/code digests.
+Private prompts, responses, token IDs, credentials, and machine-specific
+secrets are excluded.
+
+We intend to share the independent results with the Dust authors as a
+systems/fine-tuning extension. Any authorship or joint-paper arrangement
+should be based on direct collaboration and contribution rather than implied
+by citation or upstream inspiration.
+
+\section{Conclusion}
+
+Dust motivates a compelling question: how far can forward-only
+activation-space credit assignment scale before the cost of zeroth-order
+estimation becomes prohibitive? In a constrained but realistic adapter-tuning
+setting, we find that the answer depends strongly on implementation structure.
+A sufficiently large structured population recovers backprop-like adapter
+updates on a 0.9B pretrained transformer, and cached-tail replay removes most
+of the redundant full-model compute. The resulting tiny protocol is roughly
+2.1$\times$ matched adapter-only backprop rather than tens of times slower.
+
+The remaining open question is more important than execution fidelity:
+whether a closer Dust-parity tokenwise estimator and longer fixed training
+schedule produce repeatable heldout or task-level gains. Our next experiments
+are designed to answer that question without widening the claim beyond the
+evidence.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+\section{Current result ledger}
+
+\begin{table}[h]
+\centering
+\caption{Selected immutable results used in this draft.}
+\begin{tabular}{ll}
+\toprule
+Result & Value \\
+\midrule
+Naive K=64 LoRA-B gradient cosine & $\approx 0.106$ \\
+K=1536 local LoRA-B gradient cosine & 0.98125 \\
+K=1536 two-step A/B update cosine & 0.99796 / 0.99144 \\
+K=1024 cached-tail two-step A/B cosine vs serial & 0.999665 / 0.999577 \\
+K=1024 cached-tail two-step update-loop speedup & 24.26$\times$ \\
+Three-seed cached-tail mean runtime & 14.99 s \\
+Three-seed serial structured mean runtime & 347.42 s \\
+Three-seed matched backprop mean runtime & 7.06 s \\
+Three-seed cached-tail mean heldout CE delta & +0.000588 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Submission checklist}
+
+Before any arXiv submission:
+\begin{enumerate}
+    \item finalize authors and affiliations;
+    \item rerun all tables from immutable public-safe manifests;
+    \item complete tokenwise-parity experiments;
+    \item expand heldout/task evaluation;
+    \item verify every hardware/runtime claim against manifests;
+    \item replace provisional web citations if an official Dust arXiv entry
+    becomes available;
+    \item add a code/data availability statement with the public release URL;
+    \item perform an independent technical read for overclaiming.
+\end{enumerate}
+
+\end{document}
