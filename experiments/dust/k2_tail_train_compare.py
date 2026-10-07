@@ -16,7 +16,7 @@ from experiments.dust.k2_data import select_disjoint
 from experiments.dust.k2_matched_compare import digest, load_base, read_mem_available
 from experiments.dust.k2_tail_replay import (
     cache_base_sample, init_lora, score_tail_scored,
-    tail_scored_structured_step,
+    tail_scored_structured_step, tail_scored_tokenwise_step,
 )
 
 
@@ -49,7 +49,8 @@ def run(*, model_dir: Path, train_file: Path, heldout_file: Path,
         expected_sha: str, device: str, seed: int, population: int,
         sigma: float, lr: float, direction_batch: int, steps: int,
         train_count: int, eval_count: int, train_max_tokens: int,
-        eval_max_tokens: int, reference_file: Path | None) -> dict:
+        eval_max_tokens: int, reference_file: Path | None,
+        estimator: str = "shared_orthogonal") -> dict:
     import torch
     from transformers import AutoTokenizer
 
@@ -61,6 +62,8 @@ def run(*, model_dir: Path, train_file: Path, heldout_file: Path,
         raise ValueError("unsupported direction_batch")
     if not (0 < sigma <= .5 and 0 < lr <= 1.0):
         raise ValueError("invalid sigma/lr")
+    if estimator not in ("shared_orthogonal","tokenwise_gaussian"):
+        raise ValueError("unsupported estimator")
 
     tok=AutoTokenizer.from_pretrained(
         str(model_dir),trust_remote_code=True,local_files_only=True)
@@ -112,8 +115,12 @@ def run(*, model_dir: Path, train_file: Path, heldout_file: Path,
 
         history=[]
         train_started=time.monotonic()
+        step_fn=(
+            tail_scored_structured_step
+            if estimator=="shared_orthogonal"
+            else tail_scored_tokenwise_step)
         for step in range(steps):
-            one=tail_scored_structured_step(
+            one=step_fn(
                 model,train_caches[step],a,b,
                 seed=seed*100000+step,population=population,
                 sigma=sigma,lr=lr,direction_batch=direction_batch)
@@ -142,6 +149,8 @@ def run(*, model_dir: Path, train_file: Path, heldout_file: Path,
             "seed":seed,"rank":4,"steps":steps,"population":population,
             "sigma":sigma,"learning_rate":lr,
             "direction_batch":direction_batch,
+            "estimator":estimator,
+            "independent_noise_per_token":estimator=="tokenwise_gaussian",
             "dataset":dataset,
             "train_before":train_before,"train_after":train_after,
             "heldout_before":held_before,"heldout_after":held_after,
@@ -203,6 +212,9 @@ def main(argv=None) -> int:
     ap.add_argument("--sigma",type=float,default=.25)
     ap.add_argument("--lr",type=float,default=.1)
     ap.add_argument("--direction-batch",type=int,default=4)
+    ap.add_argument(
+        "--estimator",choices=("shared_orthogonal","tokenwise_gaussian"),
+        default="shared_orthogonal")
     ap.add_argument("--steps",type=int,default=4)
     ap.add_argument("--train-count",type=int,default=16)
     ap.add_argument("--eval-count",type=int,default=12)
@@ -218,6 +230,7 @@ def main(argv=None) -> int:
         expected_sha=a.expected_sha256,device=a.device,seed=a.seed,
         population=a.population,sigma=a.sigma,lr=a.lr,
         direction_batch=a.direction_batch,steps=a.steps,
+        estimator=a.estimator,
         train_count=a.train_count,eval_count=a.eval_count,
         train_max_tokens=a.train_max_tokens,
         eval_max_tokens=a.eval_max_tokens)
