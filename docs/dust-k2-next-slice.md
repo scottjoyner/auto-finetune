@@ -19,6 +19,15 @@ orthogonal directions are shared across token positions within each draw.
 That distinction is scientifically important and is the first thing this
 slice should close.
 
+**Status (2026-10-07): Slice A is now complete.** The independent per-token
+Gaussian antithetic path is implemented, synthetic tests pass, the real
+three-seed K=64/256/1024 matrix has run on Xwing ROCm, and the selectable
+training path completed a bounded two-step smoke. At K=256 and K=1024 the
+shared orthogonal control is more closely aligned with exact local autograd
+at essentially the same tail runtime, so tokenwise Gaussian does **not**
+advance as the quality-training estimator. Slice B should keep the existing
+shared orthogonal K=1024 / sigma=.25 / D=4 configuration fixed.
+
 ## Research questions
 
 1. **Tokenwise parity:** does independent per-token activation noise, closer
