@@ -65,3 +65,48 @@ def test_exact_prompt_leakage_block_and_no_text_in_manifest(tmp_path):
     assert "SENSITIVE" not in json.dumps(manifest)
     with pytest.raises(ValueError):
         select_disjoint(train, train, FakeTokenizer())
+
+
+def test_eval_requires_unique_normalized_prompts(tmp_path):
+    train = tmp_path / "train.jsonl"
+    heldout = tmp_path / "heldout.jsonl"
+    def row(q, a):
+        return json.dumps({"messages": [{"role": "user", "content": q},
+                                        {"role": "assistant", "content": a}]}) + "\n"
+    train.write_text(
+        row("TRAIN UNIQUE PROMPT 1", "Training answer one")
+        + row("TRAIN UNIQUE PROMPT 2", "Training answer two"))
+    heldout.write_text(
+        row("REPEATED HELDOUT PROMPT", "First heldout answer")
+        + row(" repeated   heldout prompt ", "Second heldout answer")
+        + row("SECOND UNIQUE HELDOUT", "Third heldout answer"))
+    tr, ev, manifest = select_disjoint(
+        train, heldout, FakeTokenizer(),
+        train_count=2, eval_count=2,
+        max_tokens=128, eval_max_tokens=128)
+    assert len(tr) == 2
+    assert len(ev) == 2
+    assert manifest["selection"] == "sha256-ranked-unique-normalized-prompt.v2"
+    assert manifest["eval_unique_prompt_hashes"] == 2
+    assert len(set(manifest["eval_selected_prompt_sha256"])) == 2
+    assert manifest["excluded_eval_pairs_repeating_selected_prompt"] == 1
+    assert "REPEATED HELDOUT PROMPT" not in json.dumps(manifest)
+
+
+def test_eval_fails_closed_when_rows_do_not_supply_enough_unique_prompts(tmp_path):
+    train = tmp_path / "train.jsonl"
+    heldout = tmp_path / "heldout.jsonl"
+    def row(q, a):
+        return json.dumps({"messages": [{"role": "user", "content": q},
+                                        {"role": "assistant", "content": a}]}) + "\n"
+    train.write_text(
+        row("TRAIN UNIQUE PROMPT 1", "Training answer one")
+        + row("TRAIN UNIQUE PROMPT 2", "Training answer two"))
+    heldout.write_text(
+        row("ONLY HELDOUT PROMPT", "First answer")
+        + row(" only   heldout prompt ", "Second answer"))
+    with pytest.raises(ValueError, match="Not enough disjoint"):
+        select_disjoint(
+            train, heldout, FakeTokenizer(),
+            train_count=2, eval_count=2,
+            max_tokens=128, eval_max_tokens=128)
