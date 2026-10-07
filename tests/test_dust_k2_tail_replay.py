@@ -4,12 +4,24 @@ import pytest
 
 torch=pytest.importorskip("torch")
 
+import experiments.dust.k2_structured_train_compare as structured_module
+import experiments.dust.k2_tail_replay as tail_module
 from experiments.dust.k2_forward_only import FinalProjectionLoRA, position_losses
 from experiments.dust.k2_structured_train_compare import structured_step_batched, cosine_error
 from experiments.dust.k2_tail_replay import (
     cache_base_sample, init_lora, tail_logits, tail_structured_step,
-    tail_scored_structured_step,
+    tail_scored_structured_step, tail_scored_structured_estimate,
+    tail_scored_tokenwise_estimate, tail_scored_tokenwise_step,
+    local_lora_grads_scored, score_tail_scored,
 )
+
+
+@pytest.fixture(autouse=True)
+def synthetic_memory_headroom(monkeypatch):
+    """Synthetic unit tests must not depend on current fleet memory pressure."""
+    enough=8*1024**3
+    monkeypatch.setattr(structured_module,"read_mem_available",lambda: enough)
+    monkeypatch.setattr(tail_module,"memory_available_bytes",lambda: enough)
 
 
 class TinyLayer(torch.nn.Module):
@@ -155,3 +167,60 @@ def test_scored_only_tail_matches_full_batched_update():
     assert scored_first["train_ce"] == pytest.approx(first["train_ce"],abs=1e-6)
     assert cosine_error(tail_a,full_a)["cosine"] > .999
     assert cosine_error(tail_b,full_b)["cosine"] > .999
+
+
+def test_tokenwise_antithetic_recovers_exact_local_output_and_lora_gradients():
+    torch.manual_seed(74)
+    model=TinyTailModel().eval().requires_grad_(False)
+    row=sample()
+    cache=cache_base_sample(model,row,"cpu")
+    a,b=init_lora(cache,rank=4,seed=111)
+    gen=torch.Generator(device="cpu").manual_seed(112)
+    with torch.no_grad():
+        b.copy_(torch.randn(b.shape,generator=gen)*.02)
+
+    positions,_=score_tail_scored(model,cache,a,b)
+    # Exact local output gradient at supervised final-o_proj positions.
+    from experiments.dust.k2_tail_replay import supervised_source_positions
+    scored_positions,_=supervised_source_positions(cache)
+    jitter=torch.zeros(
+        1,scored_positions.numel(),cache.oproj_output.shape[-1],
+        dtype=torch.float32,requires_grad=True)
+    losses,_=score_tail_scored(model,cache,a,b,jitter=jitter)
+    exact=torch.autograd.grad(losses.sum(),jitter)[0].detach()
+
+    estimate=tail_scored_tokenwise_estimate(
+        model,cache,a,b,seed=555,population=4096,
+        sigma=.005,direction_batch=32)
+    out=cosine_error(estimate["estimate"],exact)
+    exact_a,exact_b=local_lora_grads_scored(
+        cache,a,b,scored_positions,exact,count=int(scored_positions.numel()))
+    est_a,est_b=local_lora_grads_scored(
+        cache,a,b,scored_positions,estimate["estimate"],
+        count=int(scored_positions.numel()))
+    assert out["cosine"] > .97
+    assert cosine_error(est_a,exact_a)["cosine"] > .97
+    assert cosine_error(est_b,exact_b)["cosine"] > .97
+    assert estimate["unique_direction_vectors"] == 4096 * row["assistant_tokens"]
+    assert estimate["token_position_perturbations"] == 4096 * row["assistant_tokens"]
+    assert estimate["independent_noise_per_token"] is True
+
+
+def test_tokenwise_step_is_forward_only_and_updates_fresh_lora():
+    torch.manual_seed(75)
+    model=TinyTailModel().eval().requires_grad_(False)
+    row=sample()
+    cache=cache_base_sample(model,row,"cpu")
+    a,b=init_lora(cache,rank=4,seed=121)
+    a0=a.clone(); b0=b.clone()
+    first=tail_scored_tokenwise_step(
+        model,cache,a,b,seed=777,population=256,
+        sigma=.02,lr=.1,direction_batch=16)
+    assert first["tokens"] == row["assistant_tokens"]
+    assert first["tail_forward_calls"] == 17
+    assert first["unique_direction_vectors"] == 256 * row["assistant_tokens"]
+    assert first["token_position_perturbations"] == 256 * row["assistant_tokens"]
+    assert first["independent_noise_per_token"] is True
+    assert torch.equal(a,a0)  # B starts at zero, so first A gradient is zero.
+    assert not torch.equal(b,b0)
+    assert all(p.grad is None for p in model.parameters())

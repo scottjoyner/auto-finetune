@@ -50,13 +50,13 @@ time of a matched adapter-only backpropagation control.
 
 The quality result remains negative/neutral: average heldout cross-entropy
 worsens slightly for both forward-only and backprop controls in the tiny
-protocol. Our results therefore support a narrower claim: forward-only
+protocol. We also implement an independent per-token Gaussian estimator closer
+to Dust's tokenwise perturbation semantics. It is viable but does not beat the
+shared orthogonal control at K=256--1024 in this position-local final-layer
+setting. Our results therefore support a narrower claim: forward-only
 activation perturbation can recover backprop-like adapter updates at this
 scale, and systems structure can remove much of the apparent execution cost,
-but update fidelity is not sufficient evidence of generalization. We outline
-a next experiment that brings the estimator closer to Dust's independent
-per-token perturbation semantics and evaluates quality over longer,
-predeclared training schedules.
+but update fidelity is not sufficient evidence of generalization.
 \end{abstract}
 
 \section{Introduction}
@@ -105,10 +105,10 @@ The main contributions of this draft are:
     23$\times$ faster than our initial serial implementation.
     \item A deliberately negative quality result: high update cosine does not
     yet translate into repeatable heldout improvement in our small protocol.
-    \item A concrete next experiment to test independent per-token
-    perturbations, bringing the fine-tuning study closer to Dust's estimator
-    semantics rather than conflating our current shared-direction estimator
-    with the full method.
+    \item A completed independent per-token Gaussian perturbation
+    comparison showing that Dust-like tokenwise noise is viable here but is
+    less sample-efficient than the shared orthogonal control at K=256--1024,
+    clarifying where our fine-tuning setting differs from the full method.
 \end{itemize}
 
 \paragraph{Scope.}
@@ -199,10 +199,12 @@ draw. That choice made the gradient-calibration experiment simple and made a
 complete hidden-space basis possible, but it does not realize Dust's
 token-as-virtual-population mechanism.
 
-The next planned experiment therefore adds an independent per-token
-antithetic estimator and compares its compute/fidelity frontier with the
-shared-direction estimator. We retain the term Dust-inspired until that
-parity experiment is complete.
+We therefore add an independent per-token antithetic Gaussian estimator
+and compare its compute/fidelity frontier directly with the shared-direction
+control. The tokenwise estimator is viable but less sample-efficient at
+K=256--1024 in this final-layer, position-local setting. We retain the term
+Dust-inspired because earlier-layer perturbations and attention future-token
+credit remain outside the present experiment.
 
 \subsection{Cached final-tail replay}
 
@@ -411,13 +413,12 @@ suggest that the basic estimator is not obviously blocked by model scale or
 by AMD execution. Instead, the remaining research problem is a combination of
 population efficiency, estimator semantics, and optimization schedule.
 
-\section{Next Experiment: Tokenwise Virtual Population}
+\section{Tokenwise Perturbation Parity}
 
-The highest-value next experiment brings the fine-tuning estimator closer to
-Dust's defining tokenwise mechanism.
-
-For scored token $t$ and draw $k$, sample an independent direction
-$u_{k,t}$. The antithetic estimator becomes
+To close the largest semantic gap with Dust, we implemented independent
+per-token Gaussian activation perturbations in the cached final-\oproj{} tail.
+For scored token $t$ and draw $k$, the estimator uses an independently sampled
+direction $u_{k,t}$:
 \begin{equation}
 \hat g_{h_t} =
 \frac{1}{2\sigma K}
@@ -428,22 +429,65 @@ L_t(h_t-\sigma u_{k,t})
 \right]u_{k,t}.
 \end{equation}
 
-At the final \oproj{}, the downstream tail is position-local, so this test
-does not require the future-token attention credit used for earlier attention
-internals in Dust. That makes it a clean setting for comparing shared
-directions with truly independent tokenwise perturbations.
+We compare this tokenwise Gaussian estimator with the shared orthogonal
+antithetic control over seeds 7, 42, and 1337, populations
+$K\in\{64,256,1024\}$, and $\sigma\in\{0.05,0.25\}$. The calibration
+state uses a reproducible small nonzero LoRA-B factor so both A and B gradients
+are measurable.
 
-We will compare:
-\begin{enumerate}
-    \item historical one-sided Gaussian $K=64$;
-    \item shared orthogonal antithetic $K\in\{256,512,1024\}$;
-    \item tokenwise Gaussian antithetic $K\in\{64,256,1024\}$.
-\end{enumerate}
+At the preferred $\sigma=0.25$, mean cosine to exact local autograd is:
 
-The estimator will be selected from train-side gradient fidelity and variance,
-not heldout loss. The chosen configuration will then be frozen for an
-8/16/32-update, multi-seed quality experiment with a larger heldout set and
-fixed tool-call/agentic evaluations.
+\begin{table}[t]
+\centering
+\caption{Three-seed tokenwise-parity calibration at $\sigma=0.25$.}
+\label{tab:tokenwise}
+\begin{tabular}{llrrrr}
+\toprule
+Estimator & $K$ & Output cosine & LoRA-A cosine & LoRA-B cosine & Time (s) \\
+\midrule
+Shared orthogonal & 64   & 0.1964 & 0.1984 & 0.1899 & 0.117 \\
+Tokenwise Gaussian & 64 & 0.1976 & 0.2059 & 0.2033 & 0.116 \\
+Shared orthogonal & 256  & \textbf{0.4002} & \textbf{0.3401} & \textbf{0.4075} & 0.467 \\
+Tokenwise Gaussian & 256 & 0.3716 & 0.2344 & 0.3780 & 0.466 \\
+Shared orthogonal & 1024 & \textbf{0.8091} & \textbf{0.7278} & \textbf{0.8116} & 1.875 \\
+Tokenwise Gaussian & 1024 & 0.6266 & 0.5024 & 0.6274 & 1.868 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The tokenwise estimator is viable and improves with population, but it does
+not outperform the shared orthogonal estimator at the operating populations.
+At $K=1024$, the shared estimator has materially higher output and LoRA
+gradient cosine at essentially identical measured tail runtime.
+
+This negative result is informative rather than contradictory to Dust. In our
+restricted final-\oproj{} experiment, the downstream tail is position-local:
+each scored token's loss depends only on its own perturbed final-layer output.
+Reusing the same well-structured orthogonal basis across token positions does
+not create cross-token credit contamination in this setting, while
+orthogonality reduces estimator variance. Dust addresses a broader case in
+which many sites are perturbed and attention creates future-token credit.
+
+A two-step real-model training smoke verifies that the selectable tokenwise
+path is operational end-to-end with zero backward calls and an unchanged base
+model. We therefore treat tokenwise parity as a completed calibration gate,
+not as a reason to replace the current structured estimator.
+
+\section{Next Experiment: Quality Scaling}
+
+Estimator selection is now frozen for the next quality experiment:
+shared orthogonal antithetic perturbations with $K=1024$, $\sigma=0.25$, and
+D=4 cached scored-tail replay.
+
+The next protocol will test 8, 16, and 32 update schedules across multiple
+predeclared seeds, with a larger independently checked heldout set,
+near-duplicate screening, fixed tool-call exactness/JSON-validity metrics, and
+fixed agentic completion tasks. The matched adapter-only backprop control will
+remain in every cell.
+
+The estimator will not be retuned using heldout results. Checkpoint promotion
+requires repeatable heldout or task-level improvement; train-loss reduction or
+high gradient cosine alone remains insufficient.
 
 \section{Limitations}
 
@@ -488,10 +532,10 @@ of the redundant full-model compute. The resulting tiny protocol is roughly
 2.1$\times$ matched adapter-only backprop rather than tens of times slower.
 
 The remaining open question is more important than execution fidelity:
-whether a closer Dust-parity tokenwise estimator and longer fixed training
-schedule produce repeatable heldout or task-level gains. Our next experiments
-are designed to answer that question without widening the claim beyond the
-evidence.
+whether the fixed best estimator, evaluated over longer predeclared schedules
+and broader task suites, produces repeatable heldout or task-level gains. The
+tokenwise parity gate is now complete and does not justify replacing the
+shared orthogonal K=1024 control in this setting.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
@@ -515,6 +559,8 @@ Three-seed cached-tail mean runtime & 14.99 s \\
 Three-seed serial structured mean runtime & 347.42 s \\
 Three-seed matched backprop mean runtime & 7.06 s \\
 Three-seed cached-tail mean heldout CE delta & +0.000588 \\
+Tokenwise K=1024 A/B cosine at $\sigma=.25$ & 0.5024 / 0.6274 \\
+Shared orthogonal K=1024 A/B cosine at $\sigma=.25$ & 0.7278 / 0.8116 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -525,7 +571,7 @@ Before any arXiv submission:
 \begin{enumerate}
     \item finalize authors and affiliations;
     \item rerun all tables from immutable public-safe manifests;
-    \item complete tokenwise-parity experiments;
+    \item regenerate tokenwise-parity tables from the immutable public-safe manifest;
     \item expand heldout/task evaluation;
     \item verify every hardware/runtime claim against manifests;
     \item replace provisional web citations if an official Dust arXiv entry
