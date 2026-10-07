@@ -59,8 +59,11 @@ def structured_step(model, adapter: FinalProjectionLoRA, sample: dict, device: s
         del raw
         estimate_sum = torch.zeros(
             (*clean.shape, hidden), device=device, dtype=torch.float32)
+        min_host_mem = read_mem_available()
         for index in range(population):
-            if read_mem_available() < 1536 * 1024**2:
+            available = read_mem_available()
+            min_host_mem = min(min_host_mem, available)
+            if available < 1536 * 1024**2:
                 raise MemoryError("Host memory below structured-step floor")
             noise = directions[index].view(1, 1, hidden).expand_as(estimate_sum)
             adapter.jitter = sigma * noise
@@ -83,6 +86,7 @@ def structured_step(model, adapter: FinalProjectionLoRA, sample: dict, device: s
             "train_ce": float(clean.sum().item()/mask.sum().item()),
             "population": population, "sigma": sigma,
             "forward_calls": 1 + 2*population,
+            "min_host_mem_available_bytes": min_host_mem,
         }
 
 
@@ -124,9 +128,12 @@ def structured_step_batched(
             [sample["labels"]], device=device, dtype=torch.long)
         forward_calls = 1
         chunks = 0
+        min_host_mem = read_mem_available()
         try:
             for start in range(0, population, direction_batch):
-                if read_mem_available() < 1536 * 1024**2:
+                available = read_mem_available()
+                min_host_mem = min(min_host_mem, available)
+                if available < 1536 * 1024**2:
                     raise MemoryError("Host memory below batched structured-step floor")
                 d = directions[start:start + direction_batch]
                 width = d.shape[0]
@@ -165,6 +172,7 @@ def structured_step_batched(
             "population": population, "sigma": sigma,
             "direction_batch": direction_batch,
             "chunks": chunks, "forward_calls": forward_calls,
+            "min_host_mem_available_bytes": min_host_mem,
         }
 
 
