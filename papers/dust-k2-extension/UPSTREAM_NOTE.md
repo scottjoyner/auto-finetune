@@ -32,13 +32,18 @@ slightly in the short protocol for both the forward-only treatment and the
 matched backprop control. We are treating that as a useful negative result,
 not hiding it.
 
-One important difference from Dust is that our current orthogonal estimator
+One important difference from Dust is that our strongest structured estimator
 shares a perturbation direction across token positions within a draw, whereas
-Dust uses independent per-token activation noise. We are planning that parity
-experiment next; because our current trainable site is the final attention
-`o_proj`, the downstream tail is position-local and gives us a clean way to
-test the token-as-virtual-population idea before attempting earlier-layer
-future-token credit.
+Dust uses independent per-token activation noise. We have now completed that
+parity experiment for the final attention `o_proj`. Independent per-token
+Gaussian antithetic noise is viable and improves with population, but at
+K=256 and K=1024 it is less aligned with exact local autograd than the shared
+orthogonal control at essentially the same tail runtime. At K=1024 and
+sigma=.25, mean A/B gradient cosine is approximately **.502/.627** for
+tokenwise Gaussian versus **.728/.812** for shared orthogonal directions over
+three seeds. We interpret this as a property of this deliberately
+position-local final-tail setting, not as a contradiction of Dust's broader
+attention/future-credit regime.
 
 We have drafted an arXiv-style independent technical report and can provide a
 public-safe reproduction package with synthetic fixtures, estimator code,
@@ -48,7 +53,9 @@ needed for that package.
 We would value feedback on whether this extension is useful to your research
 agenda, especially on:
 
-1. the most faithful tokenwise estimator comparison to prioritize;
+1. whether you would expect tokenwise independence to show its main benefit
+   only once perturbations participate in attention/future-token credit rather
+   than in a position-local final tail;
 2. whether you have a preferred way to report population/forward cost for
    adapter-tuning experiments;
 3. any implementation details from the full experiments that would affect a
