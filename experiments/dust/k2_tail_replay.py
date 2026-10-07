@@ -257,37 +257,48 @@ def score_tail_scored(model, cache: TailCache, a, b, jitter=None):
     return losses,positions
 
 
+def local_lora_grads_scored(
+    cache: TailCache, a, b, positions, output_gradient, *, count: int
+):
+    x=cache.oproj_input[:,positions,:].reshape(
+        -1,cache.oproj_input.shape[-1]).float()
+    dy=output_gradient.reshape(-1,output_gradient.shape[-1]).float()
+    z=x @ a.T
+    grad_b=dy.T @ z / count
+    grad_a=(dy @ b).T @ x / count
+    return grad_a,grad_b
+
+
 def apply_local_lora_update_scored(
     cache: TailCache, a, b, positions, output_gradient, *, count: int, lr: float
 ):
     import torch
     with torch.no_grad():
-        x=cache.oproj_input[:,positions,:].reshape(
-            -1,cache.oproj_input.shape[-1]).float()
-        dy=output_gradient.reshape(-1,output_gradient.shape[-1]).float()
-        z=x @ a.T
-        grad_b=dy.T @ z / count
-        grad_a=(dy @ b).T @ x / count
+        grad_a,grad_b=local_lora_grads_scored(
+            cache,a,b,positions,output_gradient,count=count)
         b.add_(grad_b,alpha=-lr)
         a.add_(grad_a,alpha=-lr)
     return grad_a,grad_b
 
 
-def tail_scored_structured_step(
+def tail_scored_structured_estimate(
     model, cache: TailCache, a, b, *, seed: int, population: int,
-    sigma: float, lr: float, direction_batch: int,
-) -> dict:
-    """Orthogonal antithetic update using only supervised final-tail positions."""
+    sigma: float, direction_batch: int,
+):
+    """Estimate output gradients with shared orthogonal antithetic directions."""
     import torch
-    positions,targets=supervised_source_positions(cache)
+
+    positions,_=supervised_source_positions(cache)
     count=int(positions.numel())
     out_features=cache.oproj_output.shape[-1]
     if population > out_features:
         raise ValueError("population exceeds final o_proj output width")
     if direction_batch not in (1,2,4,8,16,32):
         raise ValueError("unsupported direction_batch")
-    if not (0 < sigma <= .5 and 0 < lr <= 1.0):
-        raise ValueError("invalid sigma/lr")
+    if direction_batch > population:
+        raise ValueError("direction_batch exceeds population")
+    if not (0 < sigma <= .5):
+        raise ValueError("invalid sigma")
 
     with torch.no_grad():
         clean,_=score_tail_scored(model,cache,a,b)
@@ -326,17 +337,161 @@ def tail_scored_structured_step(
                 diff.unsqueeze(-1)*d[:,None,:]
             ).sum(dim=0,keepdim=True)/(2.0*sigma*population)
             forwards += 1
-        grad_a,grad_b=apply_local_lora_update_scored(
-            cache,a,b,positions,estimate,count=count,lr=lr)
         return {
-            "train_ce":float(clean.mean().item()),
+            "clean":clean,
+            "positions":positions,
+            "estimate":estimate,
             "tokens":count,
             "population":population,
             "direction_batch":direction_batch,
             "tail_forward_calls":forwards,
             "elapsed_seconds":time.monotonic()-started,
+            "min_host_mem_available_bytes":min_host_mem,
+            "independent_noise_per_token":False,
+            "unique_direction_vectors":population,
+            "token_position_perturbations":population*count,
+        }
+
+
+def tail_scored_structured_step(
+    model, cache: TailCache, a, b, *, seed: int, population: int,
+    sigma: float, lr: float, direction_batch: int,
+) -> dict:
+    """Orthogonal antithetic update using only supervised final-tail positions."""
+    import torch
+
+    if not (0 < lr <= 1.0):
+        raise ValueError("invalid learning rate")
+    with torch.no_grad():
+        result=tail_scored_structured_estimate(
+            model,cache,a,b,seed=seed,population=population,
+            sigma=sigma,direction_batch=direction_batch)
+        grad_a,grad_b=apply_local_lora_update_scored(
+            cache,a,b,result["positions"],result["estimate"],
+            count=result["tokens"],lr=lr)
+        return {
+            "train_ce":float(result["clean"].mean().item()),
+            "tokens":result["tokens"],
+            "population":population,
+            "direction_batch":direction_batch,
+            "tail_forward_calls":result["tail_forward_calls"],
+            "elapsed_seconds":result["elapsed_seconds"],
             "grad_a_norm":float(grad_a.norm().item()),
             "grad_b_norm":float(grad_b.norm().item()),
-            "min_host_mem_available_bytes":min_host_mem,
+            "min_host_mem_available_bytes":result[
+                "min_host_mem_available_bytes"],
             "scored_positions_only":True,
+            "independent_noise_per_token":False,
+            "unique_direction_vectors":result["unique_direction_vectors"],
+            "token_position_perturbations":result[
+                "token_position_perturbations"],
+        }
+
+
+def tail_scored_tokenwise_estimate(
+    model, cache: TailCache, a, b, *, seed: int, population: int,
+    sigma: float, direction_batch: int,
+):
+    """Estimate per-token final-o_proj output gradients with independent noise.
+
+    Unlike tail_scored_structured_step, each scored token receives an
+    independent Gaussian perturbation for every draw. This matches the
+    token-as-virtual-population semantics we want to compare against Dust more
+    closely, while remaining restricted to the position-local final-o_proj
+    downstream tail.
+    """
+    import torch
+
+    positions,_=supervised_source_positions(cache)
+    count=int(positions.numel())
+    out_features=cache.oproj_output.shape[-1]
+    if population <= 0 or population > 4096:
+        raise ValueError("population must be in [1,4096]")
+    if direction_batch not in (1,2,4,8,16,32):
+        raise ValueError("unsupported direction_batch")
+    if direction_batch > population:
+        raise ValueError("direction_batch exceeds population")
+    if not (0 < sigma <= .5):
+        raise ValueError("invalid sigma")
+
+    with torch.no_grad():
+        clean,_=score_tail_scored(model,cache,a,b)
+        estimate=torch.zeros(
+            1,count,out_features,device=cache.oproj_output.device,
+            dtype=torch.float32)
+        gen=torch.Generator(device=cache.oproj_output.device).manual_seed(seed)
+        forwards=1
+        min_host_mem=memory_available_bytes()
+        if min_host_mem and min_host_mem < 1536 * 1024**2:
+            raise MemoryError("host memory below tokenwise-tail safety floor")
+        started=time.monotonic()
+        draws=0
+        while draws < population:
+            available=memory_available_bytes()
+            if available:
+                min_host_mem=min(min_host_mem,available)
+                if available < 1536 * 1024**2:
+                    raise MemoryError("host memory below tokenwise-tail safety floor")
+            width=min(direction_batch,population-draws)
+            noise=torch.randn(
+                width,count,out_features,generator=gen,
+                device=cache.oproj_output.device,dtype=torch.float32)
+            signed=torch.cat((noise,-noise),dim=0)
+            losses,_=score_tail_scored(
+                model,cache,a,b,jitter=signed*sigma)
+            plus,minus=losses[:width].float(),losses[width:].float()
+            diff=plus-minus
+            estimate += (
+                diff.unsqueeze(-1)*noise
+            ).sum(dim=0,keepdim=True)/(2.0*sigma*population)
+            forwards += 1
+            draws += width
+        return {
+            "clean":clean,
+            "positions":positions,
+            "estimate":estimate,
+            "tokens":count,
+            "population":population,
+            "direction_batch":direction_batch,
+            "tail_forward_calls":forwards,
+            "elapsed_seconds":time.monotonic()-started,
+            "min_host_mem_available_bytes":min_host_mem,
+            "independent_noise_per_token":True,
+            "unique_direction_vectors":population*count,
+            "token_position_perturbations":population*count,
+        }
+
+
+def tail_scored_tokenwise_step(
+    model, cache: TailCache, a, b, *, seed: int, population: int,
+    sigma: float, lr: float, direction_batch: int,
+) -> dict:
+    """Apply one tokenwise antithetic final-o_proj LoRA update."""
+    import torch
+
+    if not (0 < lr <= 1.0):
+        raise ValueError("invalid learning rate")
+    with torch.no_grad():
+        result=tail_scored_tokenwise_estimate(
+            model,cache,a,b,seed=seed,population=population,
+            sigma=sigma,direction_batch=direction_batch)
+        grad_a,grad_b=apply_local_lora_update_scored(
+            cache,a,b,result["positions"],result["estimate"],
+            count=result["tokens"],lr=lr)
+        return {
+            "train_ce":float(result["clean"].mean().item()),
+            "tokens":result["tokens"],
+            "population":population,
+            "direction_batch":direction_batch,
+            "tail_forward_calls":result["tail_forward_calls"],
+            "elapsed_seconds":result["elapsed_seconds"],
+            "grad_a_norm":float(grad_a.norm().item()),
+            "grad_b_norm":float(grad_b.norm().item()),
+            "min_host_mem_available_bytes":result[
+                "min_host_mem_available_bytes"],
+            "scored_positions_only":True,
+            "independent_noise_per_token":True,
+            "unique_direction_vectors":result["unique_direction_vectors"],
+            "token_position_perturbations":result[
+                "token_position_perturbations"],
         }
