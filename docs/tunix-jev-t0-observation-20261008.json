@@ -1,0 +1,31 @@
+{
+  "Tunix_agent_training_executed": false,
+  "dependencies": {
+    "jax": {
+      "distribution_version": null,
+      "module_found": false
+    },
+    "tunix": {
+      "distribution_version": null,
+      "module_found": false
+    }
+  },
+  "episodes": [
+    {
+      "production_dispatch_authorized": false,
+      "provider_tokens": 0,
+      "reward": 0.75826772,
+      "task": "K2-synthetic-tail-1"
+    },
+    {
+      "production_dispatch_authorized": false,
+      "provider_tokens": 0,
+      "reward": 0.27795276,
+      "task": "K2-synthetic-tail-2"
+    }
+  ],
+  "hosted_calls": 0,
+  "real_model_weights_read": false,
+  "schema": "jev.tunix-t0.v1",
+  "status": "OFFLINE_ENVIRONMENT_ONLY"
+}
