@@ -1,0 +1,59 @@
+\documentclass[10pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref,amsmath,booktabs}
+\title{An Offline Probe-and-Update Environment Contract for Researching Learned LLM Optimizer Policies}
+\author{Research engineering note --- author attribution pending}
+\date{8 October 2026}
+\begin{document}
+\maketitle
+\begin{abstract}
+We specify and test a minimal deterministic two-step agent environment
+motivated by predictive forward-only fine-tuning. The environment
+uses a synthetic hidden update direction, permits one probe and one
+fake update or abstention, and returns a scalar reward. This establishes
+an executable environment contract, not model gradient prediction,
+learned optimization or a Tunix integration.
+\end{abstract}
+\section{Prediction and model}
+We preregister a reproducibility hypothesis: a bounded synthetic
+probe-to-update episode can be exercised safely without loading real
+weights or contacting providers. A future experiment may test whether
+architecture sketches and representation statistics predict useful
+low-rank update directions compared with exact autograd and
+orthogonal/gaussian forward-only estimators \cite{parity}.
+Our T0 null includes malformed action acceptance or unsanctioned
+execution. The synthetic gradient $g$ is task-id-derived.
+An action chooses coordinate $i$ for observation $g_i$; the next
+action chooses a sign $s\in\{-1,+1\}$ and coordinate $j$ with
+reward $r=s g_j-0.1$, or abstains with $r=0$.
+\section{Observed results}
+On X1 the focused environment tests passed 5/5.
+The fixed two-task rewards were 0.75826772 and 0.27795276,
+respectively. Neither the JAX nor Tunix module was installed.
+No trainable policy or target model was loaded. These synthetic
+rewards are not predictive-quality observations.
+\section{Limitations and next tests}
+Tunix \cite{tunix} is a JAX-based post-training library for supervised
+and reinforcement learning. Its policy optimization routines need
+not be forward-only even if the target model's update estimator is.
+This study does not exercise Tunix APIs, JAX hardware backends,
+any inference, architecture transfer, embeddings, private data,
+checkpoint quality or external environment actions.
+The next phase requires a pinned upstream revision, isolated JAX
+CPU installation, sealed train/test lineage and budget-matched
+controls. All learned policies remain advisory and cannot grant
+provider capacity or production authority.
+\section{Reproducibility}
+\begin{verbatim}
+python3 -m unittest discover -s tests -p test_tunix_jev_t0.py -v
+python3 -m scripts.tunix_jev_t0
+\end{verbatim}
+\begin{thebibliography}{9}
+\bibitem{tunix} Google, \emph{Tunix: A Lightweight LLM Post-Training Library},
+\url{https://github.com/google/tunix}, accessed October 2026.
+\bibitem{parity} scottjoyner/auto-finetune,
+\emph{Tokenwise Dust parity experiment}, PR 13 (2026).
+\bibitem{jax} JAX authors, \emph{Installation guide},
+\url{https://docs.jax.dev/en/latest/installation.html}.
+\end{thebibliography}
+\end{document}
