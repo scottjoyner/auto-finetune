@@ -97,6 +97,49 @@ class RankAdmissionTests(unittest.TestCase):
     "real CPU Torch+Transformers meta integration is opt-in",
 )
 class RealQwenMetaTests(unittest.TestCase):
+    def test_official_synthetic_bf16_export_cast_matches_byte_accountant(self):
+        # This executes the pinned upstream class only on a small synthetic
+        # CPU layer, then mirrors the *active* main.py save_artifacts cast
+        # predicate. It does not import/train the CLI or download weights.
+        import torch
+        from experiments.littlebit.official_class_parity import (
+            load_official_class, verify_source,
+        )
+        Base = load_official_class(verify_source(
+            Path(os.environ["LITTLEBIT_UPSTREAM_ROOT"])))
+
+        class Layer(Base, torch.nn.Linear):
+            def __init__(self):
+                torch.nn.Linear.__init__(self, 256, 128, bias=False)
+
+        torch.manual_seed(7)
+        layer = Layer()
+        layer.__quant_convert__(
+            do_train=True, quant_func=torch.sign, split_dim=16,
+            min_split_dim=16, residual=False, use_itq=False)
+        before = layer.state_dict()
+        raw_bytes = sum(t.numel() * t.element_size() for t in before.values())
+        after = {
+            key: tensor.to(torch.bfloat16)
+            if "packed" not in key and "shape" not in key
+            and tensor.dtype == torch.float32 else tensor
+            for key, tensor in before.items()
+        }
+        exported_bytes = sum(t.numel() * t.element_size()
+                             for t in after.values())
+        from experiments.littlebit.qwen_metadata_budget import (
+            projected_upstream_tensor_bytes,
+        )
+        expected_raw = projected_upstream_tensor_bytes(128, 256, 16)
+        expected_bf16 = (projected_upstream_tensor_bytes(
+            128, 256, 16, scale_bytes=2) - 4)
+        self.assertEqual(raw_bytes, expected_raw)
+        self.assertEqual(exported_bytes, expected_bf16)
+        self.assertLess(exported_bytes, raw_bytes)
+        self.assertEqual(after["u1"].dtype, torch.bfloat16)
+        self.assertEqual(after["_eff_bit_actual"].dtype, torch.bfloat16)
+        self.assertEqual(after["_split_dim_final"].dtype, torch.int64)
+
     def test_055_actual_conversion_is_deny_only(self):
         result = admission.inspect(
             Path(os.environ["LITTLEBIT_QWEN_CONFIG"]),
