@@ -35,10 +35,22 @@ def pseudonym(key: bytes, sample: dict) -> str:
         raise ValueError("episode HMAC key must be at least 32 bytes")
     tokens = sample["tokens"]
     labels = sample["labels"]
-    if not isinstance(tokens, list) or not isinstance(labels, list):
-        raise ValueError("invalid sample for keyed grouping")
+    if (not isinstance(tokens, list) or not isinstance(labels, list)
+            or len(tokens) != len(labels)):
+        raise ValueError("invalid source shape for keyed grouping")
+    # Only the non-supervised prompt prefix determines the episode group.
+    # Different target responses to the SAME prompt must never be partitioned
+    # into different train/eval groups.
+    first_scored = next((i for i, label in enumerate(labels)
+                         if label != -100), None)
+    if first_scored is None or first_scored < 1:
+        raise ValueError("source lacks a masked prompt prefix")
+    prefix = tokens[:first_scored]
+    if any(type(x) is not int for x in prefix):
+        raise ValueError("noninteger prompt token")
     return hmac.new(
-        key, stable_json({"tokens": tokens, "labels": labels}).encode(),
+        key, stable_json({"source_group_schema": "masked-prompt-prefix-v2",
+                          "prefix_tokens": prefix}).encode(),
         hashlib.sha256,
     ).hexdigest()
 
