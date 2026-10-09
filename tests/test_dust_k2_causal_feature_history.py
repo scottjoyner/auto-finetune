@@ -15,7 +15,7 @@ class CausalHistoryTests(unittest.TestCase):
         self.assertEqual(len(FEATURES), 8)
         with self.assertRaisesRegex(ValueError,"prior PRE preview"):
             state.commit_batch(first_index=0,clean_loss=1.,
-                               plus_losses=[.9],minus_losses=[1.1],sigma=.25)
+                               plus_losses=[.9,1.1],minus_losses=[1.1,.9],sigma=.25)
 
     def test_batch_history_unchanged_until_complete_plus_minus_post(self):
         state=self.make_state()
