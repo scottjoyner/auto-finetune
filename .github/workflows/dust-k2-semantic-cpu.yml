@@ -5,6 +5,7 @@ on:
     paths:
       - 'experiments/dust/k2_semantic_challenge_contract.py'
       - 'experiments/dust/k2_offline_semantic_audit.py'
+      - 'experiments/dust/k2_encoder_challenge_compare.py'
       - 'tests/test_dust_k2_semantic_challenge.py'
       - 'docs/dust-k2-semantic-challenge-20261009.md'
       - '.github/workflows/dust-k2-semantic-cpu.yml'
@@ -33,6 +34,7 @@ jobs:
         run: |
           python -m py_compile \
             experiments/dust/k2_semantic_challenge_contract.py \
-            experiments/dust/k2_offline_semantic_audit.py
+            experiments/dust/k2_offline_semantic_audit.py \
+            experiments/dust/k2_encoder_challenge_compare.py
           echo "No real prompts, tensors, models, GPUs, keys, external calls, storage or training."
           echo "Semantic review scores never authorize source independence or classifier fit."
