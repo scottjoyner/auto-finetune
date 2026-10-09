@@ -1,0 +1,44 @@
+name: Dust K2 auxiliary source cluster accounting
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_auxiliary_prompt_clusters.py'
+      - 'experiments/dust/k2_auxiliary_cluster_reconcile.py'
+      - 'experiments/dust/k2_full_source_overlap.py'
+      - 'tests/test_dust_k2_auxiliary_prompt_clusters.py'
+      - 'tests/test_dust_k2_auxiliary_cluster_reconcile.py'
+      - 'tests/test_dust_k2_full_source_overlap.py'
+      - 'docs/dust-k2-auxiliary-prompt-clusters-20261009.md'
+      - '.github/workflows/dust-k2-auxiliary-clusters-cpu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  strict-private-cpu-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate exact lexical clusters, private reconciliation and complete original-source scan
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_auxiliary_prompt_clusters.py -v
+          python -m unittest discover -s tests -p test_dust_k2_auxiliary_cluster_reconcile.py -v
+          python -m unittest discover -s tests -p test_dust_k2_full_source_overlap.py -v
+      - name: Compile full private scanner and verifier
+        run: |
+          python -m py_compile \
+            experiments/dust/k2_auxiliary_prompt_clusters.py \
+            experiments/dust/k2_auxiliary_cluster_reconcile.py \
+            experiments/dust/k2_full_source_overlap.py
+          echo "Synthetic-only CI, no private K2 corpus, HMAC key, model weights or GPU."
+          echo "No trained classifier, source split promotion, receiver key custody or optimizer authority."
