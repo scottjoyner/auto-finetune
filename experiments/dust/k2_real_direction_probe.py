@@ -32,7 +32,11 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
         sample_index: int = 0, seed: int = 42, population: int = 64,
         sigma: float = 0.25, direction_batch: int = 4,
         max_tokens: int = 128, device: str = "cuda",
-        receiver_run_id: str | None = None) -> dict:
+        receiver_run_id: str | None = None,
+        preflight_manifest: Path | None = None,
+        expected_preflight_sha256: str | None = None) -> dict:
+    if preflight_manifest is None or expected_preflight_sha256 is None:
+        raise ValueError("source-group preflight and pinned manifest hash required")
     if population not in (8, 16, 32, 64):
         raise ValueError("first witness is capped at 64 directions")
     if direction_batch != 4 or population % direction_batch:
@@ -65,6 +69,17 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
     del tokenizer
     episode = pseudonym(key, sample)
     del key
+    from .k2_cohort_preflight import authorize_index
+    manifest_raw = preflight_manifest.read_bytes()
+    if hashlib.sha256(manifest_raw).hexdigest() != expected_preflight_sha256:
+        raise ValueError("tampered or unpinned source cohort manifest")
+    selected_group = authorize_index(
+        json.loads(manifest_raw),
+        source_sha256=digest(train_file),
+        model_config_sha256=digest(model_dir / "config.json"),
+        max_tokens=max_tokens, sample_index=sample_index,
+        episode_hmac_sha256=episode)
+    del manifest_raw
     before_load = time.monotonic()
     model, observed_sha = load_base(
         model_dir, device=device, expected_sha=expected_sha)
@@ -110,6 +125,10 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
             "model_config_sha256": digest(model_dir / "config.json"),
             "sample_selection_pseudonymous": True,
             "source_group_schema": "masked-prompt-prefix-v2",
+            "preflight_manifest_sha256": expected_preflight_sha256,
+            "preflight_group_split": selected_group["group_split"],
+            "preflight_cluster_size": selected_group["cluster_members"],
+            "near_duplicate_clustering_scope": "single pinned corpus only",
             "raw_source_identifiers_in_evidence": False,
             "source_episode_hmac_sha256": episode,
             "population": population, "sigma": sigma, "seed": seed,
@@ -162,6 +181,10 @@ def main(argv=None):
     ap.add_argument("--direction-batch", type=int, default=4)
     ap.add_argument("--max-tokens", type=int, default=128)
     ap.add_argument("--receiver-run-id", help="hex32 run ID for x1 HMAC receipt")
+    ap.add_argument("--preflight-manifest", required=True, type=Path,
+                    help="producer-local, exact near-duplicate preflight JSON")
+    ap.add_argument("--expected-preflight-sha256", required=True,
+                    help="pinned SHA256 of that cohort preflight")
     args = ap.parse_args(argv)
     if not args.observe_only:
         ap.error("explicit --observe-only is required")
@@ -179,7 +202,9 @@ def main(argv=None):
         population=args.population, sigma=args.sigma,
         direction_batch=args.direction_batch,
         max_tokens=args.max_tokens, device=args.device,
-        receiver_run_id=args.receiver_run_id)
+        receiver_run_id=args.receiver_run_id,
+        preflight_manifest=args.preflight_manifest,
+        expected_preflight_sha256=args.expected_preflight_sha256)
     with args.output.open("x", encoding="utf-8") as target:
         target.write(json.dumps(report, sort_keys=True, indent=2) + "\n")
 
