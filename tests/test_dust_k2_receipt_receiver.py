@@ -51,8 +51,8 @@ class ReceiverCustodyTests(unittest.TestCase):
                 receive(root, "not-hex", "a" * 64)
             with self.assertRaises(ValueError):
                 receive(root, "a" * 32, "bad-hash")
-            self.assertFalse((root / "a" * 32).exists()
-                             if False else False)
+            self.assertEqual(sorted(p.name for p in root.iterdir()),
+                             ["receiver-owned.key"])
 
 
 if __name__ == "__main__":
