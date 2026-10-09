@@ -56,7 +56,8 @@ def refuse_remote_reviewer_session() -> None:
     """Defense in depth only. Absence of these flags does NOT certify
     physical console, human identity or absence of session recording.
     """
-    refuse_remote_reviewer_session()
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        raise PermissionError("human TTY required; headless session denied")
     if any(os.environ.get(name) for name in (
             "SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY", "MOSH_IP")):
         raise PermissionError("remote SSH/mosh reviewer session denied")
@@ -134,8 +135,7 @@ def record_decisions(queue, lookup, *,
 def run_interactive(*, queue_path: Path, queue_sha: str, source_path: Path,
                     source_sha: str, key_path: Path, reviewer_id: str,
                     receipt_path: Path):
-    if not sys.stdin.isatty() or not sys.stdout.isatty():
-        raise PermissionError("human TTY required; headless session denied")
+    refuse_remote_reviewer_session()
     if (receipt_path.is_symlink() or receipt_path.exists()
             or not receipt_path.parent.is_dir()
             or receipt_path.parent.stat().st_mode & 0o077):
