@@ -49,3 +49,15 @@ Research bundle supplied in the associated ChatGPT conversation; no code has bee
 - Compare official `torch.svd_lowrank` randomized behavior at controlled torch RNG seeds with deterministic independent full-SVD reference. Don't claim numerical equality for different SVD implementations.
 - Lock model/data revisions and license rights before any pretrained Qwen layer experiment.
 - GPU/QAT/inference/production remain **HOLD**.
+
+## Extension: FP32 scale sensitivity and executable upstream-source gate
+
+The pinned source's `_initialize_parameters()` calls `self.weight.data.float()` before `_decompose_matrix()`, whose scale output is cast to that decomposition input's dtype. Therefore treating initialized scales as FP16 without checking the real model's later casts is **not justified**.
+
+On an independent synthetic, upstream-shaped **128×256 rank-24** PyTorch tensor dictionary, full payload BPW was **0.53515625** assuming FP16 scales and **0.74609375** using FP32 scales. The same separate one-layer `torch.save` ZIPs measured **1.45361328125** and **1.67236328125 BPW** respectively. The initial upstream-reported formula yields only **0.48046875 BPW**. These numbers illustrate how dtype, row packing, and checkpoint framing can alter target feasibility. They are **not** official class or whole-model checkpoints.
+
+The v3 bundle contains an opt-in `official_upstream_parity_gate.py` that verifies both exact pinned Git blob IDs, rejects missing/tampered source, requires `--execute-cpu`, refuses GPU-visible runtimes, and can load the real upstream `LittleBitLinear` from an external read-only clone for bounded 64×64 rank-8 initialization tests. **This official runtime path remains NOT_RUN**; negative-action acceptance passed. No upstream implementation files are redistributed in the bundle.
+
+The complete self-contained independent audit (including original synthetic experiments) now passes **35/35 tests** when extracted afresh under Python 3.13.5 / CPU Torch 2.10.0. Evidence: test log SHA256 `33aff9608d1592b1279187da4177f9f112b7ac753183cf3d76049610f8697a76`; revised 7-row audit JSON SHA256 `e9c1ab35752892d470a6b82aee8be550f603c69de5c562846fe03ae600df8a89`; full reproducible bundle SHA256 `3dcddb25bc95cc3bfc1d02fe018533675da4efc80a4a8294c37bfe82ab4c60e7`.
+
+**Gate status unchanged:** exact official CPU class execution HOLD; model layer parity HOLD; any pretrained model, QAT, GPU, provider usage, NAS writing or production promotion DENIED.
