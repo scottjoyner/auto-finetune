@@ -1,0 +1,44 @@
+name: LittleBit research metadata CPU
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/littlebit/qwen_metadata_budget.py'
+      - 'tests/test_littlebit_qwen_metadata_budget.py'
+      - 'research/littlebit-fleet/E2_QWEN_METADATA_BUDGET_20261009.md'
+      - '.github/workflows/littlebit-metadata-cpu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-metadata:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download pinned model CONFIG only (no weights)
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --max-time 20 \
+            'https://huggingface.co/Qwen/Qwen3-0.6B/resolve/167b8104f88905a951069f5f95f9776908da5f68/config.json' \
+            -o "$RUNNER_TEMP/qwen3_config.json"
+          printf '%s  %s\n' \
+            660db3b73d788119c04535e48cf9be5f55bc3100841a718637ae695b442f27dd \
+            "$RUNNER_TEMP/qwen3_config.json" | sha256sum --check --strict
+      - name: Run only the independent metadata/packing tests
+        env:
+          LITTLEBIT_QWEN_CONFIG: ${{ runner.temp }}/qwen3_config.json
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_littlebit_qwen_metadata_budget.py -v
+          python -m experiments.littlebit.qwen_metadata_budget \
+            --config "$LITTLEBIT_QWEN_CONFIG" --inspect-pinned-metadata > "$RUNNER_TEMP/qwen3_projection.json"
+      - name: Distinguish the overall repository test suite
+        run: |
+          echo "This check covers only LittleBit metadata tests."
+          echo "It does NOT claim the full repository pytest workflow, upstream Torch integration, or GPU/QAT checks are green."
