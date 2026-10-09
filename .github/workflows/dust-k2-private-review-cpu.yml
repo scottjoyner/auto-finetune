@@ -1,0 +1,43 @@
+name: Dust K2 private semantic human review contract
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_private_semantic_review_queue.py'
+      - 'experiments/dust/k2_human_semantic_adjudication.py'
+      - 'experiments/dust/k2_local_semantic_review_session.py'
+      - 'tests/test_dust_k2_private_semantic_review.py'
+      - 'tests/test_dust_k2_local_semantic_review_session.py'
+      - 'docs/dust-k2-private-semantic-review-20261009.md'
+      - '.github/workflows/dust-k2-private-review-cpu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reject-forged-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Exact synthetic private queue and human-only receipt tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_private_semantic_review.py -v
+          python -m unittest discover -s tests -p test_dust_k2_local_semantic_review_session.py -v
+      - name: Compile offline-only queue and human adjudication workflow
+        run: |
+          python -m py_compile \
+            experiments/dust/k2_private_semantic_review_queue.py \
+            experiments/dust/k2_human_semantic_adjudication.py \
+            experiments/dust/k2_local_semantic_review_session.py
+          echo "CI never sees private prompts, HMAC secret, actual review pair scores or K2 weights."
+          echo "Human label receipts, semantic source independence and data-use rights are NOT accepted by CI."
+          echo "All classifier fitting, gradient selection, storage and production authority remain DENIED."
