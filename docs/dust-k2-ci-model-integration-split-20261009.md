@@ -39,9 +39,21 @@ python -m pytest -o addopts='' -q \
 
 Validation ran in the isolated Git worktree of PR #35, not in a production deployment or NAS recovery filesystem. No K2 optimizer training, model weight updates, credential provisioning or new production service were initiated.
 
+## Exact-head acceptance follow-up: correction, still NO-GO
+
+At initial PR #36 head `02f76d46cc0a47603447764d0cbd2cb2d3e2ba60`, hosted [CPU-core workflow run 37996427093](https://github.com/scottjoyner/auto-finetune/actions/runs/37996427093) **FAILED**, despite eliminating the original four collection-time errors.
+
+- **889 tests passed, 8 skipped, 11 failed; coverage 66.87%, below the preserved 69% gate.**
+- Remaining hosted failed assertions/imports include four real K2 Torch witness tests, three `test_eval.py` Torch-dependent tests, one `test_train.py` Torch check, one `test_binarize.py` missing `datasets.Dataset` package behavior, plus two CLI bench-matrix assumptions.
+- This is not a clean CPU-only suite yet; tests importing Torch **inside individual test bodies** were not caught by excluding four collection-time modules. The two CLI expectations are NOT declared dependency-only and need direct behavior/fixture investigation.
+- An independent Xwing core run with optional Torch/Transformers installed (still excluding the four explicit modules) had **67.72% coverage** and a separate `tests/test_config.py::test_project_root_is_parent_of_src` failure caused by the isolated worktree path assumption. It also failed the 69% gate. Neither result may be marked green or waived by lowering the gate.
+- The 82 passed / 1 skipped **model-only** test acceptance remains valid and separate. The self-hosted GitHub workflow is still unconfigured/unrun.
+
+The smallest follow-up is to make the CPU dependency categorization complete (including function-local Torch imports), investigate the two CLI failures and worktree-path assumption without changing production behavior, and add meaningful tests to restore the unchanged 69% coverage floor. **This PR remains a draft and the hosted core workflow remains red.**
+
 ## Gate distinctions
 
-- Hosted **core** tests: standard core suite, explicit 4-module exclusions, original 69% coverage threshold. Not a full integration suite.
+- Hosted **core** tests: attempted standard core suite, explicit 4-module exclusions, original 69% coverage threshold; **currently FAIL**, with 11 known cases and 66.87% coverage. Not a full integration suite.
 - Xwing local targeted model tests: **82 pass, 1 skip**, real Torch/Transformers environment; not a GitHub runner or release gate.
 - New self-hosted model-test workflow: manual-only and guarded to trusted main; **NOT_RUN**, runner absent/unproven until separately installed.
 - Signer key isolation: prior legacy x1 signing key readable under the producer-shared Unix `scott` account, separate UID service still NOT_VERIFIED.
