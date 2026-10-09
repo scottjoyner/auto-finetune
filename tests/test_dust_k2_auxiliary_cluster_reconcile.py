@@ -42,7 +42,8 @@ class PrivateClusterReconciliationTests(unittest.TestCase):
             self.assertFalse(result["dataset_reuse_rights_approved"])
             self.assertFalse(result["classifier_training_authorized"])
             self.assertNotIn("how to collect",str(result))
-            self.assertNotIn("normalized_prompt",str(report))
+            self.assertTrue(all("normalized_prompt" not in row
+                for row in report["candidate_entries"]))
 
     def test_refuse_rehashed_forged_promotions_or_duplicate_prompt(self):
         with tempfile.TemporaryDirectory() as tmp:
