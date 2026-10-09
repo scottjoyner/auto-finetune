@@ -1,7 +1,9 @@
 """Receiver-owned HMAC precommit receipt, for independent research witnessing.
 
-A different node (x1) runs this script via restricted authenticated SSH.
-The HMAC key NEVER crosses to the K2 producer (Xwing). A receipt is durably
+Legacy deployments run under a shared SSH principal; a separate node alone
+DOES NOT isolate its HMAC signing key from the producer. Treat signatures as
+ledger-consistency only until an independent receiver UID/forced command and
+negative key-read test are verified. A receipt is durably
 fsynced before ACK. Store only run ID, batch digest, timing and a MAC:
 no prompts, tokens, direction vectors, raw tensors, or model data.
 
@@ -144,9 +146,10 @@ def verify(root: Path, run_id: str) -> dict:
             "signed_batch_receipts": count,
             "unique_prebatch_sha256": len(seen),
             "receiver_hmac_chain_verified": True,
-            "producer_has_receiver_key": False,
+            "producer_has_receiver_key": None,
             "privacy": "only SHA digests and local timing",
-            "independent_custody_for_precommit": True,
+            "independent_custody_for_precommit": False,
+            "custody_gate": "HOLD_UNTIL_SEPARATE_RECEIVER_UID_KEY_DENIAL_VERIFIED",
             "authorizes_real_classifier_training": False}
 
 
@@ -156,8 +159,9 @@ def verify_event_join(root: Path, run_id: str, events_file: Path,
     """Receiver-side join of independently signed PRE receipts and source log.
 
     The caller fetches the source event log over an authorized SSH connection
-    into receiver-owned custody. Producer can never edit the receiver's
-    HMAC-signed receipts. This does not prove model-loss quality or split
+    into receiver custody. In legacy shared-principal deployment, the
+    producer CAN read receiver signing credentials; treat the receipt as
+    consistency-only until service isolation is independently proven. This does not prove model-loss quality or split
     correctness, only source event/receiver receipt agreement and sequencing.
     """
     verified = verify(root, run_id)

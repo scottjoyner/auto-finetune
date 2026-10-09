@@ -1,0 +1,45 @@
+name: Dust K2 feature16 and custody security research
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_feature16_contract.py'
+      - 'experiments/dust/k2_restricted_receipt_service.py'
+      - 'experiments/dust/k2_receipt_receiver.py'
+      - 'tests/test_dust_k2_feature16_contract.py'
+      - 'tests/test_dust_k2_restricted_receipt_service.py'
+      - 'docs/dust-k2-feature16-custody-gate-20261009.md'
+      - '.github/workflows/dust-k2-feature16-custody-cpu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  research-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate causal history to 16D private export
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_feature16_contract.py -v
+      - name: Validate strict forced-command and Unix custody rules
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_restricted_receipt_service.py -v
+          python -m unittest discover -s tests -p test_dust_k2_receipt_receiver.py -v
+      - name: Source compilation and no-authorization boundary
+        run: |
+          python -m py_compile \
+            experiments/dust/k2_feature16_contract.py \
+            experiments/dust/k2_restricted_receipt_service.py \
+            experiments/dust/k2_receipt_receiver.py
+          echo "No K2 weights, tokens, prompts, GPU, real signing keys, training or deployment."
+          echo "Simulated isolated UID policy tests do NOT establish live x1 custody."
