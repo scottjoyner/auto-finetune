@@ -4,8 +4,11 @@ on:
   pull_request:
     paths:
       - 'experiments/littlebit/qwen_metadata_budget.py'
+      - 'experiments/littlebit/qwen_meta_admission.py'
       - 'tests/test_littlebit_qwen_metadata_budget.py'
+      - 'tests/test_littlebit_qwen_meta_admission.py'
       - 'research/littlebit-fleet/E2_QWEN_METADATA_BUDGET_20261009.md'
+      - 'research/littlebit-fleet/E2B_QWEN_META_ADMISSION_20261009.md'
       - '.github/workflows/littlebit-metadata-cpu.yml'
   workflow_dispatch:
 
@@ -35,10 +38,10 @@ jobs:
           LITTLEBIT_QWEN_CONFIG: ${{ runner.temp }}/qwen3_config.json
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
-          python -m unittest discover -s tests -p test_littlebit_qwen_metadata_budget.py -v
+          python -m unittest discover -s tests -p 'test_littlebit_qwen_*.py' -v
           python -m experiments.littlebit.qwen_metadata_budget \
             --config "$LITTLEBIT_QWEN_CONFIG" --inspect-pinned-metadata > "$RUNNER_TEMP/qwen3_projection.json"
       - name: Distinguish the overall repository test suite
         run: |
-          echo "This check covers only LittleBit metadata tests."
+          echo "This check covers stdlib metadata/rank-policy tests; CPU Torch meta integration is separately witnessed on x1."
           echo "It does NOT claim the full repository pytest workflow, upstream Torch integration, or GPU/QAT checks are green."
