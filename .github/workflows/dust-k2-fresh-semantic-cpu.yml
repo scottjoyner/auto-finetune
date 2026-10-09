@@ -1,0 +1,43 @@
+name: Dust K2 fresh semantic confirmation and reviewer safety
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_fresh_semantic_challenge.py'
+      - 'experiments/dust/k2_local_semantic_review_session.py'
+      - 'tests/test_dust_k2_fresh_semantic_and_tty.py'
+      - 'tests/test_dust_k2_private_semantic_review.py'
+      - 'tests/test_dust_k2_local_semantic_review_session.py'
+      - '.github/workflows/dust-k2-fresh-semantic-cpu.yml'
+      - 'docs/dust-k2-fresh-semantic-confirmation-20261009.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  challenge-and-terminal-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Frozen new 40+40 challenge and terminal safety tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_fresh_semantic_and_tty.py -v
+          python -m unittest discover -s tests -p test_dust_k2_local_semantic_review_session.py -v
+          python -m unittest discover -s tests -p test_dust_k2_private_semantic_review.py -v
+      - name: Compile only (no K2 model or private prompt data)
+        run: |
+          python -m py_compile \
+            experiments/dust/k2_fresh_semantic_challenge.py \
+            experiments/dust/k2_local_semantic_review_session.py
+          echo "Fresh synthetic challenge labels have NOT been independently human adjudicated."
+          echo "No source data, private HMACs, model weights, hosted providers, GPU or training are available to CI."
+          echo "Classifier training, biased sampling, optimizer and production authorization remain DENIED."
