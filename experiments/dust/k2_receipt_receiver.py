@@ -150,6 +150,104 @@ def verify(root: Path, run_id: str) -> dict:
             "authorizes_real_classifier_training": False}
 
 
+def verify_event_join(root: Path, run_id: str, events_file: Path) -> dict:
+    """Receiver-side join of independently signed PRE receipts and source log.
+
+    The caller fetches the source event log over an authorized SSH connection
+    into receiver-owned custody. Producer can never edit the receiver's
+    HMAC-signed receipts. This does not prove model-loss quality or split
+    correctness, only source event/receiver receipt agreement and sequencing.
+    """
+    verified = verify(root, run_id)
+    receipts = [
+        json.loads(line) for line in (
+            root / (run_id + ".receipt.jsonl")
+        ).read_text().splitlines()
+    ]
+    if events_file.stat().st_size > 1024 * 1024:
+        raise ValueError("event join file exceeds size cap")
+    prior = "0" * 64
+    pre = {}
+    receipt_seen = False
+    awaiting = []
+    receipt_count = 0
+    post_count = 0
+    for line in events_file.read_text().splitlines():
+        event = json.loads(line)
+        event_sha = event.pop("event_sha256", None)
+        if not is_hex(event_sha):
+            raise ValueError("invalid producer event digest")
+        if hashlib.sha256(canonical(event).encode()).hexdigest() != event_sha:
+            raise ValueError("producer event content hash mismatch")
+        if event.get("previous_event_sha256") != prior:
+            raise ValueError("producer event chain broken")
+        prior = event_sha
+        if event.get("schema") != "auto-finetune.dust-k2-direction-events.v1":
+            raise ValueError("wrong producer schema")
+        phase = event.get("phase")
+        if phase == "PRE":
+            if receipt_seen or len(pre) >= 4:
+                raise ValueError("unexpected PRE phase or batch length")
+            index = event["candidate_index"]
+            if index != post_count + len(pre) or index in pre:
+                raise ValueError("duplicate/out-of-order PRE")
+            pre[index] = {
+                "event_sha256": event_sha,
+                "producer_pre_monotonic_ns": event["local_monotonic_ns"],
+            }
+        elif phase == "RECEIPT":
+            if receipt_seen or not pre or receipt_count >= len(receipts):
+                raise ValueError("RECEIPT without PRE batch")
+            batch_digest = hashlib.sha256(
+                "|".join(pre[x]["event_sha256"] for x in sorted(pre)).encode()
+            ).hexdigest()
+            independent = receipts[receipt_count]
+            if (
+                event["batch_sha256"] != batch_digest
+                or independent["batch_sha256"] != batch_digest
+                or independent["receiver_hmac_sha256"]
+                    != event["receiver_hmac_sha256"]
+                or independent["receiver_utc_ns"] != event["receiver_utc_ns"]
+                or independent["batch_index"] != event["batch_index"]
+                or independent["batch_index"] != receipt_count
+            ):
+                raise ValueError("cross-node PRE receipt mismatch")
+            receipt_seen = True
+            awaiting = list(sorted(pre))
+        elif phase == "POST":
+            if not receipt_seen or not awaiting:
+                raise ValueError("post before independent receipt")
+            index = event["candidate_index"]
+            if index != awaiting[0] or index not in pre:
+                raise ValueError("out-of-order POST")
+            if event["pre_event_sha256"] != pre[index]["event_sha256"]:
+                raise ValueError("POST references wrong PRE")
+            if event["local_monotonic_ns"] <= pre[index]["producer_pre_monotonic_ns"]:
+                raise ValueError("POST timestamp predates PRE")
+            awaiting.pop(0)
+            post_count += 1
+            if not awaiting:
+                pre = {}
+                receipt_seen = False
+                receipt_count += 1
+        else:
+            raise ValueError("unexpected producer event phase")
+    if pre or awaiting or receipt_seen or receipt_count != len(receipts):
+        raise ValueError("incomplete cross-node producer receipt join")
+    return {
+        **verified,
+        "producer_pre_post_chain_join_verified": True,
+        "all_post_scores_follow_receiver_ack": True,
+        "source_event_count": post_count * 2 + receipt_count,
+        "completed_direction_count": post_count,
+        "expected_receipts": receipt_count,
+        "classifier_training_authorized": False,
+        "audit_scope": "cryptographic receipt and sequence only; no heldout/model-quality attestation",
+        "joined_producer_events_sha256":
+            hashlib.sha256(events_file.read_bytes()).hexdigest(),
+    }
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--root", required=True, type=Path)
@@ -159,6 +257,7 @@ def main(argv=None):
     options.add_argument("--verify", action="store_true")
     p.add_argument("--run-id")
     p.add_argument("--batch-sha256")
+    p.add_argument("--join-events", type=Path)
     args = p.parse_args(argv)
     if args.setup:
         prepare_receiver(args.root)
@@ -166,7 +265,11 @@ def main(argv=None):
     elif args.receive:
         print(canonical(receive(args.root, args.run_id, args.batch_sha256)))
     else:
-        print(canonical(verify(args.root, args.run_id)))
+        if args.join_events is not None:
+            print(canonical(verify_event_join(
+                args.root, args.run_id, args.join_events)))
+        else:
+            print(canonical(verify(args.root, args.run_id)))
 
 
 if __name__ == "__main__":
