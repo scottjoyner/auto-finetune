@@ -55,6 +55,11 @@ class Feature16ReadinessTests(unittest.TestCase):
             self.assertEqual(report["complete_direction_rows"], 8)
             self.assertEqual(report["feature_columns_total"], 16)
             self.assertFalse(report["all_source_count_minima_met"])
+            self.assertFalse(report["preflight_adequacy_for_training_design"])
+            self.assertEqual(
+                sum(report["available_eligible_source_clusters_in_pinned_preflight"].values()), 1)
+            self.assertEqual(
+                sum(report["collected_source_cluster_deficit_to_minimum"].values()), 111)
             self.assertFalse(report["real_label_classifier_training_authorized"])
             self.assertFalse(report["receiver_key_isolation_verified"])
             self.assertEqual(sum(report["positive_direction_labels"].values()), 4)
@@ -115,6 +120,27 @@ class Feature16ReadinessTests(unittest.TestCase):
             private.chmod(0o644)
             with self.assertRaises(PermissionError):
                 validate_episode(private, "b" * 64)
+
+    def test_near_duplicate_cluster_cannot_span_different_partitions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            private, manifest, _ = sample_inputs(base)
+            source = json.loads(private.read_text().splitlines()[0])
+            split = source["source_partition_provisional"]
+            other_split = next(x for x in ("train", "validation", "test")
+                               if x != split)
+            payload = json.loads(manifest.read_text())
+            payload["candidates"].append({
+                "sample_index": 2,
+                "disposition": "ELIGIBLE",
+                "episode_hmac_sha256": "f" * 64,
+                "near_duplicate_cluster_sha256": "e" * 64,
+                "group_split": other_split,
+            })
+            manifest.write_text(json.dumps(payload))
+            manifest_hash = hashlib.sha256(manifest.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(ValueError, "cluster crosses pinned partitions"):
+                check(private, manifest, manifest_hash)
 
     def test_extra_or_nonfinite_json_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
