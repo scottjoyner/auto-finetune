@@ -25,6 +25,9 @@ class ChallengeTests(unittest.TestCase):
             "true_positive"], 10)
         self.assertEqual(report["prespecified_threshold_results"]["0.85"][
             "false_positive"], 0)
+        self.assertEqual(report["paired_positive_outscores_hard_negative"],10)
+        self.assertEqual(report["positive_vs_negative_pairwise_auc"],1.0)
+        self.assertTrue(report["ranking_metrics_are_exploratory_not_authority"])
         self.assertFalse(report["classifier_training_authorized"])
 
     def test_poor_model_fails_but_cannot_certify_independence(self):
