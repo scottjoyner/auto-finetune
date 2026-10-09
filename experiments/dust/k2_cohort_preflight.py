@@ -81,6 +81,11 @@ def build_manifest(records: list[dict], *,
         assigned = {r["partition"] for r in rows}
         quarantined = len(assigned) != 1
         group_split = next(iter(assigned)) if not quarantined else "quarantine"
+        # Opaque, deterministic, near-duplicate *cluster* identity; do not
+        # select multiple source episodes from the same cluster.
+        cluster_hmac_sha256 = hashlib.sha256("|".join(sorted(
+            {r["episode_hmac_sha256"] for r in rows}
+        )).encode()).hexdigest()
         for row in rows:
             index = row["sample_index"]
             disposition = "ELIGIBLE"
@@ -91,6 +96,7 @@ def build_manifest(records: list[dict], *,
             candidates.append({
                 "sample_index": index,
                 "episode_hmac_sha256": row["episode_hmac_sha256"],
+                "near_duplicate_cluster_sha256": cluster_hmac_sha256,
                 "source_group_schema": "masked-prompt-prefix-v2",
                 "group_split": group_split,
                 "cluster_members": len(rows),
