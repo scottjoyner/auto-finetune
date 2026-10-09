@@ -85,8 +85,28 @@ def evaluate_challenge(scores: list[float]) -> dict:
             "challenge_pass_for_screening_research_only":
                 recall >= 0.7 and false_positive_rate <= 0.2,
         }
+    # Frozen positive/negative examples are paired by topic and anchor.
+    # Ranking is exploratory and independent of absolute cosine calibration.
+    positives = [float(score) for score, (_, _, label)
+                 in zip(scores, PAIRS, strict=True) if label == 1]
+    negatives = [float(score) for score, (_, _, label)
+                 in zip(scores, PAIRS, strict=True) if label == 0]
+    per_anchor_margins = [a - b for a, b in
+                          zip(positives, negatives, strict=True)]
+    # All positive/negative comparisons, with half credit for exact ties.
+    ordered = sum(
+        (1.0 if a > b else 0.5 if a == b else 0.0)
+        for a in positives for b in negatives)
     return {
         "schema": SCHEMA,
+        "paired_positive_outscores_hard_negative": sum(
+            gap > 0 for gap in per_anchor_margins),
+        "paired_positive_hard_negative_trials": len(per_anchor_margins),
+        "mean_paired_cosine_margin": (
+            sum(per_anchor_margins) / len(per_anchor_margins)),
+        "positive_vs_negative_pairwise_auc": ordered / (
+            len(positives) * len(negatives)),
+        "ranking_metrics_are_exploratory_not_authority": True,
         "positive_challenge_pairs": 10,
         "hard_negative_pairs": 10,
         "prespecified_threshold_results": results,
