@@ -81,7 +81,9 @@ class CausalProbeHistory:
                 or not 0 <= before_candidate < self.population
                 or before_candidate < len(self._completed)):
             raise ValueError("invalid historical preview index")
-        self._preview_cursor = max(self._preview_cursor, before_candidate + 1)
+        if before_candidate != self._preview_cursor:
+            raise ValueError("PRE previews must be contiguous and in candidate order")
+        self._preview_cursor += 1
         if not self._completed:
             return (0.,) * len(FEATURES)
         gains = [p.plus_gain for p in self._completed]
@@ -122,8 +124,8 @@ class CausalProbeHistory:
         if (not plus_losses or len(plus_losses) != len(minus_losses)
                 or first_index + len(plus_losses) > self.population):
             raise ValueError("invalid completed batch length")
-        if self._preview_cursor < first_index + len(plus_losses):
-            raise ValueError("cannot commit labels without prior PRE preview")
+        if self._preview_cursor != first_index + len(plus_losses):
+            raise ValueError("cannot commit labels without exactly matching prior PRE previews")
         prepared = []
         for offset, (plus, minus) in enumerate(
             zip(plus_losses, minus_losses, strict=True)
