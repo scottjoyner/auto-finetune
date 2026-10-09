@@ -93,6 +93,26 @@ class RestrictedReceiptTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 IsolatedSSHReceiver("evil.example", "a" * 32, identity)
 
+    def test_legacy_receipt_verifier_never_claims_independent_key_custody(self):
+        from experiments.dust.k2_receipt_receiver import (
+            prepare_receiver, receive, verify)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "legacy-receiver"
+            prepare_receiver(root)
+            receive(root, "a" * 32, "b" * 64)
+            result = verify(root, "a" * 32)
+            self.assertEqual(result["signed_batch_receipts"], 1)
+            self.assertTrue(result["receiver_hmac_chain_verified"])
+            self.assertIsNone(result["producer_has_receiver_key"])
+            self.assertFalse(result["independent_custody_for_precommit"])
+            self.assertFalse(result["authorizes_real_classifier_training"])
+
+    def test_git_worktree_must_never_be_installed_as_service_program(self):
+        from experiments.dust.k2_restricted_receipt_service import (
+            verify_installed_code)
+        with self.assertRaises(PermissionError):
+            verify_installed_code(Path(__file__))
+
     def test_service_is_explicitly_not_provisioned(self):
         from experiments.dust.k2_restricted_receipt_service import main
         with self.assertRaisesRegex(SystemExit, "RECEIVER_NOT_PROVISIONED"):
