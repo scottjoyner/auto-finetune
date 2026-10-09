@@ -132,7 +132,11 @@ def validate_episode(path: Path, expected_model_sha: str):
 
 def evaluate_readiness(feature_paths: list[Path], manifest_path: Path, *,
                        expected_manifest_sha: str,
-                       expected_model_sha: str) -> dict:
+                       expected_model_sha: str,
+                       cross_corpus_audit_path: Path | None = None,
+                       expected_cross_corpus_sha: str | None = None) -> dict:
+    if (cross_corpus_audit_path is None) != (expected_cross_corpus_sha is None):
+        raise ValueError("cross-corpus audit requires both file and digest")
     if not 1 <= len(feature_paths) <= MAX_EPISODES:
         raise ValueError("source episode count exceeds fixed acceptance bound")
     if not hex_digest(expected_manifest_sha) or not hex_digest(expected_model_sha):
@@ -143,6 +147,14 @@ def evaluate_readiness(feature_paths: list[Path], manifest_path: Path, *,
     manifest = load_json(manifest_blob)
     if manifest.get("schema") != COHORT_SCHEMA:
         raise ValueError("source cohort schema mismatch")
+    audit_overlay = None
+    if cross_corpus_audit_path is not None:
+        from .k2_crosscorpus_veto import bind_quarantine_overlay
+        audit_overlay = bind_quarantine_overlay(
+            manifest, expected_manifest_sha,
+            cross_corpus_audit_path, expected_cross_corpus_sha)
+    contaminated_clusters = (
+        audit_overlay["quarantined_clusters"] if audit_overlay else set())
     candidates = manifest.get("candidates", [])
     if (not isinstance(candidates, list) or len(candidates) > 256):
         raise ValueError("invalid candidate cohort")
@@ -156,6 +168,8 @@ def evaluate_readiness(feature_paths: list[Path], manifest_path: Path, *,
         cluster = candidate.get("near_duplicate_cluster_sha256")
         if not hex_digest(group) or not hex_digest(cluster):
             raise ValueError("incomplete cohort HMAC cluster assignment")
+        if cluster in contaminated_clusters:
+            continue
         identity = (cluster, candidate.get("group_split"))
         if group in allowed and allowed[group] != identity:
             raise ValueError("one prompt group has incompatible cohort assignments")
@@ -176,7 +190,7 @@ def evaluate_readiness(feature_paths: list[Path], manifest_path: Path, *,
         episode = validate_episode(path, expected_model_sha)
         group = episode["source_group"]
         if group not in allowed:
-            raise ValueError("source absent from eligible pinned cohort")
+            raise ValueError("source absent from eligible pinned cohort or quarantined by cross-corpus audit")
         cluster, cohort_split = allowed[group]
         if episode["split"] != cohort_split:
             raise ValueError("provisional partition differs from pinned cohort")
@@ -230,6 +244,16 @@ def evaluate_readiness(feature_paths: list[Path], manifest_path: Path, *,
         "varying_feature_columns_observed": varying_columns,
         "feature_columns_total": len(FEATURE_NAMES),
         "source_lexical_cohort_preflight_only": True,
+        "cross_corpus_audit_supplied": audit_overlay is not None,
+        "cross_corpus_lexical_audit_coverage": (
+            "NOT_RUN" if audit_overlay is None else
+            "INCOMPLETE_TRUNCATED" if not audit_overlay[
+                "lexical_scan_complete_for_supplied_corpora"] else
+            "COMPLETE_FOR_SUPPLIED_CORPORA_ONLY"),
+        "cross_corpus_audited_auxiliary_corpora": (
+            audit_overlay["audited_auxiliary_corpus_count"] if audit_overlay else 0),
+        "cross_corpus_quarantined_source_clusters": len(contaminated_clusters),
+        "independent_audit_of_cross_corpus_matching": False,
         "cross_corpus_semantic_contamination_verified": False,
         "receiver_key_isolation_verified": False,
         "independent_forward_loss_numeric_witness": False,
@@ -246,13 +270,19 @@ def main(argv=None):
     p.add_argument("--source-preflight", type=Path, required=True)
     p.add_argument("--source-preflight-sha256", required=True)
     p.add_argument("--expected-model-sha256", required=True)
+    p.add_argument("--cross-corpus-audit", type=Path,
+                   help="optional SHA-pinned local lexical scan quarantine")
+    p.add_argument("--cross-corpus-audit-sha256",
+                   help="required when supplying a cross-corpus audit")
     args = p.parse_args(argv)
     if not args.read_only_readiness:
         p.error("explicit --read-only-readiness required")
     result = evaluate_readiness(
         args.features, args.source_preflight,
         expected_manifest_sha=args.source_preflight_sha256,
-        expected_model_sha=args.expected_model_sha256)
+        expected_model_sha=args.expected_model_sha256,
+        cross_corpus_audit_path=args.cross_corpus_audit,
+        expected_cross_corpus_sha=args.cross_corpus_audit_sha256)
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
