@@ -64,3 +64,28 @@ GitHub's separate `LittleBit research metadata CPU` workflow tests stdlib rank r
 **Next smallest reversible engineering slice:** a non-mutating per-module `rank_plan` override **proposal** with a strict physical-bit budget, verification that the *actual upstream conversion entry point* can accept explicit per-module ranks, tests for rank-fallback/infeasible dimensions, and independent packed tensor byte verification. DO NOT insert a planner silently into QAT/model serving. Separately confirm Qwen/model and LittleBit source licensing and whether export casts scales to BF16; only then consider a capped, reviewed pretrained-weight single-layer experiment.
 
 **All current gates for pretrained weight downloads, QAT, hosted inference, GPU training, NAS writes and production model promotion remain HOLD/DENY.**
+
+## E2b.1 refinement — pinned active BF16 export path (2026-10-09)
+
+**Important correction to interpreting the above FP32 table:** the pinned upstream `main.py` (Git blob `d5f68106ed78e103eaa05c6feda77ce66c3bad03`) defines `save_artifacts` **twice**. The **second (effective)** definition applies `float32 -> bfloat16` to state-dictionary tensors unless their keys contain `packed` or `shape`, before calling `save_pretrained(..., safe_serialization=True)`. Thus the FP32 initializer-state projection above is **not equivalent to the active main.py export projection**. The export also converts the two FP32 quantization metadata buffers, saving four additional bytes per module beyond casting the four branch scale tensors. Other upstream export entry points may differ.
+
+The deny-only gate now reports the two storage cases separately, using actual ranks returned by the official `apply_littlebit_patch(do_train=False)` meta execution:
+
+| Upstream nominal setting | Initializer-state FP32 BPW | Initializer-state modules over target | Active main.py BF16-export *projected* BPW | Export-projected modules over target | Export-projected linear tensor bytes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0.55, one branch | 0.57979329 | 196/196 | **0.55194702** | **84/196** | **30,384,816** |
+| 0.30, one branch | 0.33291829 | 196/196 | **0.30741577** | **140/196** | **16,923,312** |
+| 0.55, two branches | 0.60653483 | 196/196 | **0.55599976** | **112/196** | **30,607,920** |
+
+At primary 0.55, all 84 export-budget violations are in `mlp.gate_proj`, `mlp.up_proj`, and `mlp.down_proj` (28 layers each); the four attention projections pass under the BF16-export assumptions. At primary 0.30, 140 violations cover the two MLP expansion projections and the Q/K/V attention projections, while O and MLP down meet the target. At residual 0.55, 112 violations cover the four attention projections and the MLPs meet the target.
+
+**Independent synthetic cast check:** using the actual pinned `LittleBitLinear` class on an isolated CPU 128×256/rank16 matrix, we inspected its `state_dict()`, applied the active export's explicit cast predicate without importing or invoking the upstream training CLI, and confirmed its true PyTorch tensor byte totals match our FP32 and BF16-export arithmetic exactly, including preserved int64 shape and packed int32 tensors. This is not a production checkpoint or confirmation of the final `save_pretrained` container size.
+
+**Latest x1 tests:** 14/14 focus tests pass (ten stdlib rank/source/negative tests and four separately opted-in actual Torch/source integration checks), including sequential audit import isolation and the synthetic `state_dict` export-cast parity check. The earlier 12/12 results describe a prior branch revision.
+
+**New immutable local evidence files**, containing 196 per-module FP32 and BF16 export decisions per setting:
+- `/home/scott/git/littlebit-meta-dual-budget-055-20261009.json`: SHA256 `e28da4ea16d022a1d536e7108cecf7e1ee76f0a2f524a49547f211b0a48b1e26`.
+- `/home/scott/git/littlebit-meta-dual-budget-030-20261009.json`: SHA256 `395fbd9a802cb7811b877b5c00266590a5b4d8498e08449020e7207abea14e86`.
+- `/home/scott/git/littlebit-meta-dual-budget-055-residual-20261009.json`: SHA256 `71251ff04002a799b4025736d2d37b69c8215fd7df2dfc727c3c204d19693b2a`.
+
+**Gate remains DENY** for all three tested nominal targets even under BF16 export assumptions, because aggregated and some per-module byte budgets exceed the target. Nothing changes ranks, pretrained weights, QAT, deployment, or fleet services. Future work should test a separately reviewed per-module rank plan and actual *full* checkpoint serialization, without conflating state-dictionary payload with a safe deployed format.
