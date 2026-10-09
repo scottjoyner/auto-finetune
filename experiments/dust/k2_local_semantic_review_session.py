@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import unicodedata
 
 from .k2_auxiliary_prompt_clusters import digest_keyed
 from .k2_data import normalized, read_pairs
@@ -32,6 +33,34 @@ CHOICES = {
     "d": "DIFFERENT_INTENT",
     "u": "UNCERTAIN",
 }
+
+
+def display_safe_prompt(prompt: str) -> str:
+    """Escape terminal instructions, invisible directional controls, line
+    breaks and C0/C1 controls in untrusted prompt text before display.
+    Refuse oversized text rather than silently truncate semantic context.
+    """
+    if (not isinstance(prompt, str) or not 1 <= len(prompt) <= 4096):
+        raise ValueError("untrusted terminal prompt length")
+    visible = []
+    for ch in prompt:
+        if unicodedata.category(ch).startswith("C"):
+            visible.append("\\u%04x" % ord(ch) if ord(ch) <= 0xffff
+                           else "\\U%08x" % ord(ch))
+        else:
+            visible.append(ch)
+    return "".join(visible)
+
+
+def refuse_remote_reviewer_session() -> None:
+    """Defense in depth only. Absence of these flags does NOT certify
+    physical console, human identity or absence of session recording.
+    """
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        raise PermissionError("human TTY required; headless session denied")
+    if any(os.environ.get(name) for name in (
+            "SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY", "MOSH_IP")):
+        raise PermissionError("remote SSH/mosh reviewer session denied")
 
 
 def make_lookup(*, prompts: list[str], key: bytes):
@@ -84,8 +113,8 @@ def record_decisions(queue, lookup, *,
         left = lookup[item["left_prompt_hmac_sha256"]]
         right = lookup[item["right_prompt_hmac_sha256"]]
         write(f"Private local semantic review {index}/{len(queue['review_candidates'])}")
-        write(f"Prompt A: {left}")
-        write(f"Prompt B: {right}")
+        write(f"Prompt A: {display_safe_prompt(left)}")
+        write(f"Prompt B: {display_safe_prompt(right)}")
         write("Labels: [s] same intent, [d] different intent, [u] uncertain")
         response = read("Select s/d/u: ").strip().lower()
         if response not in CHOICES:
@@ -106,8 +135,7 @@ def record_decisions(queue, lookup, *,
 def run_interactive(*, queue_path: Path, queue_sha: str, source_path: Path,
                     source_sha: str, key_path: Path, reviewer_id: str,
                     receipt_path: Path):
-    if not sys.stdin.isatty() or not sys.stdout.isatty():
-        raise PermissionError("human TTY required; headless session denied")
+    refuse_remote_reviewer_session()
     if (receipt_path.is_symlink() or receipt_path.exists()
             or not receipt_path.parent.is_dir()
             or receipt_path.parent.stat().st_mode & 0o077):
