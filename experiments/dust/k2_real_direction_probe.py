@@ -31,7 +31,8 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
         episode_key_file: Path, events: Path, derived: Path,
         sample_index: int = 0, seed: int = 42, population: int = 64,
         sigma: float = 0.25, direction_batch: int = 4,
-        max_tokens: int = 128, device: str = "cuda") -> dict:
+        max_tokens: int = 128, device: str = "cuda",
+        receiver_run_id: str | None = None) -> dict:
     if population not in (8, 16, 32, 64):
         raise ValueError("first witness is capped at 64 directions")
     if direction_batch != 4 or population % direction_batch:
@@ -46,7 +47,7 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
                                       for c in expected_sha):
         raise ValueError("expected weight SHA256 required")
     from .k2_direction_witness import (
-        LocalProbeWitness, pseudonym, read_private_key,
+        LocalProbeWitness, SSHReceiver, pseudonym, read_private_key,
     )
     key = read_private_key(episode_key_file)
     import torch
@@ -77,9 +78,12 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
         # Deliberately match initial rank-4 B=0 for the unbiased base
         # observation; no calibration-B change or hidden optimizer step.
         a_original, b_original = a.clone(), b.clone()
+        receiver = (SSHReceiver("x1-370", receiver_run_id)
+                    if receiver_run_id else None)
         witness = LocalProbeWitness(
             events, derived, episode_hmac_sha256=episode,
-            model_revision_sha256=observed_sha, sigma=sigma)
+            model_revision_sha256=observed_sha, sigma=sigma,
+            receiver=receiver)
         start = time.monotonic()
         result = tail_scored_structured_estimate(
             model, cache, a, b, seed=seed, population=population,
@@ -123,6 +127,11 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
             "real_pretrained_K2_loaded": True,
             "training_data_contained_in_report": False,
             "independent_time_order_attestation": False,
+            "independent_receiver_precommit_received":
+                observed["receiver_precommit_receipts"] ==
+                population // direction_batch if receiver_run_id else False,
+            "independent_receiver_run_id": receiver_run_id,
+            "independent_receipt_join_verified": False,
             "warning": "Pre/Post fsync and producer-local hash chain are "
                        "not an independent custody witness. Do not train "
                        "from these records until outside attestation, "
@@ -151,6 +160,7 @@ def main(argv=None):
     ap.add_argument("--sigma", type=float, default=.25)
     ap.add_argument("--direction-batch", type=int, default=4)
     ap.add_argument("--max-tokens", type=int, default=128)
+    ap.add_argument("--receiver-run-id", help="hex32 run ID for x1 HMAC receipt")
     args = ap.parse_args(argv)
     if not args.observe_only:
         ap.error("explicit --observe-only is required")
@@ -167,7 +177,8 @@ def main(argv=None):
         sample_index=args.sample_index, seed=args.seed,
         population=args.population, sigma=args.sigma,
         direction_batch=args.direction_batch,
-        max_tokens=args.max_tokens, device=args.device)
+        max_tokens=args.max_tokens, device=args.device,
+        receiver_run_id=args.receiver_run_id)
     with args.output.open("x", encoding="utf-8") as target:
         target.write(json.dumps(report, sort_keys=True, indent=2) + "\n")
 
