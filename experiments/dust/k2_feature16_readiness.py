@@ -147,6 +147,8 @@ def evaluate_readiness(feature_paths: list[Path], manifest_path: Path, *,
     if (not isinstance(candidates, list) or len(candidates) > 256):
         raise ValueError("invalid candidate cohort")
     allowed = {}
+    eligible_clusters = {split: set() for split in EXPECTED_MINIMUM}
+    cluster_splits = {}
     for candidate in candidates:
         if candidate.get("disposition") != "ELIGIBLE":
             continue
@@ -159,6 +161,10 @@ def evaluate_readiness(feature_paths: list[Path], manifest_path: Path, *,
             raise ValueError("one prompt group has incompatible cohort assignments")
         if identity[1] not in EXPECTED_MINIMUM:
             raise ValueError("invalid partition name")
+        if cluster in cluster_splits and cluster_splits[cluster] != identity[1]:
+            raise ValueError("near-duplicate cluster crosses pinned partitions")
+        cluster_splits[cluster] = identity[1]
+        eligible_clusters[identity[1]].add(cluster)
         allowed[group] = identity
     observed_groups = set()
     observed_clusters = set()
@@ -203,6 +209,22 @@ def evaluate_readiness(feature_paths: list[Path], manifest_path: Path, *,
         "positive_direction_labels": dict(sorted(
             (split, positive[split]) for split in EXPECTED_MINIMUM)),
         "independent_source_minimum": EXPECTED_MINIMUM,
+        "available_eligible_source_clusters_in_pinned_preflight": {
+            split: len(eligible_clusters[split])
+            for split in EXPECTED_MINIMUM
+        },
+        "preflight_source_cluster_deficit_to_minimum": {
+            split: max(0, EXPECTED_MINIMUM[split] - len(eligible_clusters[split]))
+            for split in EXPECTED_MINIMUM
+        },
+        "collected_source_cluster_deficit_to_minimum": {
+            split: max(0, EXPECTED_MINIMUM[split] - counts[split])
+            for split in EXPECTED_MINIMUM
+        },
+        "preflight_adequacy_for_training_design": all(
+            len(eligible_clusters[split]) >= required
+            for split, required in EXPECTED_MINIMUM.items()
+        ),
         "minimum_source_counts_satisfied": minimum,
         "all_source_count_minima_met": all(minimum.values()),
         "varying_feature_columns_observed": varying_columns,
