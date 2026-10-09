@@ -32,12 +32,7 @@ def fixture(folder: Path, *, collision: bool = False,
     manifest_sha = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     auxiliary = [prompt] if collision else ["wholly unrelated ocean fact"]
     aux_count = 513 if truncated else len(auxiliary)
-    report = summarize_screen(
-        source, manifest,
-        [("auxiliary.jsonl", auxiliary, "d" * 64, aux_count)],
-        expected_source_sha256="f" * 64,
-    ) if False else None
-    # The source hash is synthetic and pinned inside the manifest.
+     # The source hash is synthetic and pinned inside the manifest.
     manifest["source_dataset_sha256"] = "f" * 64
     manifest["model_config_sha256"] = "b" * 64
     manifest_path.write_text(json.dumps(manifest, sort_keys=True))
@@ -102,7 +97,7 @@ class CrossCorpusVetoTests(unittest.TestCase):
             args = fixture(Path(tmp))
             with self.assertRaisesRegex(ValueError, "SHA256 mismatch"):
                 readiness(args[0], args[1], args[2], args[3], "0" * 64)
-            with self.assertRaisesRegex(ValueError, "source hash"):
+            with self.assertRaisesRegex(ValueError, "cohort SHA256 changed"):
                 readiness(args[0], args[1], "1" * 64,
                           args[3], args[4])
 
