@@ -24,6 +24,18 @@ class RankAdmissionTests(unittest.TestCase):
         self.assertEqual(x["maximum_eligible_rank"], 320)
         self.assertGreater(x["physical_bpw"], 0.55)
 
+    def test_export_bf16_changes_which_modules_are_admissible(self):
+        before = admission.rank_admission(2048, 1024, 352, 0.55)
+        after = admission.rank_admission(2048, 1024, 352, 0.55,
+                                         export_bf16=True)
+        self.assertEqual(before["status"], "DENY")
+        self.assertEqual(after["status"], "ADMIT")
+        self.assertLess(after["projected_bytes"], before["projected_bytes"])
+        self.assertEqual(after["storage_case"], "main_export_bf16")
+        # Qwen MLP gate path still exceeds 0.55 after BF16 cast.
+        self.assertEqual(admission.rank_admission(3072, 1024, 400, 0.55,
+                                                 export_bf16=True)["status"], "DENY")
+
     def test_actual_upstream_nominal_030_rank_denied(self):
         x = admission.rank_admission(2048, 1024, 184, 0.30)
         self.assertEqual(x["status"], "DENY")
@@ -93,6 +105,9 @@ class RealQwenMetaTests(unittest.TestCase):
         self.assertEqual(result["candidate_modules"], 197)
         self.assertEqual(result["converted_modules"], 196)
         self.assertEqual(result["violations"], 196)
+        self.assertEqual(result["export_violations"], 84)
+        self.assertAlmostEqual(result["estimated_export_linear_bpw"],
+                               0.55194702, places=7)
         self.assertTrue(result["all_model_parameters_meta"])
         self.assertEqual(result["excluded_modules"], ["lm_head"])
         self.assertAlmostEqual(result["estimated_converted_linear_bpw"],
@@ -108,6 +123,7 @@ class RealQwenMetaTests(unittest.TestCase):
             Path(os.environ["LITTLEBIT_UPSTREAM_ROOT"]), 0.30)
         self.assertEqual(result["status"], "HOLD")
         self.assertEqual(result["violations"], 196)
+        self.assertEqual(result["export_violations"], 140)
         self.assertAlmostEqual(result["estimated_converted_linear_bpw"],
                                0.33291829427083336, places=9)
 
@@ -118,6 +134,7 @@ class RealQwenMetaTests(unittest.TestCase):
             residual=True)
         self.assertEqual(result["status"], "HOLD")
         self.assertEqual(result["violations"], 196)
+        self.assertEqual(result["export_violations"], 112)
         self.assertAlmostEqual(result["estimated_converted_linear_bpw"],
                                0.6065348307291667, places=9)
 
