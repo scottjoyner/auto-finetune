@@ -40,7 +40,7 @@ class CausalHistoryTests(unittest.TestCase):
     def test_no_future_commit_duplicate_or_nonfinite(self):
         state=self.make_state()
         state.preview(before_candidate=0)
-        with self.assertRaisesRegex(ValueError,"without prior PRE"):
+        with self.assertRaisesRegex(ValueError,"prior PRE previews"):
             state.commit_batch(first_index=0,clean_loss=1.,
                                plus_losses=[.9,1.1],minus_losses=[1.1,.9],
                                sigma=.25)

@@ -166,6 +166,63 @@ class TestWitness(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "hash mismatch"):
                 verify_event_join(root, run_id, tampered)
 
+    def test_causal_history_pre_only_preserves_estimator_and_receipt_join(self):
+        import torch
+        from experiments.dust.k2_receipt_receiver import (
+            prepare_receiver, receive, verify_event_join,
+        )
+        model, cache, a, b, sample = self.make_toy()
+        clean = tail_scored_structured_estimate(
+            model, cache, a, b, seed=7, population=8,
+            sigma=.25, direction_batch=4)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "receiver"
+            prepare_receiver(root)
+            events, labels = (
+                Path(directory) / name for name in ("history.events", "history.labels")
+            )
+            run_id = "f" * 32
+            observer = LocalProbeWitness(
+                events, labels,
+                episode_hmac_sha256=pseudonym(b"z" * 32, sample),
+                model_revision_sha256="b" * 64,
+                sigma=.25,
+                receiver=lambda digest: receive(root, run_id, digest),
+                causal_history_population=8)
+            observed = tail_scored_structured_estimate(
+                model, cache, a, b, seed=7, population=8,
+                sigma=.25, direction_batch=4, probe_observer=observer)
+            summary = observer.finish(8)
+            self.assertTrue(torch.equal(clean["estimate"], observed["estimate"]))
+            self.assertTrue(torch.equal(clean["clean"], observed["clean"]))
+            self.assertEqual(clean["tail_forward_calls"], observed["tail_forward_calls"])
+            self.assertEqual(summary["causal_history_schema"],
+                             "auto-finetune.dust-k2-direction-history.v2")
+            self.assertEqual(len(summary["causal_history_feature_names"]), 8)
+            self.assertFalse(summary["causal_history_classifier_training_authorized"])
+            records = [json.loads(line) for line in events.read_text().splitlines()]
+            pre = [row for row in records if row["phase"] == "PRE"]
+            self.assertEqual(len(pre), 8)
+            first = [row["history_features_pre_probe"] for row in pre[:4]]
+            second = [row["history_features_pre_probe"] for row in pre[4:]]
+            self.assertEqual(first, [[0.0] * 8] * 4)
+            self.assertEqual(second, [second[0]] * 4)
+            self.assertEqual(second[0][0], .5)
+            self.assertEqual(second[0][1],
+                             sum(json.loads(line)["loss_plus"] <
+                                 json.loads(line)["loss_clean"]
+                                 for line in labels.read_text().splitlines()[:4]) / 4)
+            self.assertTrue(all(
+                row["history_feature_schema"] ==
+                "auto-finetune.dust-k2-direction-history.v2" for row in pre))
+            derived = [json.loads(line) for line in labels.read_text().splitlines()]
+            self.assertTrue(all("history_features_pre_probe" not in r for r in derived))
+            joined = verify_event_join(root, run_id, events, labels, "b" * 64)
+            self.assertEqual(joined["signed_batch_receipts"], 2)
+            self.assertTrue(joined["derived_label_join_verified"])
+            self.assertEqual(joined["completed_direction_count"], 8)
+            self.assertTrue(all(p.grad is None for p in model.parameters()))
+
     def test_private_episode_key_requires_permissions(self):
         with tempfile.TemporaryDirectory() as directory:
             key = Path(directory) / "key"

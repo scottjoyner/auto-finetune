@@ -1,0 +1,46 @@
+name: Dust K2 causal PRE replay CPU
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_causal_feature_history.py'
+      - 'experiments/dust/k2_causal_evidence_verify.py'
+      - 'experiments/dust/k2_direction_witness.py'
+      - 'experiments/dust/k2_real_direction_probe.py'
+      - 'tests/test_dust_k2_causal_feature_history.py'
+      - 'tests/test_dust_k2_causal_evidence_verify.py'
+      - 'tests/test_dust_k2_direction_witness.py'
+      - 'docs/dust-k2-causal-history-observer-20261009.md'
+      - '.github/workflows/dust-k2-causal-cpu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prehistory-stdlib:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Causal ordering and strict historical replay tests (no Torch)
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_causal_feature_history.py -v
+          python -m unittest discover -s tests -p test_dust_k2_causal_evidence_verify.py -v
+      - name: Syntax check read-only observer and audit
+        run: |
+          python -m py_compile \
+            experiments/dust/k2_causal_feature_history.py \
+            experiments/dust/k2_causal_evidence_verify.py \
+            experiments/dust/k2_direction_witness.py \
+            experiments/dust/k2_real_direction_probe.py
+      - name: Preserve nonproduction boundary
+        run: |
+          echo "Focused hosted CI does not import K2, load model weights, or use GPU."
+          echo "Actual Torch estimator parity ran on x1/Xwing separately."
+          echo "No classifier training or trusted receiver signing-key custody admitted."

@@ -34,7 +34,8 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
         max_tokens: int = 128, device: str = "cuda",
         receiver_run_id: str | None = None,
         preflight_manifest: Path | None = None,
-        expected_preflight_sha256: str | None = None) -> dict:
+        expected_preflight_sha256: str | None = None,
+        collect_causal_history_v2: bool = False) -> dict:
     if preflight_manifest is None or expected_preflight_sha256 is None:
         raise ValueError("source-group preflight and pinned manifest hash required")
     if population not in (8, 16, 32, 64):
@@ -98,7 +99,9 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
         witness = LocalProbeWitness(
             events, derived, episode_hmac_sha256=episode,
             model_revision_sha256=observed_sha, sigma=sigma,
-            receiver=receiver)
+            receiver=receiver,
+            causal_history_population=(population if collect_causal_history_v2
+                                       else None))
         start = time.monotonic()
         result = tail_scored_structured_estimate(
             model, cache, a, b, seed=seed, population=population,
@@ -125,6 +128,9 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
             "model_config_sha256": digest(model_dir / "config.json"),
             "sample_selection_pseudonymous": True,
             "source_group_schema": "masked-prompt-prefix-v2",
+            "causal_history_v2_observed": (
+                observed["causal_history_pre_events_only"]),
+            "causal_history_v2_training_authorized": False,
             "preflight_manifest_sha256": expected_preflight_sha256,
             "preflight_group_split": selected_group["group_split"],
             "preflight_cluster_size": selected_group["cluster_members"],
@@ -180,6 +186,8 @@ def main(argv=None):
     ap.add_argument("--sigma", type=float, default=.25)
     ap.add_argument("--direction-batch", type=int, default=4)
     ap.add_argument("--max-tokens", type=int, default=128)
+    ap.add_argument("--collect-causal-history-v2", action="store_true",
+                    help="opt in to history PRE event fields, no trainer changes")
     ap.add_argument("--receiver-run-id", help="hex32 run ID for x1 HMAC receipt")
     ap.add_argument("--preflight-manifest", required=True, type=Path,
                     help="producer-local, exact near-duplicate preflight JSON")
@@ -204,7 +212,8 @@ def main(argv=None):
         max_tokens=args.max_tokens, device=args.device,
         receiver_run_id=args.receiver_run_id,
         preflight_manifest=args.preflight_manifest,
-        expected_preflight_sha256=args.expected_preflight_sha256)
+        expected_preflight_sha256=args.expected_preflight_sha256,
+        collect_causal_history_v2=args.collect_causal_history_v2)
     with args.output.open("x", encoding="utf-8") as target:
         target.write(json.dumps(report, sort_keys=True, indent=2) + "\n")
 
