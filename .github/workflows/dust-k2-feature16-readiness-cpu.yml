@@ -1,0 +1,37 @@
+name: Dust K2 feature16 source readiness gate
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_feature16_readiness.py'
+      - 'tests/test_dust_k2_feature16_readiness.py'
+      - 'docs/dust-k2-feature16-readiness-20261009.md'
+      - '.github/workflows/dust-k2-feature16-readiness-cpu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  strict-observation-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate 16D source-cluster readiness with strict research hold
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_feature16_readiness.py -v
+          python -m unittest discover -s tests -p test_dust_k2_feature16_contract.py -v
+      - name: Compile read-only dataset validator
+        run: |
+          python -m py_compile experiments/dust/k2_feature16_readiness.py
+          echo "No model weights, prompts, NAS, providers, GPU, optimizer or training."
+          echo "Synthetic tests do not establish independent signing-key custody."
+          echo "Real-label classifier and production admission remain DENY."
