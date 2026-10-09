@@ -93,6 +93,7 @@ class Feature16ContractTests(unittest.TestCase):
             paths, *_ = feature_fixture(temp)
             public = Path(temp) / "public"
             public.mkdir(mode=0o755)
+            public.chmod(0o755)  # Force insecure mode despite ambient umask.
             with self.assertRaises(PermissionError):
                 export_private(*paths, public / "dataset.jsonl")
 
