@@ -13,6 +13,7 @@ import hmac
 import json
 import math
 import os
+import subprocess
 from pathlib import Path
 import time
 
@@ -52,6 +53,39 @@ def read_private_key(path: Path) -> bytes:
     return key
 
 
+class SSHReceiver:
+    """Request an x1-owned HMAC receipt; block until independently fsynced."""
+
+    def __init__(self, host: str, run_id: str):
+        if host != "x1-370" or len(run_id) != 32 or any(
+            ch not in "0123456789abcdef" for ch in run_id
+        ):
+            raise ValueError("receiver host or run ID not allowlisted")
+        self.host = host
+        self.run_id = run_id
+
+    def __call__(self, batch_sha256: str):
+        if len(batch_sha256) != 64 or any(
+            c not in "0123456789abcdef" for c in batch_sha256
+        ):
+            raise ValueError("invalid PRE-batch digest")
+        path = ("/home/scott/git/wt-dust-k2-direction-witness-20261009/"
+                "experiments/dust/k2_receipt_receiver.py")
+        command = ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
+                   "-o", "ConnectTimeout=5", self.host, "/usr/bin/python3", path,
+                   "--root", "/home/scott/git/dust-k2-receiver-custody-20261009",
+                   "--receive", "--run-id", self.run_id,
+                   "--batch-sha256", batch_sha256]
+        result = subprocess.run(command, check=True, capture_output=True,
+                                text=True, timeout=18)
+        receipt = json.loads(result.stdout)
+        if (receipt["run_id"] != self.run_id
+                or receipt["batch_sha256"] != batch_sha256
+                or len(receipt["receiver_hmac_sha256"]) != 64):
+            raise RuntimeError("receiver receipt inconsistent")
+        return receipt
+
+
 class LocalProbeWitness:
     """Two separate, exclusively created mode-600 ledgers.
 
@@ -63,7 +97,7 @@ class LocalProbeWitness:
 
     def __init__(self, event_path: Path, completed_path: Path, *,
                  episode_hmac_sha256: str, model_revision_sha256: str,
-                 sigma: float):
+                 sigma: float, receiver=None):
         from .predictive_probe_contract import required_hex
         if event_path.resolve() == completed_path.resolve():
             raise ValueError("event and completed files must be separate")
@@ -72,6 +106,8 @@ class LocalProbeWitness:
         if not 0 < sigma <= .5:
             raise ValueError("invalid probe sigma")
         self.sigma = sigma
+        self.receiver = receiver
+        self.remote_receipt_count = 0
         self.events = None
         self.completed = None
         self.completed_path = Path(completed_path)
@@ -169,6 +205,26 @@ class LocalProbeWitness:
         if not rows:
             raise RuntimeError("empty direction batch")
         self.pending = rows
+        if self.receiver is not None:
+            # Submit only a hash of fsynced PRE events to receiver x1. The
+            # receiver HMAC key stays on x1; blocking receipt arrives BEFORE
+            # the caller enters the antithetic forward evaluation.
+            digest = hashlib.sha256("|".join(
+                row["event_sha256"] for row in rows).encode()
+            ).hexdigest()
+            receipt = self.receiver(digest)
+            marker = {
+                "schema": EVENT_SCHEMA, "phase": "RECEIPT",
+                "batch_sha256": digest,
+                "receiver_hmac_sha256": receipt["receiver_hmac_sha256"],
+                "receiver_utc_ns": receipt["receiver_utc_ns"],
+                "batch_index": receipt["batch_index"],
+                "previous_event_sha256": self.chain,
+            }
+            marker["event_sha256"] = sha256_json(marker)
+            self._write(self.events, marker)
+            self.chain = marker["event_sha256"]
+            self.remote_receipt_count += 1
 
     def after_batch(self, *, plus, minus, first):
         if self.pending is None:
@@ -224,6 +280,10 @@ class LocalProbeWitness:
         report["independent_timing_witness"] = False
         report["last_hash_chain_event_sha256"] = self.chain
         report["direction_population_unchanged"] = True
+        report["receiver_precommit_receipts"] = self.remote_receipt_count
+        report["independent_receiver_key_not_exported"] = (
+            self.receiver is not None)
+        report["receiver_hmac_verified_by_receiver"] = False
         return report
 
     def close(self):
