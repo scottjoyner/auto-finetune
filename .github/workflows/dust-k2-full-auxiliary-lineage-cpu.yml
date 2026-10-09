@@ -1,0 +1,44 @@
+name: Dust K2 bounded full auxiliary and source lineage CPU
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_cross_corpus_audit.py'
+      - 'experiments/dust/k2_crosscorpus_veto.py'
+      - 'experiments/dust/k2_source_lineage_gate.py'
+      - 'tests/test_dust_k2_extended_auxiliary.py'
+      - 'tests/test_dust_k2_source_lineage_gate.py'
+      - 'docs/dust-k2-full-auxiliary-lineage-20261009.md'
+      - '.github/workflows/dust-k2-full-auxiliary-lineage-cpu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-private-audit-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate bounded full scan and lineage classification (stdlib only)
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_extended_auxiliary.py -v
+          python -m unittest discover -s tests -p test_dust_k2_source_lineage_gate.py -v
+          python -m unittest discover -s tests -p test_dust_k2_crosscorpus_veto.py -v
+          python -m unittest discover -s tests -p test_dust_k2_cross_corpus_audit.py -v
+      - name: Syntax check independent read-only path
+        run: |
+          python -m py_compile \
+            experiments/dust/k2_cross_corpus_audit.py \
+            experiments/dust/k2_crosscorpus_veto.py \
+            experiments/dust/k2_source_lineage_gate.py
+          echo "All corpora here are synthetic. No real prompts, model, GPU or provider calls."
+          echo "No classifier, sample selection, optimizer, key custody or production admission."
