@@ -90,7 +90,7 @@ class Feature16ContractTests(unittest.TestCase):
 
     def test_readonly_output_requires_private_directory(self):
         with tempfile.TemporaryDirectory() as temp:
-            paths, *_ = fixture(temp)
+            paths, *_ = feature_fixture(temp)
             public = Path(temp) / "public"
             public.mkdir(mode=0o755)
             with self.assertRaises(PermissionError):
