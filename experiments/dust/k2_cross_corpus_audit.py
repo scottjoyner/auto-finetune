@@ -73,6 +73,8 @@ def summarize_screen(source_rows: list[dict], manifest: dict,
         raise ValueError("unrecognized source manifest")
     if manifest.get("source_dataset_sha256") != expected_source_sha256:
         raise ValueError("source corpus changed since source preflight")
+    if not aux_groups:
+        raise ValueError("no auxiliary corpora were audited")
     candidates = manifest["candidates"]
     if len(source_rows) != len(candidates):
         raise ValueError("source tokenizable count changed")
@@ -128,7 +130,8 @@ def summarize_screen(source_rows: list[dict], manifest: dict,
         "quarantine_sample_indices": affected,
         "potentially_impacted_partition_counts": dict(sorted(partitions.items())),
         "source_cluster_contamination_review_required": bool(affected),
-        "complete_auxiliary_coverage": not any_truncated,
+        "complete_auxiliary_coverage": bool(aux_groups) and not any_truncated,
+        "audit_provenance_scope": "PRODUCER_LOCAL_LEXICAL_AUDIT_ONLY",
         "semantic_paraphrase_screened": False,
         "all_corpora_exhaustively_audited": False,
         "source_independence_certified": False,
@@ -180,9 +183,14 @@ def scan(*, model_dir: Path, source_file: Path, auxiliary_files: list[Path],
         available = len(raw)
         subset = raw[:AUXILIARY_PAIR_CAP]
         aux_groups.append((file.name, subset, info["sha256"], available))
-    return summarize_screen(
+    report = summarize_screen(
         source_rows, manifest, aux_groups,
         expected_source_sha256=source_info["sha256"])
+    # Bind this particular audit to the exact immutable, approved preflight;
+    # a later corpus revision needs a new scan, not reuse of an old JSON.
+    report["source_preflight_sha256"] = hashlib.sha256(manifest_raw).hexdigest()
+    report["source_model_config_sha256"] = manifest["model_config_sha256"]
+    return report
 
 
 def main(argv=None):

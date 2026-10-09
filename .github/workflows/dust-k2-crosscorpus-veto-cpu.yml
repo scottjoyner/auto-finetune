@@ -1,0 +1,44 @@
+name: Dust K2 cross-corpus quarantine acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_cross_corpus_audit.py'
+      - 'experiments/dust/k2_crosscorpus_veto.py'
+      - 'experiments/dust/k2_feature16_readiness.py'
+      - 'tests/test_dust_k2_crosscorpus_veto.py'
+      - 'tests/test_dust_k2_cross_corpus_audit.py'
+      - 'tests/test_dust_k2_feature16_readiness.py'
+      - '.github/workflows/dust-k2-crosscorpus-veto-cpu.yml'
+      - 'docs/dust-k2-crosscorpus-veto-20261009.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  strict-quarantine-no-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test strict cross-corpus quarantine, source privacy and group count
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_crosscorpus_veto.py -v
+          python -m unittest discover -s tests -p test_dust_k2_cross_corpus_audit.py -v
+          python -m unittest discover -s tests -p test_dust_k2_feature16_readiness.py -v
+      - name: Compile research-only modules
+        run: |
+          python -m py_compile \
+            experiments/dust/k2_cross_corpus_audit.py \
+            experiments/dust/k2_crosscorpus_veto.py \
+            experiments/dust/k2_feature16_readiness.py
+          echo "Only synthetic test data; no private corpora, provider calls or K2 model."
+          echo "All classifier training, independent key custody and production authority remain denied."
