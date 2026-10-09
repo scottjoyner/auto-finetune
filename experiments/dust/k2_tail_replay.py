@@ -283,7 +283,7 @@ def apply_local_lora_update_scored(
 
 def tail_scored_structured_estimate(
     model, cache: TailCache, a, b, *, seed: int, population: int,
-    sigma: float, direction_batch: int,
+    sigma: float, direction_batch: int, probe_observer=None,
 ):
     """Estimate output gradients with shared orthogonal antithetic directions."""
     import torch
@@ -329,9 +329,19 @@ def tail_scored_structured_estimate(
             signed=torch.cat((d,-d),dim=0)
             jitter=signed[:,None,:].expand(
                 2*width,count,out_features)*sigma
+            # Optional producer-local PRE event is fsynced BEFORE this
+            # perturbation's forward; all K directions are still scored.
+            # Never attach observer logic to the optimizer update step.
+            if probe_observer is not None:
+                probe_observer.before_batch(
+                    directions=d,clean=clean,cache=cache,
+                    positions=positions,first=start)
             losses,_=score_tail_scored(
                 model,cache,a,b,jitter=jitter)
             plus,minus=losses[:width].float(),losses[width:].float()
+            if probe_observer is not None:
+                probe_observer.after_batch(
+                    plus=plus,minus=minus,first=start)
             diff=plus-minus
             estimate += (
                 diff.unsqueeze(-1)*d[:,None,:]
