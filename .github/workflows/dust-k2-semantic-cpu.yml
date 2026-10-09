@@ -1,0 +1,38 @@
+name: Dust K2 local semantic challenge contract
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_semantic_challenge_contract.py'
+      - 'experiments/dust/k2_offline_semantic_audit.py'
+      - 'tests/test_dust_k2_semantic_challenge.py'
+      - 'docs/dust-k2-semantic-challenge-20261009.md'
+      - '.github/workflows/dust-k2-semantic-cpu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  challenge-security-no-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fixed paraphrase and hard-negative challenge contract
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_semantic_challenge.py -v
+      - name: Compile offline research audit
+        run: |
+          python -m py_compile \
+            experiments/dust/k2_semantic_challenge_contract.py \
+            experiments/dust/k2_offline_semantic_audit.py
+          echo "No real prompts, tensors, models, GPUs, keys, external calls, storage or training."
+          echo "Semantic review scores never authorize source independence or classifier fit."
