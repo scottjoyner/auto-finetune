@@ -19,11 +19,27 @@ class ProvenanceSafetyTests(unittest.TestCase):
             report=summarize_provenance(
                 path,source_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
             self.assertEqual(report["recognized_norobots_labeled_rows"],2)
-            self.assertEqual(report["candidate_upstream_license"],"CC-BY-NC-4.0")
+            self.assertEqual(report["candidate_upstream_license"],"UNVERIFIED")
             self.assertFalse(report["commercial_training_rights_approved"])
             self.assertFalse(report["classifier_training_authorized"])
             self.assertFalse(report["local_corpus_transformation_provenance_verified"])
             self.assertNotIn('"messages"',str(report))
+
+    def test_full_9500_row_metadata_supports_candidate_upstream_only(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/"unmodified-frozen-source-format.jsonl"
+            path.write_text('{"source":"norobots/Generation","messages":[]}\n'*9500)
+            report=summarize_provenance(
+                path,source_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+            self.assertEqual(report["local_conversation_rows"],9500)
+            self.assertEqual(report["recognized_norobots_labeled_rows"],9500)
+            self.assertEqual(report["candidate_upstream_license"],"CC-BY-NC-4.0")
+            self.assertEqual(report["candidate_upstream_dataset"],
+                             "HuggingFaceH4/no_robots")
+            self.assertFalse(report["local_corpus_license_grant_verified"])
+            self.assertFalse(report["commercial_training_rights_approved"])
+            self.assertFalse(report["classifier_training_authorized"])
 
     def test_metadata_without_provenance_and_hash_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
