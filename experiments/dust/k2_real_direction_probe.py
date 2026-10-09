@@ -35,7 +35,10 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
         receiver_run_id: str | None = None,
         preflight_manifest: Path | None = None,
         expected_preflight_sha256: str | None = None,
-        collect_causal_history_v2: bool = False) -> dict:
+        collect_causal_history_v2: bool = False,
+        isolated_receiver_key_file: Path | None = None) -> dict:
+    if isolated_receiver_key_file is not None and receiver_run_id is None:
+        raise ValueError("isolated receipt identity requires a receiver run ID")
     if preflight_manifest is None or expected_preflight_sha256 is None:
         raise ValueError("source-group preflight and pinned manifest hash required")
     if population not in (8, 16, 32, 64):
@@ -52,7 +55,8 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
                                       for c in expected_sha):
         raise ValueError("expected weight SHA256 required")
     from .k2_direction_witness import (
-        LocalProbeWitness, SSHReceiver, pseudonym, read_private_key,
+        LocalProbeWitness, SSHReceiver, IsolatedSSHReceiver,
+        pseudonym, read_private_key,
     )
     key = read_private_key(episode_key_file)
     import torch
@@ -94,8 +98,12 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
         # Deliberately match initial rank-4 B=0 for the unbiased base
         # observation; no calibration-B change or hidden optimizer step.
         a_original, b_original = a.clone(), b.clone()
-        receiver = (SSHReceiver("x1-370", receiver_run_id)
-                    if receiver_run_id else None)
+        if isolated_receiver_key_file is not None:
+            receiver = IsolatedSSHReceiver(
+                "x1-370", receiver_run_id, isolated_receiver_key_file)
+        else:
+            receiver = (SSHReceiver("x1-370", receiver_run_id)
+                        if receiver_run_id else None)
         witness = LocalProbeWitness(
             events, derived, episode_hmac_sha256=episode,
             model_revision_sha256=observed_sha, sigma=sigma,
@@ -153,6 +161,12 @@ def run(*, model_dir: Path, train_file: Path, expected_sha: str,
             "real_pretrained_K2_loaded": True,
             "training_data_contained_in_report": False,
             "independent_time_order_attestation": False,
+            "receipt_authentication_mode": (
+                "ISOLATED_RECEIPT_IDENTITY_REQUESTED__CUSTODY_UNVERIFIED"
+                if isolated_receiver_key_file else
+                "LEGACY_SHARED_UNIX_PRINCIPAL" if receiver_run_id else
+                "NO_REMOTE_RECEIPT"),
+            "separate_receiver_uid_key_read_denial_verified": False,
             "independent_receiver_precommit_received":
                 observed["receiver_precommit_receipts"] ==
                 population // direction_batch if receiver_run_id else False,
@@ -189,6 +203,8 @@ def main(argv=None):
     ap.add_argument("--collect-causal-history-v2", action="store_true",
                     help="opt in to history PRE event fields, no trainer changes")
     ap.add_argument("--receiver-run-id", help="hex32 run ID for x1 HMAC receipt")
+    ap.add_argument("--isolated-receiver-key-file", type=Path,
+                    help="dedicated receipt-only SSH identity; no legacy fallback")
     ap.add_argument("--preflight-manifest", required=True, type=Path,
                     help="producer-local, exact near-duplicate preflight JSON")
     ap.add_argument("--expected-preflight-sha256", required=True,
@@ -213,7 +229,8 @@ def main(argv=None):
         receiver_run_id=args.receiver_run_id,
         preflight_manifest=args.preflight_manifest,
         expected_preflight_sha256=args.expected_preflight_sha256,
-        collect_causal_history_v2=args.collect_causal_history_v2)
+        collect_causal_history_v2=args.collect_causal_history_v2,
+        isolated_receiver_key_file=args.isolated_receiver_key_file)
     with args.output.open("x", encoding="utf-8") as target:
         target.write(json.dumps(report, sort_keys=True, indent=2) + "\n")
 
