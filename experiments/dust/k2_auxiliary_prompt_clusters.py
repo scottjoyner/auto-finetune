@@ -81,16 +81,15 @@ def lexical_components(prompts: list[str], *, cutoff_seconds: int = MAX_SECONDS,
     for ordinal, i in enumerate(order):
         left = prompts[i]
         n = len(left)
-        for j in order[ordinal + 1:]:
-            if (comparisons + length_pruned + quick_pruned) % 32768 == 0:
+        for offset, j in enumerate(order[ordinal + 1:]):
+            if (comparisons + length_pruned) % 32768 == 0:
                 if time.monotonic() - start > cutoff_seconds:
                     raise TimeoutError("exhaustive lexical audit deadline: no manifest")
             right = prompts[j]
             m = len(right)
             # Increasing length: every remaining partner is also impossible.
             if 2 * n < threshold * (n + m):
-                length_pruned += len(order) - (ordinal + 1) - (j == j and
-                    order[ordinal + 1:].index(j))
+                length_pruned += len(order) - (ordinal + 1) - offset
                 break
             comparisons += 1
             matcher = SequenceMatcher(None, left, right, autojunk=False)
@@ -111,6 +110,10 @@ def lexical_components(prompts: list[str], *, cutoff_seconds: int = MAX_SECONDS,
     return members, {
         "all_unordered_distinct_prompt_pairs": len(prompts) * (len(prompts)-1)//2,
         "length_eligible_pairs_evaluated": comparisons,
+        "length_pruned_pairs": length_pruned,
+        "quick_ratio_below_threshold_pairs": quick_pruned,
+        "candidate_pair_accounting_complete": (
+            comparisons + length_pruned == len(prompts) * (len(prompts)-1)//2),
         "sequence_matcher_edges_at_or_above_threshold": edges,
         "lexical_components": len(members),
         "max_component_unique_prompts": max(map(len, members)),
@@ -143,7 +146,6 @@ def build_private_manifest(prompt_rows: list[dict], key: bytes, *,
         prompts, cutoff_seconds=cutoff_seconds)
     entries = []
     splits = Counter()
-    mixed_from_old_candidate_partition = 0
     for cluster in components:
         ids = [digest_keyed(key, "exact-prompt-v1", prompts[i]) for i in cluster]
         cluster_identity = digest_keyed(
