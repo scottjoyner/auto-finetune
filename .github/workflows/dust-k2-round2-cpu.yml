@@ -1,0 +1,43 @@
+name: Dust K2 round-two preregistration CPU
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_cross_corpus_audit.py'
+      - 'experiments/dust/k2_causal_feature_history.py'
+      - 'tests/test_dust_k2_cross_corpus_audit.py'
+      - 'tests/test_dust_k2_causal_feature_history.py'
+      - 'docs/dust-k2-round2-experiment-20261009.md'
+      - '.github/workflows/dust-k2-round2-cpu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-and-history-no-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run deterministic privacy and causal ordering tests
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_cross_corpus_audit.py -v
+          python -m unittest discover -s tests -p test_dust_k2_causal_feature_history.py -v
+      - name: Compile read-only research modules
+        run: |
+          python -m py_compile \
+            experiments/dust/k2_cross_corpus_audit.py \
+            experiments/dust/k2_causal_feature_history.py
+      - name: Explicit independent evidence and trainer hold
+        run: |
+          echo "This is synthetic-only source screening and causal-history acceptance."
+          echo "No local corpora, K2 model, HMAC key, ROCm, training, NAS or provider calls."
+          echo "Independent signing-key custody and source-heldout adequacy remain HOLD."
