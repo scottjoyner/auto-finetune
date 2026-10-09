@@ -147,19 +147,23 @@ def train_head(rows: list[Candidate], normalizer: Standardizer, seed: int,
     selected = [r for k in boot for r in by_episode[k]]
     rng = random.Random(seed + 101)
     weights = [0.0] * (len(FEATURE_NAMES) + 1)
+    # Deterministic mini-batch SGD: candidate outcomes are from training
+    # episodes only, with whole-episode bootstrap and seeded row ordering.
+    mini_batch = 32
     for epoch in range(epochs):
-        # Batch SGD on a fixed training-only bootstrapped episode cohort.
         rng.shuffle(selected)
-        gradient = [0.0] * len(weights)
-        for row in selected:
-            vec = normalizer.transform(row.features)
-            residual = logistic(dot(weights, vec)) - row.useful
-            for j, x in enumerate(vec):
-                gradient[j] += residual * x
-        for j in range(len(weights)):
-            reg = .005 * weights[j] if j else 0.0
-            weights[j] -= learning_rate * (
-                gradient[j] / len(selected) + reg)
+        for offset in range(0, len(selected), mini_batch):
+            batch = selected[offset:offset + mini_batch]
+            gradient = [0.0] * len(weights)
+            for row in batch:
+                vec = normalizer.transform(row.features)
+                residual = logistic(dot(weights, vec)) - row.useful
+                for j, x in enumerate(vec):
+                    gradient[j] += residual * x
+            for j in range(len(weights)):
+                reg = .005 * weights[j] if j else 0.0
+                weights[j] -= learning_rate * (
+                    gradient[j] / len(batch) + reg)
     return tuple(weights)
 
 
