@@ -163,10 +163,18 @@ class TestWitness(unittest.TestCase):
                 read_private_key(key)
             key.chmod(0o600)
             self.assertEqual(read_private_key(key), b"q" * 32)
-            self.assertNotEqual(pseudonym(b"q" * 32, {"tokens":[1],
-                                                      "labels":[1]}),
-                                pseudonym(b"r" * 32, {"tokens":[1],
-                                                      "labels":[1]}))
+            first = {"tokens": [1, 2, 3, 4],
+                     "labels": [-100, -100, 3, 4]}
+            response_variant = {"tokens": [1, 2, 7, 8, 9],
+                                "labels": [-100, -100, 7, 8, 9]}
+            self.assertNotEqual(pseudonym(b"q" * 32, first),
+                                pseudonym(b"r" * 32, first))
+            # The same masked prompt must remain one episode group even
+            # when target response text/length differs.
+            self.assertEqual(pseudonym(b"q" * 32, first),
+                             pseudonym(b"q" * 32, response_variant))
+            with self.assertRaisesRegex(ValueError, "masked prompt"):
+                pseudonym(b"q" * 32, {"tokens": [3], "labels": [3]})
 
     def test_no_overwrite_and_incomplete_pre_probe_fails(self):
         model, cache, a, b, sample = self.make_toy()
