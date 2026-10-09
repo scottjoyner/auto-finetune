@@ -1,0 +1,50 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,hyperref}
+\title{LittleBit-Fleet: A Preregistered Study of Sub-1-Bit Latent-Factor Compression and Scale-Only Forward Optimization}
+\author{Independent Research Project --- Draft, Not an Experimental Result}
+\date{9 October 2026}
+\begin{document}
+\maketitle
+\begin{abstract}
+This document preregisters a reproducible evaluation of whether low-rank, binarized-factor language model compression can retain useful model quality at a practical bits-per-weight operating point while enabling cheaper scale-only adaptation. We plan to compare the original LittleBit Dual-SVID initialization \cite{lee2025littlebit} with the Joint-ITQ initialization of LittleBit-2 \cite{lee2026littlebit2}. A separate hypothesis asks whether orthogonal antithetic, forward-only perturbations can approximate exact gradients of the compressed representation's scale variables. This document reports no new model training, quality improvement, memory reduction or fleet inference benchmark. Independent replication and negative-result reporting are mandatory.
+\end{abstract}
+\section{Motivation and scientific boundary}
+Low-rank factorization followed by factor binarization and learned magnitude compensation can reduce transformer-linear storage below one bit per original weight \cite{lee2025littlebit}. However, reduced deployed storage does not entail lower training memory or faster real-world inference. We distinguish model-fidelity, training-cost and inference-performance outcomes. Our optimization of frozen-factor scale vectors is an \emph{independent proposed extension}, not part of the original result and not proof of general forward-only training.
+\section{Hypotheses}
+\paragraph{H1 (initialization)} At matched bit budgets, Joint-ITQ reduces reconstruction error and/or post-QAT held-out loss relative to Dual-SVID.
+\paragraph{H2 (scale-only adaptation)} Frozen-factor scale-only QAT recovers held-out fidelity relative to its untrained initialization while using fewer training resources than full factor-and-scale QAT.
+\paragraph{H3 (forward-only calibration)} Orthogonal antithetic estimates of the scale gradient have lower variance and more useful held-out learning than matched Gaussian directions at the same forward-evaluation budget.
+\paragraph{H4 (operating point)} A target 0.55 transformer-linear BPW offers a useful quality-storage tradeoff on an upstream-compatible model; 0.30 BPW is conditional exploration.
+\section{Method}
+For a dense matrix $W\in\mathbb{R}^{d_o\times d_i}$, represent the primary compressed branch as
+\[
+\widehat W_{\mathrm{pri}}=\operatorname{diag}(h) U_{\pm}\operatorname{diag}(\ell)V_{\pm}^{\top}\operatorname{diag}(g).
+\]
+A separate residual branch is optional but its sign and scale bits count against the same total budget. Our scales-only arm freezes the continuous/master factor values and their signs, updating only $h,g,\ell$ and any enabled residual scales. The full-QAT control trains factor masters and scales following upstream QAT; a no-QAT version provides an initialization baseline.
+\paragraph{Loss.} For upstream-compatible full and scale-only QAT we use the same teacher/student loss definition, $L_{\mathrm{out}}+10 L_{\mathrm{inter}}$, where the output term is a distillation KL and the intermediate term is hidden-state MSE. Optimizer schedules and data partitions are frozen before comparison.
+\paragraph{Forward-only treatment.} On a bounded final-layer scale-vector probe, antithetic perturbation pairs evaluate $L(\theta+\sigma v)$ and $L(\theta-\sigma v)$. We contrast orthogonal and Gaussian directions with exact local autograd and negative controls, counting full and cached-tail forwards independently. Neither this nor previous K2 adapter experiments establish full-model forward-only QAT fidelity.
+\section{Experimental design}
+E0: upstream revision, license, model/driver/environment preflight. E1: synthetic CPU oracle and pack/unpack tests on three fixed seeds and spectra. E2: at most a 100-step, separately authorized GPU smoke at 0.55 BPW on one upstream-supported public model. E3: independent multi-seed held-out study only after a positive pilot gate. E4: isolated exact-gradient versus forward-only scale-vector comparison after real scales-only heldout improvement. E5: deployment-independent same-node model size/latency tests. No production release is authorized.
+\paragraph{Primary endpoint.} The primary quality endpoint is token-weighted held-out cross entropy on frozen, non-overlapping public splits, with model/package bytes and peak training VRAM separately measured. Perplexity and agentic task success are additional endpoints; no task/eval leakage is allowed.
+\paragraph{Comparison discipline.} Pair controls by initial model and tokenizer revision, target bit budget, data, seed and accelerator. Record both an optimizer-step-matched and a wall-time-matched comparison when feasible. Report confidence/dispersion and all failed/no-go arms. Changes after outcome inspection require new preregistration.
+\section{Predictions and observed outcomes}
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+Experiment & Directional prediction & Observation & Gate\\
+\midrule
+H1 Dual-SVID vs Joint-ITQ & ITQ error lower & NOT\_RUN & HOLD\\
+H2 no QAT vs scale-only & Held-out CE lower & NOT\_RUN & HOLD\\
+H3 Gaussian vs orthogonal & Estimator fidelity higher & NOT\_RUN & HOLD\\
+H4 real deployment & Quality/size viable & NOT\_RUN & HOLD\\
+\bottomrule
+\end{tabular}
+\end{center}
+\section{Risk, licensing and threats to validity}
+The upstream implementation identifies its license as CC BY-NC 4.0; this project is research-only until use, redistribution and commercial restrictions are reviewed. CUDA benchmark speedups cannot be extrapolated to ROCm/Vulkan. Important limitations include small model scale, sensitivity to BPW accounting and tensor packing, teacher cost, limited random seeds, dataset contamination and the mismatch between local gradient cosine and useful held-out learning. Raw prompts and credentials will not be serialized in public manifests.
+\section{Reproducibility and release gates}
+Every experiment requires a prior hypothesis record, source/model/tokenizer/data hashes, exact runtime and hardware metadata, bounded resources, measurement commands, immutable evidence manifest, independent validation and an explicit reviewer verdict. A failed or negative experiment remains in the report; absence of a result is represented as NOT\_RUN, not zero.
+\bibliographystyle{plain}
+\bibliography{references}
+\end{document}
