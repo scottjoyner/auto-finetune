@@ -73,4 +73,8 @@ def test_ensure_dirs(tmp_path):
 def test_project_root_is_parent_of_src():
     root = project_root()
     assert os.path.isdir(os.path.join(root, "src"))
-    assert os.path.basename(root) == "auto-finetune"
+    # Isolated Git worktrees deliberately have arbitrary checkout names.
+    # Verify the source's actual parent rather than hardcoding repo basename.
+    from pathlib import Path
+    assert Path(root).resolve() == Path(__file__).resolve().parents[1]
+    assert os.path.isfile(os.path.join(root, "pyproject.toml"))
