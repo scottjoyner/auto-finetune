@@ -155,7 +155,8 @@ def execute_case(torch, base_cls, *, rows: int, cols: int, rank: int,
         "scale_bytes": scale_bytes, "scale_dtypes": scale_types,
         "packed_tensor_shapes": {n: list(state[n].shape) for n in names},
         "original_weight_sha256": hashlib.sha256(
-            weight.contiguous().numpy().tobytes()).hexdigest(),
+            bytes(weight.contiguous().view(torch.uint8).flatten().tolist())
+        ).hexdigest(),
     }
 
 
