@@ -83,6 +83,18 @@ class SyntheticClassifierTests(unittest.TestCase):
         self.assertEqual(report["backward_calls"], 0)
         self.assertEqual(report["gpu_seconds"], 0)
         self.assertEqual(report, research.run_synthetic())
+        self.assertEqual(report["confirmation_episodes"], 48)
+        self.assertTrue(report["test_is_development_exposed"])
+        self.assertTrue(report["confirmation_is_first_view"])
+        self.assertFalse(set(research.CONFIRMATION_EPISODES) &
+                         set().union(*map(set, research.SPLIT_EPISODES.values())))
+        self.assertIn(report["confirmation_metrics"]["confirmation_verdict"],
+                      ("CONFIRMATORY_TOY_ADVANTAGE",
+                       "NO_EVIDENCE_OF_SUPERIORITY"))
+        self.assertEqual(
+            report["confirmation_metrics"]["paired_episode_bootstrap"]
+                  ["classifier_minus_curvature_precision_at_4"]
+                  ["per_episode_count"], 48)
         m = report["metrics"]
         self.assertIn(m["shadow_recommendation"],
                       ("CONTINUE_SHADOW", "HOLD_NO_BASELINE_ADVANTAGE"))
