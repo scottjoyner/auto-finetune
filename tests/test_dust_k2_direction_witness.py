@@ -17,6 +17,11 @@ from experiments.dust.k2_tail_replay import (
 )
 
 
+def torch_equal_exact(a, b):
+    import torch
+    return torch.equal(a, b)
+
+
 class TestWitness(unittest.TestCase):
     def make_toy(self):
         import torch
@@ -109,6 +114,45 @@ class TestWitness(unittest.TestCase):
                                  if "event_sha256" in event else prior)
                 else:
                     self.assertIn(event["pre_event_sha256"], seen_pre)
+
+    def test_independent_hmac_receipt_joins_pre_post_before_forward(self):
+        from experiments.dust.k2_receipt_receiver import (
+            prepare_receiver, receive, verify_event_join)
+        model, cache, a, b, sample = self.make_toy()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "receiver-owned"
+            prepare_receiver(root)
+            ev = Path(directory) / "run.events"
+            derived = Path(directory) / "run.derived"
+            run_id = "a" * 32
+            remote_callback = lambda batch_digest: receive(
+                root, run_id, batch_digest)
+            witness = LocalProbeWitness(
+                ev, derived,
+                episode_hmac_sha256=pseudonym(b"z" * 32, sample),
+                model_revision_sha256="b" * 64,
+                sigma=.25, receiver=remote_callback)
+            plain = tail_scored_structured_estimate(
+                model, cache, a, b, seed=7, population=8,
+                sigma=.25, direction_batch=4)
+            observed = tail_scored_structured_estimate(
+                model, cache, a, b, seed=7, population=8,
+                sigma=.25, direction_batch=4,
+                probe_observer=witness)
+            report = witness.finish(8)
+            self.assertEqual(report["receiver_precommit_receipts"], 2)
+            self.assertTrue(torch_equal_exact(plain["estimate"],
+                                              observed["estimate"]))
+            joined = verify_event_join(root, run_id, ev)
+            self.assertEqual(joined["signed_batch_receipts"], 2)
+            self.assertEqual(joined["completed_direction_count"], 8)
+            self.assertTrue(joined["all_post_scores_follow_receiver_ack"])
+            self.assertFalse(joined["classifier_training_authorized"])
+            tampered = Path(directory) / "tampered.events"
+            tampered.write_text(ev.read_text().replace('"phase":"RECEIPT"',
+                                                        '"phase":"BAD_PHASE"', 1))
+            with self.assertRaisesRegex(ValueError, "hash mismatch"):
+                verify_event_join(root, run_id, tampered)
 
     def test_private_episode_key_requires_permissions(self):
         with tempfile.TemporaryDirectory() as directory:
