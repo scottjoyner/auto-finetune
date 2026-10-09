@@ -1,0 +1,53 @@
+# LittleBit-Fleet / 2026-10-09 / DESIGN TEMPLATE ONLY.
+# These defaults deliberately deny real training, provider calls, data ingestion and deployment.
+schema_version: "0.1-draft"
+experiment_id: "littlebit-design-not-run"
+stage: "E0"
+research_only: true
+predictions_locked: false
+execution:
+  enabled: false
+  cpu_toy_enabled: false
+  gpu_training_enabled: false
+  allow_model_download: false
+  allow_dependency_install: false
+  allow_external_provider_calls: false
+  allow_production_dispatch: false
+  allow_checkpoint_promotion: false
+  allow_deployment: false
+  allow_nas_write: false
+  approved_workdir: null
+  approved_host: null
+  max_gpu_seconds: 0
+  max_provider_tokens: 0
+  max_runtime_seconds: 0
+  max_ram_bytes: 0
+  max_vram_bytes: 0
+model:
+  proposed_model_id: "Qwen/Qwen3-0.6B"
+  revision: null
+  tokenizer_sha256: null
+  upstream_commit_sha: null
+  upstream_license_review: "PENDING"
+  architecture_verified: false
+datasets:
+  training_manifest_sha256: null
+  calibration_manifest_sha256: null
+  validation_manifest_sha256: null
+  heldout_manifest_sha256: null
+  final_test_manifest_sha256: null
+  lineage_disjoint_witness: false
+design:
+  target_block_bpws: [1.0, 0.55, 0.30]
+  target_model_bpw: null
+  primary_bpw_for_gpu: 0.55
+  seeds: [7, 42, 1337]
+  initializer_controls: ["dual_svid", "joint_itq"]
+  training_controls: ["none", "full_qat", "scales_only"]
+  forward_only_mode: "DISABLED"
+reporting:
+  include_negative_results: true
+  redact_raw_prompts: true
+  require_paired_baselines: true
+  require_reviewer_gate: true
+  real_observations_available: false
