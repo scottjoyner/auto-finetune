@@ -87,6 +87,18 @@ class SyntheticClassifierTests(unittest.TestCase):
         self.assertIn(m["shadow_recommendation"],
                       ("CONTINUE_SHADOW", "HOLD_NO_BASELINE_ADVANTAGE"))
         self.assertEqual(len(report["episode_split_sha256"]), 3)
+        self.assertEqual(m["production_admission"],
+                         "HOLD_NO_REAL_LABELS_OR_HELDOUT_CE")
+        self.assertEqual(m["paired_episode_bootstrap"]["resample_unit"],
+                         "independent_synthetic_episode")
+        intervals = m["paired_episode_bootstrap"]
+        for name in ("classifier_minus_curvature_precision_at_4",
+                     "classifier_minus_curvature_true_gain_at_4"):
+            lo, hi = intervals[name]["ci95"]
+            self.assertLessEqual(lo, intervals[name]["mean_delta"])
+            self.assertGreaterEqual(hi, intervals[name]["mean_delta"])
+            self.assertLessEqual(lo, 0)
+            self.assertGreaterEqual(hi, 0)
         for method in ("classifier", "momentum", "curvature_aware_momentum",
                        "random"):
             self.assertTrue(math.isfinite(
