@@ -143,11 +143,23 @@ class TestWitness(unittest.TestCase):
             self.assertEqual(report["receiver_precommit_receipts"], 2)
             self.assertTrue(torch_equal_exact(plain["estimate"],
                                               observed["estimate"]))
-            joined = verify_event_join(root, run_id, ev)
+            joined = verify_event_join(
+                root, run_id, ev, derived, "b" * 64)
+            self.assertTrue(joined["derived_label_join_verified"])
+            self.assertEqual(joined["derived_label_file_sha256"],
+                             hashlib.sha256(derived.read_bytes()).hexdigest())
             self.assertEqual(joined["signed_batch_receipts"], 2)
             self.assertEqual(joined["completed_direction_count"], 8)
             self.assertTrue(joined["all_post_scores_follow_receiver_ack"])
             self.assertFalse(joined["classifier_training_authorized"])
+            broken_labels = Path(directory) / "tampered.derived"
+            forged = [json.loads(row) for row in
+                      derived.read_text().splitlines()]
+            forged[0]["loss_plus"] += 0.25
+            broken_labels.write_text("\n".join(
+                json.dumps(row) for row in forged) + "\n")
+            with self.assertRaisesRegex(ValueError, "derived label differs"):
+                verify_event_join(root, run_id, ev, broken_labels, "b" * 64)
             tampered = Path(directory) / "tampered.events"
             tampered.write_text(ev.read_text().replace('"phase":"RECEIPT"',
                                                         '"phase":"BAD_PHASE"', 1))
