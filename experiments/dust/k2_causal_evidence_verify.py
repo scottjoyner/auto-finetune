@@ -24,6 +24,22 @@ from .predictive_probe_contract import validate_record
 
 MAX_FILE_BYTES = 1024 * 1024
 BATCH_LIMIT = 4
+# Whitelists also reject accidental sensitive payloads in producer logs.
+PRE_FIELDS = frozenset({
+    "schema", "phase", "episode_hmac_sha256", "candidate_index",
+    "features_pre_probe", "history_feature_schema",
+    "history_features_pre_probe", "clean_pre_probe", "sigma",
+    "local_monotonic_ns", "previous_event_sha256",
+})
+POST_FIELDS = frozenset({
+    "schema", "phase", "candidate_index", "pre_event_sha256",
+    "loss_plus", "loss_minus", "local_monotonic_ns",
+    "previous_event_sha256",
+})
+RECEIPT_FIELDS = frozenset({
+    "schema", "phase", "batch_sha256", "receiver_hmac_sha256",
+    "receiver_utc_ns", "batch_index", "previous_event_sha256",
+})
 
 
 def read_jsonl(path: Path) -> list[dict]:
@@ -52,6 +68,9 @@ def verify(events_path: Path, derived_path: Path, summary_path: Path) -> dict:
     labels = read_jsonl(derived_path)
     if len(labels) not in (8, 16, 32, 64):
         raise ValueError("unexpected full K population")
+    if (summary_path.is_symlink() or not summary_path.is_file()
+            or summary_path.stat().st_size > 64 * 1024):
+        raise ValueError("untrusted or oversized observation summary")
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     if (
         summary.get("population") != len(labels)
@@ -85,6 +104,8 @@ def verify(events_path: Path, derived_path: Path, summary_path: Path) -> dict:
         chain = observed_sha
         phase = event.get("phase")
         if phase == "PRE":
+            if set(event) != PRE_FIELDS:
+                raise ValueError("unsafe or incomplete PRE event fields")
             if post_started or receipt_current or len(pending_pre) >= BATCH_LIMIT:
                 raise ValueError("bad PRE batch state")
             index = event.get("candidate_index")
@@ -106,6 +127,8 @@ def verify(events_path: Path, derived_path: Path, summary_path: Path) -> dict:
                 raise ValueError("clean/sigma changed inside batch")
             pending_pre.append({**event, "event_sha256": observed_sha})
         elif phase == "RECEIPT":
+            if set(event) != RECEIPT_FIELDS:
+                raise ValueError("unsafe or incomplete RECEIPT fields")
             if receipt_current or post_started or len(pending_pre) != BATCH_LIMIT:
                 raise ValueError("receipt outside complete PRE batch")
             digest = hashlib.sha256(
@@ -116,6 +139,8 @@ def verify(events_path: Path, derived_path: Path, summary_path: Path) -> dict:
             receipt_current = True
             receipts += 1
         elif phase == "POST":
+            if set(event) != POST_FIELDS:
+                raise ValueError("unsafe or incomplete POST event fields")
             if not pending_pre or len(pending_post) >= len(pending_pre):
                 raise ValueError("POST without complete PRE record")
             post_started = True
