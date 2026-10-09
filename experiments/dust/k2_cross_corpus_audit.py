@@ -22,6 +22,7 @@ from .k2_data import normalized, read_pairs, tokenize_pair
 from .k2_direction_witness import pseudonym, read_private_key
 
 AUXILIARY_PAIR_CAP = 512
+MAX_EXTENDED_AUXILIARY_PAIR_CAP = 16384
 SOURCE_PAIR_CAP = 256
 NEAR_DUPLICATE_THRESHOLD = 0.85
 
@@ -53,8 +54,12 @@ def lexical_matches(source: list[dict], auxiliary: list[str],
             # string's length. Skip impossible >=85% lexical matches.
             if 2 * min(len(prompt), len(other)) / (len(prompt) + len(other)) < threshold:
                 continue
-            score = SequenceMatcher(None, prompt, other,
-                                    autojunk=False).ratio()
+            matcher = SequenceMatcher(None, prompt, other, autojunk=False)
+            # quick_ratio() is an upper bound, so this shortcut cannot
+            # discard a lexical match that meets the frozen threshold.
+            if matcher.quick_ratio() < threshold:
+                continue
+            score = matcher.ratio()
             if score > best:
                 best = score
         if best >= threshold:
@@ -67,8 +72,13 @@ def lexical_matches(source: list[dict], auxiliary: list[str],
 
 def summarize_screen(source_rows: list[dict], manifest: dict,
                      aux_groups: list[tuple[str, list[str], str, int]],
-                     *, expected_source_sha256: str):
+                     *, expected_source_sha256: str,
+                     auxiliary_pair_cap: int = AUXILIARY_PAIR_CAP):
     """Return privacy-safe report; source_rows are ephemeral in-process."""
+    if (type(auxiliary_pair_cap) is not int
+            or not AUXILIARY_PAIR_CAP <= auxiliary_pair_cap
+                   <= MAX_EXTENDED_AUXILIARY_PAIR_CAP):
+        raise ValueError("unsupported bounded auxiliary scan cap")
     if manifest.get("schema") != SCHEMA:
         raise ValueError("unrecognized source manifest")
     if manifest.get("source_dataset_sha256") != expected_source_sha256:
@@ -89,7 +99,7 @@ def summarize_screen(source_rows: list[dict], manifest: dict,
     aux_summary = []
     any_truncated = False
     for name, prompts, sha, available in aux_groups:
-        if len(sha) != 64 or len(prompts) > AUXILIARY_PAIR_CAP:
+        if len(sha) != 64 or len(prompts) > auxiliary_pair_cap:
             raise ValueError("untrusted aux digest or cap overrun")
         matches = lexical_matches(source_rows, prompts)
         combined.update(matches)
@@ -131,6 +141,7 @@ def summarize_screen(source_rows: list[dict], manifest: dict,
         "potentially_impacted_partition_counts": dict(sorted(partitions.items())),
         "source_cluster_contamination_review_required": bool(affected),
         "complete_auxiliary_coverage": bool(aux_groups) and not any_truncated,
+        "auxiliary_pair_cap": auxiliary_pair_cap,
         "audit_provenance_scope": "PRODUCER_LOCAL_LEXICAL_AUDIT_ONLY",
         "semantic_paraphrase_screened": False,
         "all_corpora_exhaustively_audited": False,
@@ -142,7 +153,12 @@ def summarize_screen(source_rows: list[dict], manifest: dict,
 
 
 def scan(*, model_dir: Path, source_file: Path, auxiliary_files: list[Path],
-         key_file: Path, manifest_file: Path, manifest_sha256: str):
+         key_file: Path, manifest_file: Path, manifest_sha256: str,
+         auxiliary_pair_cap: int = AUXILIARY_PAIR_CAP):
+    if (type(auxiliary_pair_cap) is not int
+            or not AUXILIARY_PAIR_CAP <= auxiliary_pair_cap
+                <= MAX_EXTENDED_AUXILIARY_PAIR_CAP):
+        raise ValueError("extended scan cap exceeds research limit")
     if not 1 <= len(auxiliary_files) <= 3:
         raise ValueError("bounded auxiliary corpus list must contain 1-3 files")
     if len({str(p.resolve()) for p in auxiliary_files}) != len(auxiliary_files):
@@ -181,11 +197,12 @@ def scan(*, model_dir: Path, source_file: Path, auxiliary_files: list[Path],
         # Preserve sorted order. Later new files are audited with a new pin.
         raw = [normalized(pair[0]) for _, (_, pair) in sorted(entries.items())]
         available = len(raw)
-        subset = raw[:AUXILIARY_PAIR_CAP]
+        subset = raw[:auxiliary_pair_cap]
         aux_groups.append((file.name, subset, info["sha256"], available))
     report = summarize_screen(
         source_rows, manifest, aux_groups,
-        expected_source_sha256=source_info["sha256"])
+        expected_source_sha256=source_info["sha256"],
+        auxiliary_pair_cap=auxiliary_pair_cap)
     # Bind this particular audit to the exact immutable, approved preflight;
     # a later corpus revision needs a new scan, not reuse of an old JSON.
     report["source_preflight_sha256"] = hashlib.sha256(manifest_raw).hexdigest()
@@ -203,6 +220,9 @@ def main(argv=None):
     p.add_argument("--preflight-manifest", type=Path, required=True)
     p.add_argument("--expected-preflight-sha256", required=True)
     p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--auxiliary-pair-cap", type=int,
+                   default=AUXILIARY_PAIR_CAP,
+                   help="Bound 512..16384 pairs per auxiliary file; never unlimited")
     args = p.parse_args(argv)
     if not args.read_only_cross_corpus:
         p.error("explicit read-only flag required")
@@ -213,7 +233,8 @@ def main(argv=None):
         model_dir=args.model_dir, source_file=args.source_jsonl,
         auxiliary_files=args.auxiliary_jsonl, key_file=args.episode_key_file,
         manifest_file=args.preflight_manifest,
-        manifest_sha256=args.expected_preflight_sha256)
+        manifest_sha256=args.expected_preflight_sha256,
+        auxiliary_pair_cap=args.auxiliary_pair_cap)
     with args.output.open("x", encoding="utf-8") as output:
         output.write(json.dumps(report, sort_keys=True, indent=2) + "\n")
     print(json.dumps({
