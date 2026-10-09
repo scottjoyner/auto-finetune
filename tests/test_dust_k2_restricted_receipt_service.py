@@ -1,5 +1,9 @@
 """Security policy unit tests; no privileged account mutations."""
 import unittest
+import json
+from pathlib import Path
+import tempfile
+from unittest.mock import patch
 
 from experiments.dust.k2_restricted_receipt_service import (
     parse_forced_command, verify_separate_identity,
@@ -54,6 +58,40 @@ class RestrictedReceiptTests(unittest.TestCase):
             with self.subTest(override=override):
                 with self.assertRaises(PermissionError):
                     verify_separate_identity(**{**base, **override})
+
+    def test_isolated_ssh_client_uses_dedicated_forced_command_only(self):
+        from experiments.dust.k2_direction_witness import IsolatedSSHReceiver
+        with tempfile.TemporaryDirectory() as temp:
+            identity = Path(temp) / "receipt-only-ssh.key"
+            identity.write_text("synthetic testing only")
+            identity.chmod(0o600)
+            client = IsolatedSSHReceiver("x1-370", "a" * 32, identity)
+            expected = {
+                "schema": "auto-finetune.dust-k2-independent-receipt.v1",
+                "run_id": "a" * 32, "batch_sha256": "b" * 64,
+                "receiver_hmac_sha256": "c" * 64, "batch_index": 0,
+            }
+            class Result:
+                stdout = json.dumps(expected)
+            with patch(
+                "experiments.dust.k2_direction_witness.subprocess.run",
+                return_value=Result(),
+            ) as invoked:
+                self.assertEqual(client("b" * 64), expected)
+                command = invoked.call_args.args[0]
+                self.assertIn("dustreceipt", command)
+                self.assertIn("IdentitiesOnly=yes", command)
+                self.assertIn("ClearAllForwardings=yes", command)
+                self.assertIn("StrictHostKeyChecking=yes", command)
+                self.assertNotIn("/home/scott/git/wt-dust-k2-direction-witness-20261009/", 
+                                 " ".join(command))
+                self.assertEqual(command[-1], "receive " + "a" * 32 +
+                                 " " + "b" * 64)
+            identity.chmod(0o644)
+            with self.assertRaises(PermissionError):
+                IsolatedSSHReceiver("x1-370", "a" * 32, identity)
+            with self.assertRaises(ValueError):
+                IsolatedSSHReceiver("evil.example", "a" * 32, identity)
 
     def test_service_is_explicitly_not_provisioned(self):
         from experiments.dust.k2_restricted_receipt_service import main
