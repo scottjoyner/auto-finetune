@@ -6,15 +6,40 @@ import tempfile
 import unittest
 
 from test_dust_k2_causal_evidence_verify import fixture
+from experiments.dust.k2_direction_witness import sha256_json
 from experiments.dust.k2_feature16_contract import (
     FEATURE_NAMES, SCHEMA, export_private, extract_verified_episode,
 )
 
 
+def feature_fixture(directory):
+    paths, events, rows, summary = fixture(directory)
+    # The actual v1 geometric witness reserves slots 0 and 7 as zeros.
+    real_shape = [0.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.25, 0.0]
+    before_after_sha = {}
+    previous = "0" * 64
+    for event in events:
+        old = event.pop("event_sha256")
+        if event["phase"] == "PRE":
+            event["features_pre_probe"] = real_shape
+        if event["phase"] == "POST":
+            event["pre_event_sha256"] = before_after_sha[
+                event["pre_event_sha256"]]
+        event["previous_event_sha256"] = previous
+        event["event_sha256"] = sha256_json(event)
+        before_after_sha[old] = event["event_sha256"]
+        previous = event["event_sha256"]
+    for row in rows:
+        row["features_pre_probe"] = real_shape
+    paths[0].write_text("".join(json.dumps(x) + "\n" for x in events))
+    paths[1].write_text("".join(json.dumps(x) + "\n" for x in rows))
+    return paths, events, rows, summary
+
+
 class Feature16ContractTests(unittest.TestCase):
     def test_complete_verifiable_episode_yields_private_16d_rows(self):
         with tempfile.TemporaryDirectory() as temp:
-            sources, _, _, _ = fixture(temp)
+            sources, _, _, _ = feature_fixture(temp)
             items, report = extract_verified_episode(*sources)
             self.assertEqual(len(FEATURE_NAMES), 16)
             self.assertEqual(report["direction_rows"], 8)
