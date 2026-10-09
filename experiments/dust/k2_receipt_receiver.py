@@ -150,7 +150,9 @@ def verify(root: Path, run_id: str) -> dict:
             "authorizes_real_classifier_training": False}
 
 
-def verify_event_join(root: Path, run_id: str, events_file: Path) -> dict:
+def verify_event_join(root: Path, run_id: str, events_file: Path,
+                      derived_file: Path | None = None,
+                      expected_model_sha: str | None = None) -> dict:
     """Receiver-side join of independently signed PRE receipts and source log.
 
     The caller fetches the source event log over an authorized SSH connection
@@ -168,6 +170,8 @@ def verify_event_join(root: Path, run_id: str, events_file: Path) -> dict:
         raise ValueError("event join file exceeds size cap")
     prior = "0" * 64
     pre = {}
+    all_pre = {}
+    all_post = {}
     receipt_seen = False
     awaiting = []
     receipt_count = 0
@@ -191,6 +195,7 @@ def verify_event_join(root: Path, run_id: str, events_file: Path) -> dict:
             index = event["candidate_index"]
             if index != post_count + len(pre) or index in pre:
                 raise ValueError("duplicate/out-of-order PRE")
+            all_pre[index] = dict(event)
             pre[index] = {
                 "event_sha256": event_sha,
                 "producer_pre_monotonic_ns": event["local_monotonic_ns"],
@@ -224,6 +229,7 @@ def verify_event_join(root: Path, run_id: str, events_file: Path) -> dict:
                 raise ValueError("POST references wrong PRE")
             if event["local_monotonic_ns"] <= pre[index]["producer_pre_monotonic_ns"]:
                 raise ValueError("POST timestamp predates PRE")
+            all_post[index] = dict(event)
             awaiting.pop(0)
             post_count += 1
             if not awaiting:
@@ -234,8 +240,51 @@ def verify_event_join(root: Path, run_id: str, events_file: Path) -> dict:
             raise ValueError("unexpected producer event phase")
     if pre or awaiting or receipt_seen or receipt_count != len(receipts):
         raise ValueError("incomplete cross-node producer receipt join")
+    derived_verified = False
+    positive_labels = None
+    derived_sha = None
+    if derived_file is not None:
+        if not is_hex(expected_model_sha):
+            raise ValueError("expected pinned model SHA required for label join")
+        if derived_file.stat().st_size > 1024 * 1024:
+            raise ValueError("derived label file exceeds bounded size")
+        observations = [json.loads(line) for line in
+                        derived_file.read_text().splitlines()]
+        if len(observations) != post_count:
+            raise ValueError("derived label count mismatch")
+        expected_fields = {
+            "schema", "episode_hmac_sha256", "model_revision_sha256",
+            "candidate_index", "features_pre_probe", "sigma",
+            "loss_clean", "loss_plus", "loss_minus",
+            "probe_time_order_attested",
+        }
+        positives = 0
+        for index, row in enumerate(observations):
+            p = all_pre[index]
+            q = all_post[index]
+            if (
+                set(row) != expected_fields
+                or row["schema"] != "auto-finetune.dust-predictive-probe.v1"
+                or row["candidate_index"] != index
+                or row["model_revision_sha256"] != expected_model_sha
+                or row["episode_hmac_sha256"] != p["episode_hmac_sha256"]
+                or row["features_pre_probe"] != p["features_pre_probe"]
+                or row["sigma"] != p["sigma"]
+                or row["loss_clean"] != p["clean_pre_probe"]
+                or row["loss_plus"] != q["loss_plus"]
+                or row["loss_minus"] != q["loss_minus"]
+                or row["probe_time_order_attested"] is not True
+            ):
+                raise ValueError("derived label differs from PRE/POST events")
+            positives += int(row["loss_plus"] < row["loss_clean"])
+        derived_verified = True
+        positive_labels = positives
+        derived_sha = hashlib.sha256(derived_file.read_bytes()).hexdigest()
     return {
         **verified,
+        "derived_label_join_verified": derived_verified,
+        "derived_label_file_sha256": derived_sha,
+        "derived_positive_directions": positive_labels,
         "producer_pre_post_chain_join_verified": True,
         "all_post_scores_follow_receiver_ack": True,
         "source_event_count": post_count * 2 + receipt_count,
@@ -258,6 +307,8 @@ def main(argv=None):
     p.add_argument("--run-id")
     p.add_argument("--batch-sha256")
     p.add_argument("--join-events", type=Path)
+    p.add_argument("--join-derived", type=Path)
+    p.add_argument("--expected-model-sha")
     args = p.parse_args(argv)
     if args.setup:
         prepare_receiver(args.root)
@@ -267,7 +318,8 @@ def main(argv=None):
     else:
         if args.join_events is not None:
             print(canonical(verify_event_join(
-                args.root, args.run_id, args.join_events)))
+                args.root, args.run_id, args.join_events,
+                args.join_derived, args.expected_model_sha)))
         else:
             print(canonical(verify(args.root, args.run_id)))
 
