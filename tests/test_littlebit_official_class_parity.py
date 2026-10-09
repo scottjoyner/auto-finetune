@@ -59,7 +59,7 @@ class SourceBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "shapes exceed"):
             parity.run(Path("/missing"), shapes=((512, 512, 512),))
         with self.assertRaisesRegex(ValueError, "ITQ iterations"):
-            parity.run(Path("/missing"), itq_iters=50)
+            parity.run(Path("/missing"), itq_iters=51)
         with patch.object(torch.cuda, "is_available", return_value=True):
             with self.assertRaisesRegex(RuntimeError, "CPU-only build"):
                 parity.run(Path("/missing"))
