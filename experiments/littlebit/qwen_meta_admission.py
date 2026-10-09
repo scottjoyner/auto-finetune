@@ -32,6 +32,7 @@ PINNED_BLOBS = {
     "quantization/modules/littlebit.py": "43ce9d2f9383b676c3898346ece2d3994269a908",
     "quantization/utils/binary_packer.py": "78f0e20f8a525d3cdb0f94908fd767077834cf4b",
     "quantization/utils/quant_util.py": "c40a35168ab8f02411dfcd484f0fb4ae11b026b9",
+    "main.py": "d5f68106ed78e103eaa05c6feda77ce66c3bad03",
 }
 SUFFIXES = frozenset((
     "self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj",
@@ -66,7 +67,8 @@ def verify_source(root: Path) -> Path:
 
 def rank_admission(out_features: int, in_features: int, selected_rank: int,
                    target_bpw: float, *, branches: int = 1,
-                   scale_bytes: int = 4) -> dict:
+                   scale_bytes: int = 4,
+                   export_bf16: bool = False) -> dict:
     """Read-only admission. Never alters upstream ranks or model modules.
 
     Unlike upstream _compute_eff_bits, includes physical 32-bit row-padded
@@ -80,16 +82,23 @@ def rank_admission(out_features: int, in_features: int, selected_rank: int,
         raise ValueError("selected rank exceeds matrix dimension")
     if not 0 < target_bpw <= 1:
         raise ValueError("invalid sub-1-bit target")
+    if export_bf16 and scale_bytes != 4:
+        raise ValueError("export mode requires FP32 source scales")
+    actual_scale_bytes = 2 if export_bf16 else scale_bytes
+    # The active second main.py save_artifacts definition converts float32
+    # scale tensors AND two float32 scalar buffers to BF16. Shape tensors and
+    # packed int32 factors are excluded. Saving two scalar buffers saves 4 B.
+    buffer_savings = 4 if export_bf16 else 0
     actual_bytes = projected_upstream_tensor_bytes(
         out_features, in_features, selected_rank,
-        branches=branches, scale_bytes=scale_bytes)
+        branches=branches, scale_bytes=actual_scale_bytes) - buffer_savings
     denominator = out_features * in_features
     physical_bpw = 8 * actual_bytes / denominator
     allowed = []
     for rank in range(8, min(out_features, in_features) + 1, 8):
         candidate_bytes = projected_upstream_tensor_bytes(
             out_features, in_features, rank,
-            branches=branches, scale_bytes=scale_bytes)
+            branches=branches, scale_bytes=actual_scale_bytes) - buffer_savings
         if 8 * candidate_bytes <= target_bpw * denominator:
             allowed.append((rank, candidate_bytes))
     proposed = allowed[-1] if allowed else None
@@ -101,6 +110,7 @@ def rank_admission(out_features: int, in_features: int, selected_rank: int,
         "maximum_eligible_rank": proposed[0] if proposed else None,
         "maximum_eligible_bytes": proposed[1] if proposed else None,
         "policy": "byte-accurate deny-only; no rank mutation",
+        "storage_case": "main_export_bf16" if export_bf16 else "raw_state_scales_fp32",
     }
 
 
@@ -167,6 +177,8 @@ def inspect(config_path: Path, upstream_root: Path, target_bpw: float,
             original_total = 0
             projected_total = 0
             violated = 0
+            export_violated = 0
+            projected_export_total = 0
             for name, mod in sorted(converted.items()):
                 parts = name.split(".")
                 if len(parts) != 5 or parts[0:2] != ["model", "layers"]:
@@ -186,11 +198,20 @@ def inspect(config_path: Path, upstream_root: Path, target_bpw: float,
                 )
                 if decision["status"] == "DENY":
                     violated += 1
+                export_decision = rank_admission(
+                    mod.out_features, mod.in_features, selected_rank,
+                    target_bpw, branches=2 if residual else 1,
+                    export_bf16=True,
+                )
+                if export_decision["status"] == "DENY":
+                    export_violated += 1
+                projected_export_total += export_decision["projected_bytes"]
                 original_total += mod.out_features * mod.in_features
                 projected_total += decision["projected_bytes"]
                 rows.append({
                     "path": name, "layer_index": layer_index, "type": suffix,
                     "shape": [mod.out_features, mod.in_features], **decision,
+                    "export_projection": export_decision,
                 })
             if len({row["path"] for row in rows}) != EXPECTED_CONVERTED:
                 raise AssertionError("duplicate module paths")
@@ -206,6 +227,13 @@ def inspect(config_path: Path, upstream_root: Path, target_bpw: float,
                 "estimated_linear_tensor_bytes": projected_total,
                 "estimated_converted_linear_bpw":
                     8 * projected_total / original_total,
+                "export_violations": export_violated,
+                "estimated_export_linear_tensor_bytes": projected_export_total,
+                "estimated_export_linear_bpw":
+                    8 * projected_export_total / original_total,
+                "export_assumption": "pinned main.py final save_artifacts casts FP32 scales "
+                    "and FP32 scalar buffers to BF16 before saving; model weights "
+                    "remain absent and exported file bytes are NOT measured",
                 "all_model_parameters_meta": True, "model_downloads": 0,
                 "training": False, "gpu_seconds": 0, "nas_writes": False,
                 "provider_calls": 0, "no_automatic_rank_mutation": True,
