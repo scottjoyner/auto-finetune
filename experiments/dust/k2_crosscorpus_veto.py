@@ -60,6 +60,12 @@ def bind_quarantine_overlay(
     groups = audit.get("aux_corpora")
     if not isinstance(groups, list) or not 1 <= len(groups) <= MAX_AUX:
         raise ValueError("not enough approved auxiliary corpora were scanned")
+    from .k2_cross_corpus_audit import (
+        AUXILIARY_PAIR_CAP, MAX_EXTENDED_AUXILIARY_PAIR_CAP)
+    pair_cap = audit.get("auxiliary_pair_cap", AUXILIARY_PAIR_CAP)
+    if (type(pair_cap) is not int or
+            not AUXILIARY_PAIR_CAP <= pair_cap <= MAX_EXTENDED_AUXILIARY_PAIR_CAP):
+        raise ValueError("untrusted auxiliary scan pair cap")
     names = set()
     incomplete = False
     for row in groups:
@@ -74,7 +80,7 @@ def bind_quarantine_overlay(
         count = row.get("pairs_screened")
         available = row.get("unique_pairs_reported")
         if (
-            type(count) is not int or not 0 <= count <= 512
+            type(count) is not int or not 0 <= count <= pair_cap
             or type(available) is not int or available < count
             or row.get("truncated") is not (available > count)
         ):
@@ -131,6 +137,7 @@ def bind_quarantine_overlay(
         "audited_auxiliary_corpus_count": len(groups),
         "truncated_auxiliary_corpora": sum(
             1 for g in groups if g["truncated"]),
+        "auxiliary_pair_cap": pair_cap,
         "lexical_scan_complete_for_supplied_corpora": not incomplete,
         "audit_sha256": expected_audit_sha,
         "independent_source_certification": False,
