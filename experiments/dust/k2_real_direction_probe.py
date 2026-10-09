@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import time
 
@@ -156,6 +157,8 @@ def main(argv=None):
     for path in (args.events, args.derived, args.output):
         if path.exists() or path.is_symlink():
             ap.error("refuse to overwrite any prior research evidence")
+    # Preserve HMAC custody and summary permissions even with permissive shell umask.
+    os.umask(0o077)
     report = run(
         model_dir=args.model_dir, train_file=args.train_jsonl,
         expected_sha=args.expected_sha256,
