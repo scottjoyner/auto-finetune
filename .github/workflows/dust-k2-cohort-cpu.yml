@@ -1,0 +1,43 @@
+name: Dust K2 source-cohort CPU safety gates
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_cohort_preflight.py'
+      - 'experiments/dust/k2_cohort_collect.py'
+      - 'experiments/dust/k2_cohort_reconcile.py'
+      - 'experiments/dust/k2_real_direction_probe.py'
+      - 'tests/test_dust_k2_cohort_*.py'
+      - 'docs/dust-k2-cohort-pilot-20261009.md'
+      - '.github/workflows/dust-k2-cohort-cpu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-model-cohort-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test lexical quarantine, source hashes, strict quotas and local custody
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -m unittest discover -s tests -p 'test_dust_k2_cohort_*.py' -v
+      - name: Syntax-check bounded real model runner
+        run: |
+          python -m py_compile \
+            experiments/dust/k2_cohort_preflight.py \
+            experiments/dust/k2_cohort_collect.py \
+            experiments/dust/k2_cohort_reconcile.py \
+            experiments/dust/k2_real_direction_probe.py
+      - name: Preserve scientific/security hold boundary
+        run: |
+          echo "This workflow executes no K2 model, no GPU, no trainer, no NAS writes."
+          echo "Receiver HMAC ledger parity != key isolation; shared SSH user is HOLD."
+          echo "No real-label classifier training or production admission is authorized."
