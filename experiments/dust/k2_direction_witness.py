@@ -74,6 +74,7 @@ class LocalProbeWitness:
         self.sigma = sigma
         self.events = None
         self.completed = None
+        self.completed_path = Path(completed_path)
         self.started = False
         self.pending = None
         self.chain = "0" * 64
@@ -216,7 +217,7 @@ class LocalProbeWitness:
         self.completed.flush()
         self.events.close()
         self.completed.close()
-        report = validate_jsonl(Path(self.completed.name))
+        report = validate_jsonl(self.completed_path)
         if report["rows"] != expected_count:
             raise AssertionError("validated count does not equal population")
         report["local_pre_forward_fsync_only"] = True
