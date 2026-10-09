@@ -1,0 +1,40 @@
+name: local model-integration tests (manual, trusted main only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-optional-model-integrations:
+    # No hosted downloads; never execute untrusted PR code on a fleet machine.
+    # Requires an explicitly configured dedicated self-hosted test runner.
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, research-model-tests]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm model-test prerequisites already present locally
+        run: |
+          python3 -c 'import torch, transformers, pytest; print("Torch", torch.__version__, "Transformers", transformers.__version__)'
+          python3 -c 'import torch; print("CUDA/ROCm available", torch.cuda.is_available())'
+      - name: Run previously uncollected model-dependent tests
+        env:
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          # Keep test coverage separate from core job; no changed 69% gate.
+          python3 -m pytest \
+            -o addopts='' \
+            -q \
+            tests/test_bench_matrix.py \
+            tests/test_compat_lfm2_rocm.py \
+            tests/test_drivers_localchat.py \
+            tests/test_quantize.py
+      - name: Model tests are not production release approval
+        if: always()
+        run: |
+          echo "Manual local test result only. Model checkpoints, inference engines,"
+          echo "signer custody, dataset rights and fine-tuning promotion require separate acceptance." >> "$GITHUB_STEP_SUMMARY"
