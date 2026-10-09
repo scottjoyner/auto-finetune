@@ -1,0 +1,39 @@
+name: Dust K2 provenance and token overlap CPU gate
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_norobots_provenance.py'
+      - 'experiments/dust/k2_token_set_overlap.py'
+      - 'tests/test_dust_k2_provenance_token_overlap.py'
+      - 'docs/dust-k2-provenance-token-overlap-20261009.md'
+      - '.github/workflows/dust-k2-provenance-token-cpu.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provenance-and-overlap-no-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify rights HOLD and order-invariant token overlap
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_provenance_token_overlap.py -v
+      - name: Compile source-only research modules
+        run: |
+          python -m py_compile \
+            experiments/dust/k2_norobots_provenance.py \
+            experiments/dust/k2_token_set_overlap.py
+          echo "No real corpora, models, GPUs, hosted providers, or NAS in CI."
+          echo "CC BY-NC upstream candidate: commercial rights must NOT be assumed."
+          echo "No classifier fitting, independent signer authority, or optimizer changes."
