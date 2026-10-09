@@ -212,6 +212,12 @@ def inspect(config_path: Path, upstream_root: Path, target_bpw: float,
                 "modules": rows,
             }
     finally:
+        # The pinned package may only be used within this one bounded call.
+        # Remove modules imported by the audit so a second independent case
+        # re-verifies exact source bytes instead of reusing cached objects.
+        for module_name in tuple(sys.modules):
+            if module_name == "quantization" or module_name.startswith("quantization."):
+                del sys.modules[module_name]
         sys.path.remove(str(root))
 
 
