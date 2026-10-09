@@ -18,6 +18,7 @@ from pathlib import Path
 import time
 
 from .predictive_probe_contract import SCHEMA, validate_jsonl
+from .k2_causal_feature_history import CausalProbeHistory, FEATURES as HISTORY_FEATURE_NAMES, SCHEMA as HISTORY_SCHEMA
 
 EVENT_SCHEMA = "auto-finetune.dust-k2-direction-events.v1"
 
@@ -109,7 +110,8 @@ class LocalProbeWitness:
 
     def __init__(self, event_path: Path, completed_path: Path, *,
                  episode_hmac_sha256: str, model_revision_sha256: str,
-                 sigma: float, receiver=None):
+                 sigma: float, receiver=None,
+                 causal_history_population: int | None = None):
         from .predictive_probe_contract import required_hex
         if event_path.resolve() == completed_path.resolve():
             raise ValueError("event and completed files must be separate")
@@ -120,6 +122,11 @@ class LocalProbeWitness:
         self.sigma = sigma
         self.receiver = receiver
         self.remote_receipt_count = 0
+        self.causal_history = (
+            CausalProbeHistory(expected_population=causal_history_population,
+                               episode_hmac_sha256=self.episode)
+            if causal_history_population is not None else None
+        )
         self.events = None
         self.completed = None
         self.completed_path = Path(completed_path)
@@ -210,6 +217,12 @@ class LocalProbeWitness:
                 "local_monotonic_ns": time.monotonic_ns(),
                 "previous_event_sha256": self.chain,
             }
+            if self.causal_history is not None:
+                # PRE only: snapshot references PRIOR completed batches, never
+                # current candidate forward scores. Included in PRE hash.
+                base["history_feature_schema"] = HISTORY_SCHEMA
+                base["history_features_pre_probe"] = list(
+                    self.causal_history.preview(before_candidate=index))
             base["event_sha256"] = sha256_json(base)
             self._write(self.events, base)  # fsync BEFORE perturbed forward
             self.chain = base["event_sha256"]
@@ -276,10 +289,23 @@ class LocalProbeWitness:
             }
             self._write(self.completed, row)
             self.count += 1
+        if self.causal_history is not None:
+            # Must happen strictly after all this batch's POST loss records
+            # have been fsynced, so future PRE cannot read future labels.
+            self.causal_history.commit_batch(
+                first_index=first,
+                clean_loss=rows[0]["clean_pre_probe"],
+                plus_losses=[float(plus[i].mean().item())
+                             for i in range(len(rows))],
+                minus_losses=[float(minus[i].mean().item())
+                              for i in range(len(rows))],
+                sigma=self.sigma)
         self.pending = None
 
     def finish(self, expected_count: int) -> dict:
-        if self.pending is not None or self.count != expected_count:
+        if (self.pending is not None or self.count != expected_count
+                or (self.causal_history is not None
+                    and self.causal_history.completed_count != expected_count)):
             raise RuntimeError("incomplete witness; do not admit derived labels")
         self.events.flush()
         self.completed.flush()
@@ -296,6 +322,12 @@ class LocalProbeWitness:
         report["independent_receiver_key_not_exported"] = (
             self.receiver is not None)
         report["receiver_hmac_verified_by_receiver"] = False
+        report["causal_history_schema"] = (
+            HISTORY_SCHEMA if self.causal_history is not None else None)
+        report["causal_history_feature_names"] = (
+            list(HISTORY_FEATURE_NAMES) if self.causal_history is not None else [])
+        report["causal_history_pre_events_only"] = self.causal_history is not None
+        report["causal_history_classifier_training_authorized"] = False
         return report
 
     def close(self):
