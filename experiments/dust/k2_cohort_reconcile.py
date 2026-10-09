@@ -119,7 +119,8 @@ def reconcile(root: Path, intake: Path, producer_summary: Path):
             "events_sha256": joined["joined_producer_events_sha256"],
             "derived_sha256": joined["derived_label_file_sha256"],
         })
-    if dict(grouped) != report["split_counts"]:
+    # Normalize unused partitions with zero counts before comparison.
+    if Counter(grouped) != Counter(report["split_counts"]):
         raise ValueError("source split counts drifted")
     return {
         "schema": SCHEMA,
