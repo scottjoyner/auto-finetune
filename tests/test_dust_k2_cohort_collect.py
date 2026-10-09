@@ -47,7 +47,7 @@ class CollectorTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 select_source_indices(cohort(),bad)
-        with self.assertRaisesRegex(ValueError,"schema"):
+        with self.assertRaisesRegex(ValueError,"preflight"):
             select_source_indices(
                 {"schema":"untrusted","max_tokens":128,"candidates":[]},
                 {"train":1,"validation":0,"test":0})
