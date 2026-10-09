@@ -99,6 +99,61 @@ class SSHReceiver:
         return receipt
 
 
+class IsolatedSSHReceiver:
+    """Opt-in, receipt-only SSH identity; no fallback to legacy shared user.
+
+    Merely using this client does not establish receiver custody: the x1
+    operator must separately prove producer key-read and escalation denial,
+    inspect root-owned code installation, and independently verify receipts.
+    """
+
+    def __init__(self, host: str, run_id: str, identity_file: Path):
+        from .predictive_probe_contract import required_hex
+        if host != "x1-370":
+            raise ValueError("unapproved isolated receipt host")
+        if not isinstance(run_id, str) or len(run_id) != 32 or any(
+            c not in "0123456789abcdef" for c in run_id
+        ):
+            raise ValueError("invalid isolated receiver run ID")
+        identity_file = Path(identity_file)
+        if (identity_file.is_symlink() or not identity_file.is_file()
+                or identity_file.stat().st_mode & 0o077):
+            raise PermissionError("dedicated producer SSH identity must be mode 600")
+        self.host = host
+        self.run_id = run_id
+        self.identity_file = identity_file
+
+    def __call__(self, batch_sha256: str) -> dict:
+        if not isinstance(batch_sha256, str) or len(batch_sha256) != 64 or any(
+            c not in "0123456789abcdef" for c in batch_sha256
+        ):
+            raise ValueError("invalid isolated PRE batch digest")
+        command = [
+            "ssh", "-F", "/dev/null", "-T",
+            "-o", "BatchMode=yes",
+            "-o", "StrictHostKeyChecking=yes",
+            "-o", "IdentitiesOnly=yes",
+            "-o", "ClearAllForwardings=yes",
+            "-o", "ForwardAgent=no",
+            "-o", "ControlMaster=no",
+            "-o", "ConnectTimeout=5",
+            "-i", str(self.identity_file),
+            "-l", "dustreceipt", self.host,
+            "receive " + self.run_id + " " + batch_sha256,
+        ]
+        response = subprocess.run(
+            command, check=True, capture_output=True, text=True, timeout=18)
+        record = json.loads(response.stdout)
+        if (
+            record.get("schema") != "auto-finetune.dust-k2-independent-receipt.v1"
+            or record.get("run_id") != self.run_id
+            or record.get("batch_sha256") != batch_sha256
+            or len(record.get("receiver_hmac_sha256", "")) != 64
+        ):
+            raise RuntimeError("isolated receiver response malformed or mismatched")
+        return record
+
+
 class LocalProbeWitness:
     """Two separate, exclusively created mode-600 ledgers.
 
@@ -238,6 +293,8 @@ class LocalProbeWitness:
                 row["event_sha256"] for row in rows).encode()
             ).hexdigest()
             receipt = self.receiver(digest)
+            if receipt.get("batch_index") != self.remote_receipt_count:
+                raise RuntimeError("receiver receipt index not sequential")
             marker = {
                 "schema": EVENT_SCHEMA, "phase": "RECEIPT",
                 "batch_sha256": digest,
