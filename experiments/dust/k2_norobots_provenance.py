@@ -64,6 +64,12 @@ def summarize_provenance(path: Path, *, source_sha256: str):
                     declared_rights["local_unverified_field"] += 1
     if digest.hexdigest() != source_sha256:
         raise ValueError("pinned local corpus SHA256 mismatch")
+    # Only full consistency with the expected upstream train-split count
+    # supports a useful source-family hypothesis; never a verified license.
+    plausible_upstream = (
+        rows == 9500 and unexpected == 0
+        and sum(categories.values()) == 9500
+    )
     return {
         "schema": SCHEMA,
         "mode": "READ_ONLY_METADATA_PROVENANCE",
@@ -73,11 +79,14 @@ def summarize_provenance(path: Path, *, source_sha256: str):
         "unexpected_source_category_rows": unexpected,
         "category_label_counts": dict(sorted(categories.items())),
         "local_rights_field_rows": declared_rights["local_unverified_field"],
-        "upstream_similarity_basis":
-            "norobots category tags and 9500 conversations; exact lineage not proven",
-        "candidate_upstream_dataset": "HuggingFaceH4/no_robots",
+        "upstream_similarity_basis": (
+            "all 9500 conversations norobots-labeled; exact lineage not proven"
+            if plausible_upstream else "incomplete or inconsistent local source labels"),
+        "candidate_upstream_dataset": (
+            "HuggingFaceH4/no_robots" if plausible_upstream else "UNVERIFIED"),
         "candidate_upstream_card": SOURCE_CARD,
-        "candidate_upstream_license": UPSTREAM_LICENSE,
+        "candidate_upstream_license": (
+            UPSTREAM_LICENSE if plausible_upstream else "UNVERIFIED"),
         "upstream_dataset_license_scope":
             "ATTRIBUTION_AND_NONCOMMERCIAL_RESTRICTIONS_APPLY",
         "local_corpus_transformation_provenance_verified": False,
