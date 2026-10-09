@@ -1,0 +1,45 @@
+name: Dust K2 direction witness CPU contract
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/dust/k2_direction_witness.py'
+      - 'experiments/dust/k2_real_direction_probe.py'
+      - 'experiments/dust/k2_receipt_receiver.py'
+      - 'experiments/dust/k2_tail_replay.py'
+      - 'tests/test_dust_k2_direction_witness.py'
+      - 'tests/test_dust_k2_receipt_receiver.py'
+      - 'docs/dust-k2-real-direction-witness-20261009.md'
+      - '.github/workflows/dust-k2-direction-witness.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-model-receipt-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile research-only source
+        run: |
+          python -m py_compile \
+            experiments/dust/k2_direction_witness.py \
+            experiments/dust/k2_real_direction_probe.py \
+            experiments/dust/k2_receipt_receiver.py \
+            experiments/dust/k2_tail_replay.py
+      - name: Validate independent HMAC receipts and derived-label schema (no Torch)
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -m unittest discover -s tests -p test_dust_k2_receipt_receiver.py -v
+          python -m unittest discover -s tests -p test_dust_predictive_probe_contract.py -v
+      - name: Explicit unproven live-model boundary
+        run: |
+          echo "Only stdlib custody/contract checks run on GitHub."
+          echo "ROC m pretrained K2 smoke and estimator-parity tests are independently witnessed on Xwing/x1."
+          echo "No model weights, GPU allocation, production dispatch or fine-tuning."
