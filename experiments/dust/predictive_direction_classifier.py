@@ -34,6 +34,8 @@ CANDIDATES_PER_EPISODE = 16
 DIMENSIONS = 8
 ENSEMBLE_SEEDS = (7, 42, 1337)
 TOP_K = 4
+# Frozen before the first post-minibatch confirmation measurement.
+CONFIRMATION_EPISODES = tuple(range(4100, 4148))
 # Explicit research boundary. No code path here is allowed to call a trainer.
 RESEARCH_ONLY = True
 TRAINER_ADMISSION = False
@@ -213,14 +215,15 @@ def selected_metrics(rows, scored, *, top_k=TOP_K):
 
 
 def paired_episode_bootstrap(rows, heads, normalizer, *, samples=1000,
-                             seed=90210):
+                             seed=90210, confirmation=False):
     """Test-only uncertainty; paired resampling by EPISODE, not direction."""
     if samples != 1000:
         raise ValueError("frozen evaluation protocol uses 1000 bootstrap draws")
     grouped = {}
+    allowed = set(CONFIRMATION_EPISODES if confirmation else SPLIT_EPISODES["test"])
     for row in rows:
-        if row.episode not in SPLIT_EPISODES["test"]:
-            raise ValueError("bootstrap is test-only")
+        if row.episode not in allowed:
+            raise ValueError("bootstrap contains non-evaluation episodes")
         grouped.setdefault(row.episode, []).append(row)
     if not grouped:
         raise ValueError("empty test episodes")
@@ -262,8 +265,8 @@ def paired_episode_bootstrap(rows, heads, normalizer, *, samples=1000,
     }
 
 
-def evaluate(rows, heads, normalizer, threshold):
-    allowed = set(SPLIT_EPISODES["test"])
+def evaluate(rows, heads, normalizer, threshold, *, confirmation=False):
+    allowed = set(CONFIRMATION_EPISODES if confirmation else SPLIT_EPISODES["test"])
     if any(row.episode not in allowed for row in rows):
         raise ValueError("test evaluation contains non-test episodes")
     model_score = lambda r: predict_probability(heads, normalizer, r)[0]
@@ -285,7 +288,7 @@ def evaluate(rows, heads, normalizer, threshold):
         "test_positive_fraction": mean(r.useful for r in rows),
     }
     result["paired_episode_bootstrap"] = paired_episode_bootstrap(
-        rows, heads, normalizer)
+        rows, heads, normalizer, confirmation=confirmation)
     result["production_admission"] = "HOLD_NO_REAL_LABELS_OR_HELDOUT_CE"
     baseline = result["curvature_aware_momentum"]
     proposed = result["classifier"]
@@ -306,6 +309,27 @@ def run_synthetic():
     heads = [train_head(training, norm, seed) for seed in ENSEMBLE_SEEDS]
     threshold = choose_threshold(heads, norm, validation)
     result = evaluate(test, heads, norm, threshold)
+    confirmation = [row for seed in CONFIRMATION_EPISODES
+                    for row in make_episode(seed)]
+    # Read-only confirmation: NEVER refit or tune after inspecting this group.
+    confirmation_result = evaluate(confirmation, heads, norm, threshold,
+                                   confirmation=True)
+    confirm_ci = confirmation_result["paired_episode_bootstrap"]
+    classifier = confirmation_result["classifier"]
+    confirmation_result["confirmation_verdict"] = (
+        "CONFIRMATORY_TOY_ADVANTAGE" if (
+            classifier["precision_at_4"]
+            > confirmation_result["momentum"]["precision_at_4"]
+            and classifier["precision_at_4"]
+            > confirmation_result["curvature_aware_momentum"]["precision_at_4"]
+            and classifier["mean_true_gain_at_4"]
+            > confirmation_result["momentum"]["mean_true_gain_at_4"]
+            and classifier["mean_true_gain_at_4"]
+            > confirmation_result["curvature_aware_momentum"]["mean_true_gain_at_4"]
+            and confirm_ci["classifier_minus_curvature_precision_at_4"]["ci95"][0] > 0
+            and confirm_ci["classifier_minus_curvature_true_gain_at_4"]["ci95"][0] > 0
+        ) else "NO_EVIDENCE_OF_SUPERIORITY"
+    )
     source_split_hashes = {
         name: hashlib.sha256(",".join(str(seed) for seed in seeds).encode()
                              ).hexdigest()
@@ -330,12 +354,16 @@ def run_synthetic():
         "training_episodes": len(SPLIT_EPISODES["train"]),
         "validation_episodes": len(SPLIT_EPISODES["validation"]),
         "test_episodes": len(SPLIT_EPISODES["test"]),
+        "test_is_development_exposed": True,
+        "confirmation_episodes": len(CONFIRMATION_EPISODES),
+        "confirmation_is_first_view": True,
         "candidates_per_episode": CANDIDATES_PER_EPISODE,
         "episode_split_sha256": source_split_hashes,
         "ensemble_seeds": ENSEMBLE_SEEDS,
         "model_coefficients_sha256": digest,
         "model_coefficients_are_synthetic_only": True,
         "metrics": result,
+        "confirmation_metrics": confirmation_result,
         "limitations": [
             "No real K2 per-direction loss labels collected",
             "No changes to candidate sampling or production routing",
