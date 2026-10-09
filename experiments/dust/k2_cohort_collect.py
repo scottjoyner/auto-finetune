@@ -40,6 +40,8 @@ def select_source_indices(manifest, quotas):
     selected = []
     used_clusters = set()
     for split in ORDERED_SPLITS:
+        if quotas[split] == 0:
+            continue
         eligible = sorted((
             row for row in manifest["candidates"]
             if row.get("group_split") == split
