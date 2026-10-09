@@ -1,11 +1,15 @@
 """Independent x1 cohort reconciliation: receipt, scalar label, cluster custody.
 
 Requires custody copies transferred from Xwing into a mode-700 x1 directory.
-The HMAC signing key remains exclusively with the x1 receiver. This runner
+The current x1 HMAC key is stored physically on x1, but shared SSH user
+privileges allow Xwing to read it. Cryptographic evidence is valid as a
+consistency check ONLY; separate signing-key custody is NOT established. This runner
 never loads the model or reads prompt text. It refuses any missing, altered,
 incomplete, replayed or cross-split cluster record.
 
-PASS authorizes *read-only dataset inspection only*. Classifier training stays
+A ledger-consistency PASS authorizes *read-only dataset inspection only*.
+The independent custody gate remains HOLD until the producer cannot access
+the receiver key or receiver signing principal. Classifier training stays
 HOLD until enough independent prompts and suitable real feature histories.
 """
 from __future__ import annotations
@@ -119,7 +123,11 @@ def reconcile(root: Path, intake: Path, producer_summary: Path):
         raise ValueError("source split counts drifted")
     return {
         "schema": SCHEMA,
-        "result": "PASS_RECEIVER_CUSTODY_ONLY",
+        "result": "PASS_LEDGER_INTEGRITY__KEY_ISOLATION_UNPROVEN",
+        "cryptographic_mac_consistency_verified": True,
+        "producer_cannot_read_receiver_key": False,
+        "producer_ssh_access_audit": "xwing SSH as scott on x1 could read key at review",
+        "trust_boundary_gate": "HOLD_SHARED_UNIX_PRINCIPAL",
         "source_episode_count": len(samples),
         "distinct_near_duplicate_clusters": len(samples),
         "split_counts": dict(sorted(grouped.items())),
