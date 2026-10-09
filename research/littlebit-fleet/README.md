@@ -46,3 +46,9 @@ Each gate has a hard FAIL/HOLD option. Document a negative result; do not automa
 - Full-model checkpoint compression is not the same as block-level BPW: embeddings, norms, lm_head, scales, tensor packing, metadata and residual branches all count in true storage.
 
 **Until further approval:** `research_only: true`, `gpu_training_enabled: false`, `allow_deployment: false`, `allow_external_provider_calls: false`.
+
+## Source snapshot pinned for reproducible E0 review
+
+- Upstream Git commit (snapshot inspected on 2026-10-09): [`42d658b0c79f76450b34b6a3547462c7cdc3e1a0`](https://github.com/SamsungLabs/LittleBit/commit/42d658b0c79f76450b34b6a3547462c7cdc3e1a0). Treat the reference as an **unreviewed snapshot**, not yet a validated build.
+- The pinned README is confirmed at that ref; README blob SHA `0a480659fcdf987e8a32a81aacf864580ee380ac`. Upstream `requirements.txt` blob inspected on main: `f99190c4edc02bc3e4bc262249fb3ffb9f93628b`; confirm that blob matches the pinned commit when resolving lock.
+- No dataset or model checkpoint revision, licensing approval, host authorization, training result or dependency lock is yet recorded.
