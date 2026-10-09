@@ -208,6 +208,56 @@ def selected_metrics(rows, scored, *, top_k=TOP_K):
             "mean_true_gain_at_4": mean(gain)}
 
 
+def paired_episode_bootstrap(rows, heads, normalizer, *, samples=1000,
+                             seed=90210):
+    """Test-only uncertainty; paired resampling by EPISODE, not direction."""
+    if samples != 1000:
+        raise ValueError("frozen evaluation protocol uses 1000 bootstrap draws")
+    grouped = {}
+    for row in rows:
+        if row.episode not in SPLIT_EPISODES["test"]:
+            raise ValueError("bootstrap is test-only")
+        grouped.setdefault(row.episode, []).append(row)
+    if not grouped:
+        raise ValueError("empty test episodes")
+    deltas_precision = []
+    deltas_gain = []
+    for episode in sorted(grouped):
+        cohort = grouped[episode]
+        top_predictive = sorted(
+            cohort, key=lambda r: (
+                -predict_probability(heads, normalizer, r)[0], r.candidate)
+        )[:TOP_K]
+        top_baseline = sorted(
+            cohort, key=lambda r: (-r.curvature_score, r.candidate)
+        )[:TOP_K]
+        deltas_precision.append(
+            mean(r.useful for r in top_predictive)
+            - mean(r.useful for r in top_baseline))
+        deltas_gain.append(
+            mean(r.actual_gain for r in top_predictive)
+            - mean(r.actual_gain for r in top_baseline))
+    rnd = random.Random(seed)
+    def confidence_limits(data):
+        averaged = [
+            mean(rnd.choice(data) for _ in data) for _ in range(samples)
+        ]
+        averaged.sort()
+        return {
+            "mean_delta": mean(data),
+            "ci95": [averaged[25], averaged[974]],
+            "per_episode_count": len(data),
+            "bootstrap_draws": samples,
+        }
+    return {
+        "classifier_minus_curvature_precision_at_4":
+            confidence_limits(deltas_precision),
+        "classifier_minus_curvature_true_gain_at_4":
+            confidence_limits(deltas_gain),
+        "resample_unit": "independent_synthetic_episode",
+    }
+
+
 def evaluate(rows, heads, normalizer, threshold):
     allowed = set(SPLIT_EPISODES["test"])
     if any(row.episode not in allowed for row in rows):
@@ -230,6 +280,9 @@ def evaluate(rows, heads, normalizer, threshold):
             (model_score(r) >= threshold) == bool(r.useful) for r in rows),
         "test_positive_fraction": mean(r.useful for r in rows),
     }
+    result["paired_episode_bootstrap"] = paired_episode_bootstrap(
+        rows, heads, normalizer)
+    result["production_admission"] = "HOLD_NO_REAL_LABELS_OR_HELDOUT_CE"
     baseline = result["curvature_aware_momentum"]
     proposed = result["classifier"]
     result["shadow_recommendation"] = (
