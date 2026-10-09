@@ -167,7 +167,7 @@ def run(root: Path, *, seeds=SEEDS, shapes=SHAPES,
         raise RuntimeError("CPU-only build required, no GPU/CUDA/ROCm")
     if not str(torch.__version__).startswith("2.6.0+cpu"):
         raise RuntimeError("pinned experiment requires torch 2.6.0+cpu")
-    if not 1 <= itq_iters <= 20:
+    if not 1 <= itq_iters <= 50:
         raise ValueError("ITQ iterations out of bounded range")
     if len(seeds) > 3 or not set(seeds).issubset(SEEDS):
         raise ValueError("seeds exceed preregistered envelope")
