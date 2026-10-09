@@ -13,10 +13,10 @@ No prior direction-level supervised K2 trace is available in this branch. Aggreg
 - Three independently bootstrapped **regularized logistic heads**, each trained by CPU stochastic-gradient-style optimization (100 epochs) on the **same fixed training-only cohort** of synthetic task episodes. Every head bootstraps full episodes rather than mixing directions from the same episode across partitions.
 - Input vector consists only of values available *before scoring a proposed direction*: recent and older historical gradient/probe projections, momentum projection, estimated local curvature, step-size terms, and disagreement. No current candidate's measured plus/minus loss is a feature.
 - Target label is **beneficial direction** for one synthetic quadratic candidate: `actual_gain = -[eta*g·d + (eta²/2)*dᵀHd]` > 0. This is not actual K2 next-token cross entropy or model-quality gain.
-- Episode splits are predefined: 64 train ×16 directions, 16 validation ×16, 16 untouched test ×16. Validation only selects an F1 threshold from a frozen grid. Test is used for reporting, not training/parameter selection.
+- Episode splits are predefined: 64 train ×16 directions, 16 validation ×16, 16 development test ×16. Validation only selects an F1 threshold from a frozen grid. Test is used for reporting, not training/parameter selection.
 - Report top-four precision and gain against **random**, **momentum**, and **curvature-aware momentum**. Calculate paired 1000-resample bootstrap intervals over **episodes**, never over candidate rows.
 
-## First x1-370 completed experiment
+## Superseded exploratory full-batch prototype (not final acceptance)
 
 Python 3.12.3, standard library only, no pretrained weights, GPU, model/scheduler mutations or hosted inference. Deterministic result JSON at:
 
@@ -63,4 +63,29 @@ No real-data training CLI is provided; `--synthetic-only` is mandatory and outpu
 5. **Quality gate:** heldout K2 CE and tool-call quality across independently pinned 8/16/32-update schedules (Dust PR #13 follow-up), matched ordinary backprop and shared-orthogonal controls. Direction classification accuracy alone cannot authorize live training.
 6. **LittleBit interaction:** keep scales-only QAT as a separate hypothesis with its own real-weight and storage gates. A classifier may eventually prioritize forward-only scales perturbations, but the two research programs are not yet integrated.
 
-**Current gate: SHADOW SYNTHETIC PASS; REAL-LABEL TRAINING NOT_RUN; LIVE TRAINER/SCHEDULER/GPU/NAS/DEPLOYMENT DENY.**
+**Current gate: SHADOW SYNTHETIC EXECUTION PASS, CONFIRMATORY MODEL ADVANTAGE FAIL; REAL-LABEL TRAINING NOT_RUN; LIVE TRAINER/SCHEDULER/GPU/NAS/DEPLOYMENT DENY.**
+
+## 2026-10-09 correction: actual mini-batch SGD and fresh confirmation
+
+**Do not cite the initial full-batch results above as the definitive classifier outcome.** The original logistic training implementation accumulated gradients over all bootstrapped training rows, despite being described informally as SGD. We corrected the implementation to actual **mini-batch 32** updates (100 epochs, LR 0.1, seeded episode bootstrap, three heads 7/42/1337). This is the model intended for a predictive multi-direction stochastic system.
+
+After this correction, the exposed **16-episode development test** (3100–3115) showed classifier precision@4 **0.90625**, tied with curvature-aware and plain momentum; the classifier's mean gain **0.39405610**, vs curvature-aware momentum **0.38726287**. Paired bootstrap intervals included zero, and the development-time verdict correctly changed to `HOLD_NO_BASELINE_ADVANTAGE`. That run is SHA256 `214f839a0449de056cfba7353d2c6fcfb4847269acf10444f01ff6df93c78846`.
+
+A fresh confirmation was **predeclared in `docs/dust-predictive-confirmation-protocol-20261009.md` before running**: 48 entirely new synthetic source episodes (seeds 4100–4147), each with 16 candidates, frozen classifier fit and validation threshold, no fitting/selection using confirmation labels.
+
+| Method | Confirm precision@4 | Confirm mean true gain@4 |
+| --- | ---: | ---: |
+| Predictive mini-batch SGD ensemble | **0.85416667** | **0.32576697** |
+| Plain momentum | **0.86458333** | 0.33186156 |
+| Curvature-aware momentum | **0.86458333** | **0.34094248** |
+| Random | 0.31770833 | -0.29349829 |
+
+Classifier **minus curvature-aware momentum** on 48 paired episodes:
+- precision@4 mean **−0.01041667**, 95% bootstrap CI **[−0.03125, +0.01041667]**;
+- actual quadratic gain@4 mean **−0.01517551**, 95% bootstrap CI **[−0.03116845, −0.00271030]**.
+
+Result: **`NO_EVIDENCE_OF_SUPERIORITY`**. The stronger momentum heuristic wins in this independent synthetic confirmation. Never use the first full-batch result to override that finding. Future training may improve with real time-ordered antithetic traces or better predictors, but requires new, predeclared splits and evidence.
+
+Observed confirmation evidence on x1 local SSD: `/home/scott/git/dust-predictive-classifier-confirmation-20261009.json`, SHA256 `2a643c8e1d76549f7688e251bc35e36bd1a4b5ff3b23b6d0470b80c4f633f4e9`.
+
+**Correct scientific state:** synthetic classifier successfully trained, split/isolation tests pass, *superiority not demonstrated*, no real K2 labels, no held-out language-model CE and **zero trainer authority**. The real-world next step is an observation-only pre-probe instrumentation + independent custody review, followed by a separately preregistered classifier training attempt.
