@@ -1,0 +1,27 @@
+name: xwing-training-admission
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  admission-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install small test dependencies
+        run: python -m pip install pytest pyyaml
+      - name: Validate fail-closed Python and shell entrypoints
+        run: |
+          python -m py_compile src/training_admission.py src/cli.py src/train.py
+          bash -n launch-next.sh
+      - name: Run synthetic policy and entrypoint regressions
+        run: python -m pytest -o addopts= tests/test_training_admission.py -q
