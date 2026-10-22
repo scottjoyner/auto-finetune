@@ -1,9 +1,19 @@
 # auto-finetune
 
 <!-- repo-entrypoint-guide:start -->
-> **First-time reader:** Start with [Layout](#layout), [Quick Start](#quick-start), and [Stages](#stages). Keep extraction, dataset preparation, training, evaluation, and promotion as distinct steps; a completed training run is not evidence of safe deployment.
-> 
-> **Data governance:** Agent traces can contain secrets and private user content. Use only authorized inputs; scrub credentials and personal data before publishing datasets, traces, logs, or model artifacts.
+## Repository guide
+
+**First-time reader:** Start with [Layout](#layout), [Quick Start](#quick-start), and [Stages](#stages). Keep extraction, dataset preparation, training, evaluation, and promotion as distinct steps; a completed training run is not evidence of safe deployment.
+
+**Data governance:** Agent traces can contain secrets and private user content. Use only authorized inputs; scrub credentials and personal data before publishing datasets, traces, logs, or model artifacts.
+
+### Find your way
+
+- [Layout](#layout)
+- [Quick Start](#quick-start)
+- [Stages](#stages)
+- [Auto-Harvester Pipeline](#auto-harvester-pipeline)
+- [The Agentic Benchmark (src/bench.py)](#the-agentic-benchmark-srcbenchpy)
 <!-- repo-entrypoint-guide:end -->
 
 
