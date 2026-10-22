@@ -367,6 +367,4 @@ and future work.
 
 ## Autonomous ops & LFM2.5 program (2026-08-24)
 
-Operator details live in `/media/scott/data/finetune-staging/RUNBOOK.md`
-(§9 autonomous loops: watchdog / harvest cron / backup cron / prune cron;
-§10 LFM2.5 serving + MCP wiring + showdown script).
+Host-specific operational runbooks (autonomous loops, backups, pruning, LFM2.5 serving, and MCP wiring) are not included in this public README. Do not infer live deployment settings or enable scheduling from these examples.
