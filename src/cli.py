@@ -823,15 +823,9 @@ def _dispatch(argv: list[str], cfg=None) -> int:
                 # each source is best-effort; a down server just errors that one
                 # spec (bench_matrix isolates per-spec failures).
                 acc = list(_local_ref_specs())
-                lm_root = "/home/scott/.lmstudio/models"
-                if os.path.isdir(lm_root):
-                    base_url = os.environ.get("LMSTUDIO_URL",
-                                               "http://localhost:1234/v1")
-                    api_key = os.environ.get("LMSTUDIO_API_KEY", "lm-studio")
-                    for md in sorted(Path(lm_root).rglob("*.gguf")):
-                        acc.append({"name": md.parent.name, "runner": "api",
-                                    "base_url": base_url,
-                                    "model": md.parent.name, "api_key": api_key})
+                # Reuse the overridable inventory helper, so CI or a fresh
+                # machine need not have the operator's LM Studio model tree.
+                acc.extend(_lmstudio_specs())
                 try:
                     from src.fleet import list_models as _lm
                     for m in _lm():

@@ -278,6 +278,12 @@ def test_cli_bench_matrix_all_preset_combines_sources(monkeypatch, capsys):
                 "completed": 0, "errors": 0, "pass_rate": 0.0}} for sp in specs}
     monkeypatch.setattr(B, "bench_matrix", fake_matrix)
     monkeypatch.setattr(B, "load_tasks", lambda p: [])
+    # Synthetic provider witnesses: no dependency on the developer home dir.
+    import src.fleet as fleet
+    monkeypatch.setattr(cli, "_lmstudio_specs", lambda: [
+        {"name": "example.gguf", "runner": "api", "base_url": "http://127.0.0.1:1234/v1", "model": "example"}])
+    monkeypatch.setattr(fleet, "list_models", lambda: [
+        {"model": "example-35b", "base_url": "http://127.0.0.1:10080/v1", "node": "fixture"}])
     rc = cli.main(["cli", "bench-matrix", "--preset=all", "--tasks=/tmp/none"])
     assert rc == 0
     specs = captured["specs"]
@@ -313,6 +319,9 @@ def test_cli_bench_matrix_fleet_preset_no_crash(monkeypatch, capsys):
                 "completed": 0, "errors": 0, "pass_rate": 0.0}} for sp in specs}
     monkeypatch.setattr(B, "bench_matrix", fake_matrix)
     monkeypatch.setattr(B, "load_tasks", lambda p: [])
+    import src.fleet as fleet
+    monkeypatch.setattr(fleet, "list_models", lambda: [
+        {"model": "fixture-35b", "base_url": "http://127.0.0.1:10080/v1", "node": "fixture"}])
     rc = cli.main(["cli", "bench-matrix", "--preset=fleet", "--tasks=/tmp/none"])
     assert rc == 0
     assert len(captured["specs"]) >= 1
