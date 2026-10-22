@@ -7,6 +7,14 @@ import json
 import pytest
 
 from src.config import _DEFAULTS, Config
+
+@pytest.fixture(autouse=True)
+def _synthetic_admission(monkeypatch):
+    """Pure train tests exercise data/backend logic, not physical xwing load."""
+    import src.training_admission as admission
+    monkeypatch.setattr(admission, "read_live",
+                        lambda: admission.Decision(True, "synthetic_test"))
+
 from src.train import (
     TrainError,
     _detect_cuda,

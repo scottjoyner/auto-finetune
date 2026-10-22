@@ -929,6 +929,12 @@ def _dispatch(argv: list[str], cfg=None) -> int:
 def main(argv: list[str]) -> int:
     """Dispatch a command under canonical cross-worktree resource leases."""
     cmd = argv[1] if len(argv) > 1 else "help"
+    if cmd in {"train", "dpo"}:
+        from src.training_admission import read_live
+        decision = read_live()
+        if not decision.allowed:
+            print(f"[train-admission] HOLD: {decision.reason}", flush=True)
+            return 78
     cfg = load()
     label = _parse_label(argv)
     from src.locking import (

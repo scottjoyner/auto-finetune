@@ -21,6 +21,11 @@ def _stub_resource_leases(monkeypatch):
     command would return rc=75 regardless of what the test asserts.
     """
     import src.locking as locking
+    # This module tests command dispatch using fake inputs. Exercise real
+    # admission decisions separately in test_training_admission.py.
+    import src.training_admission as admission
+    monkeypatch.setattr(admission, "read_live",
+                        lambda: admission.Decision(True, "synthetic_test"))
     monkeypatch.setattr(locking, "command_leases",
                         lambda *a, **k: contextlib.nullcontext())
     # Tests run against fake tmp lock_dirs; the /proc scan would otherwise

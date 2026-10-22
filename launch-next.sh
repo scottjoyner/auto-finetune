@@ -20,6 +20,12 @@ V=/media/scott/data/finetune-venv/bin
 export PATH="$V:$PATH"
 export PYTHONPATH="$REPO"
 
+# First gate precedes --reset, scratch creation and any GPU liveness work.
+if ! "$V/python" -m src.training_admission; then
+  echo "[launch-next] startup admission HOLD." >&2
+  exit 78
+fi
+
 # scratch on local data drive (off NFS / small root)
 export HF_HOME=/media/scott/data/finetune-staging/hf-home
 export TRANSFORMERS_CACHE=/media/scott/data/finetune-staging/hf-home
@@ -168,6 +174,12 @@ while true; do
   if [ -f "$STOP_FILE" ]; then
     echo "[launch-next] STOP_FILE present — halting before $label."
     exit 0
+  fi
+
+  # Refuse to begin a training run if inference owns available headroom.
+  if ! "$V/python" -m src.training_admission; then
+    echo "[launch-next] admission HOLD; preserving queue state." >&2
+    exit 78
   fi
 
   # GPU liveness probe (warning-only): runs a real tiny training step to
