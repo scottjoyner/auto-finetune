@@ -219,7 +219,16 @@ def test_is_miopen_error_is_case_insensitive():
 
 # --- probing and install ---------------------------------------------------
 
-def test_probe_reports_false_on_exception():
+def test_probe_reports_false_on_exception(monkeypatch):
+    # Exercise the real kernel-failure branch on CPU-only GitHub runners:
+    # simulate a present CUDA backend but back tensor allocation with CPU
+    # to avoid depending on an actual GPU.
+    real_randn = torch.randn
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "synchronize", lambda: None)
+    monkeypatch.setattr(torch, "randn",
+                        lambda *shape, **kwargs: real_randn(
+                            *shape, dtype=kwargs.get("dtype")))
     def boom(*a, **k):
         raise RuntimeError("hipErrorInvalidDeviceFunction")
     assert _probe_works(boom) is False
