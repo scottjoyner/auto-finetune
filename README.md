@@ -87,6 +87,17 @@ auto-finetune/
     └── analysis/          # buckets, tasks, metrics, registry
 ```
 
+## Read-only first checks
+
+Before extracting local sessions, starting a scheduler, training, or deploying a model, inspect the current harvest plan:
+
+```bash
+python -m src.cli harvest-status
+python -m src.cli harvest-plan --min-new=50
+```
+
+The `all` command below includes deployment, and `scheduler-loop` repeatedly performs work. **Neither is a read-only example.** Use isolated, approved training data and a separate deployment authorization before running either.
+
 ## Quick Start
 
 ```bash
