@@ -369,6 +369,12 @@ def _reject_held_out(data_path: str) -> str:
 
 
 def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: str | None = None, max_examples: int | None = None, tokenized_dir: str | None = None) -> int:
+    if not dry_run:
+        from src.training_admission import read_live
+        decision = read_live()
+        if not decision.allowed:
+            print(f"[train-admission] HOLD: {decision.reason}", flush=True)
+            return 78
     dataset_dir = os.environ.get("TRAIN_DATASET_DIR") or cfg.path("dataset_dir")
     tokenized_dir = tokenized_dir or os.environ.get("TRAIN_TOKENIZED_DIR")
     fn_parts = ["train"]
