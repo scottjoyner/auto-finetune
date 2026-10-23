@@ -18,12 +18,18 @@ Mandatory predicates for x1:
   memory PSI some <=2% and full <=1% (ten-second averages).
 - ROCm sees gfx1201 and at least two AMD PCI display devices, distinguishing
   the absent R9700 from the still-working integrated Radeon 890M.
+- sysfs confirms R9700 (AMD PCI 1002:7551) behind x1 root port
+  0000:00:03.1 with both historical AMD OCuLink switch components
+  1002:1478 and 1002:1479. A USB4-attached RTX 3090 or reconnected
+  TBGAA device is not a valid substitute. Any new cable/topology requires
+  separate physical qualification, not a relaxation of this identity check.
 - The exclusive gfx1201 lease belongs to predictive-finetuning, and
   the append-only observer reports verified ledger AND healthy observation.
 - At least 200 GiB free on the physically mounted x1 SSD. No NAS writes.
 
 Observed x1-370, 2026-10-22: physical gfx1201 missing, observer critical,
-and available swap below 2 GiB. Training stays NO_GO regardless of apparent
+and available swap below 2 GiB. Historical root port 00:03.1 and
+both Navi switch endpoints are absent from live PCI enumeration. Training stays NO_GO regardless of apparent
 free RAM. These are independent blocking conditions. October 3 inventory
 reported R9700 online; October 16 and later boot records show only iGPU.
 TBGAA is a disconnected USB4 peripheral; its relationship to GPU unproven.

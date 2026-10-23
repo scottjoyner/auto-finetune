@@ -15,6 +15,8 @@ def healthy():
         "mem_available_kib": str(42 * 1024 * 1024),
         "swap_free_kib": str(4 * 1024 * 1024),
         "pressure": {"some": 0.0, "full": 0.0},
+        "oculink_identity": {"root_port_present": True, "r9700_behind_root": True,
+                             "switch_1478": True, "switch_1479": True},
         "rocminfo_gfx1201": True,
         "pci_amd_displays": 2,
         "lease": {"device": "gfx1201", "owner": "predictive-finetuning", "exclusive": True},
@@ -28,6 +30,19 @@ class PlacementSafetyTests(unittest.TestCase):
 
     def test_all_evidence_passes_preflight_not_launch(self):
         self.assertEqual(decide(healthy()), ("PREFLIGHT_PASS", []))
+
+    def test_usb4_gpu_would_not_satisfy_original_oculink_hardware_identity(self):
+        # Even if gfx1201 happens to reappear through another PCIe root,
+        # this x1-specific training placement requires the accepted OCuLink
+        # wiring and the historical AMD bridge switch chain.
+        for missing in ("root_port_present", "r9700_behind_root",
+                        "switch_1478", "switch_1479"):
+            with self.subTest(missing=missing):
+                evidence = healthy()
+                evidence["oculink_identity"][missing] = False
+                status, reasons = decide(evidence)
+                self.assertEqual(status, "NO_GO")
+                self.assertIn("r9700_oculink_path_unverified", reasons)
 
     def test_hardware_missing(self):
         d = healthy()
@@ -63,6 +78,8 @@ class PlacementSafetyTests(unittest.TestCase):
             ("data_free_bytes", 5, "local_data_space_below_200GiB"),
             ("data_free_bytes", None, "local_data_space_unknown"),
             ("pci_amd_displays", None, "r9700_physical_gpu_missing"),
+            ("oculink_identity", None, "r9700_oculink_path_unverified"),
+            ("oculink_identity", {}, "r9700_oculink_path_unverified"),
             ("lease", "malformed", "r9700_lease_not_verified"),
             ("observer", "malformed", "gpu_observer_not_healthy"),
             ("observer", {}, "gpu_observer_stale"),

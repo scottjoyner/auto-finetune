@@ -34,6 +34,33 @@ def pressure():
             values[row[0]] = float(dict(x.split("=", 1) for x in row[1:])["avg10"])
     return values
 
+def oculink_identity():
+    # Verify original x1 PCIe ancestry rather than a USB4 connection.
+    # BDFs beyond the root may vary while vendor IDs are stable.
+    # USB4/Thunderbolt GPU identification never substitutes for R9700 OCuLink.
+
+    pci = Path("/sys/bus/pci/devices")
+    root = "0000:00:03.1"
+    found = set()
+    if not (pci / root).is_dir():
+        return {"root_port_present": False, "r9700_behind_root": False,
+                "switch_1478": False, "switch_1479": False}
+    for device in pci.iterdir():
+        try:
+            resolved = str(device.resolve())
+            if "/" + root + "/" not in resolved:
+                continue
+            vendor = (device / "vendor").read_text().strip().lower()
+            pci_id = (device / "device").read_text().strip().lower()
+        except OSError:
+            continue
+        if vendor == "0x1002" and pci_id in ("0x7551", "0x1478", "0x1479"):
+            found.add(pci_id)
+    return {"root_port_present": True,
+            "r9700_behind_root": "0x7551" in found,
+            "switch_1478": "0x1478" in found,
+            "switch_1479": "0x1479" in found}
+
 lease = {}
 try:
     record = json.loads(Path("/home/scott/.local/state/fleet-gpu-leases/gfx1201.json").read_text())
@@ -60,6 +87,7 @@ s = {
   "swap_free_kib": proc_value("/proc/meminfo", "SwapFree:"),
   "pressure": pressure(),
   "rocminfo_gfx1201": "gfx1201" in cmd(["rocminfo"], 8),
+  "oculink_identity": oculink_identity(),
   "pci_amd_displays": len([x for x in cmd(["lspci", "-Dnn"]).splitlines()
                           if ("Display controller" in x or "VGA compatible controller" in x)
                           and ("AMD" in x or "Advanced Micro Devices" in x)]),
@@ -97,6 +125,13 @@ def decide(data: dict[str, Any] | None) -> tuple[str, list[str]]:
     if (data.get("rocminfo_gfx1201") is not True
             or not isinstance(displays, int) or isinstance(displays, bool) or displays < 2):
         reasons.append("r9700_physical_gpu_missing")
+    # Correct hardware identity is necessary: gfx1201 detected on a different
+    # cable or host controller does not satisfy the accepted x1 OCuLink lane.
+    topology = data.get("oculink_identity")
+    keys = ("root_port_present", "r9700_behind_root", "switch_1478", "switch_1479")
+    if (not isinstance(topology, dict)
+            or any(topology.get(name) is not True for name in keys)):
+        reasons.append("r9700_oculink_path_unverified")
     lease = data.get("lease")
     if not isinstance(lease, dict):
         lease = {}
