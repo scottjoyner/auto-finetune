@@ -7,6 +7,14 @@
 # (:8094) and finetuned (:8095), saves results, notifies desktop.
 
 set -uo pipefail
+
+# Fail closed BEFORE scratch, GPU probing, model loading or other side effects.
+if ! PYTHONPATH=/home/scott/git/auto-finetune \
+    /media/scott/data/finetune-venv/bin/python -m src.training_admission; then
+  echo "[training-hold] xwing fine-tuning/inference admission HOLD." >&2
+  exit 78
+fi
+
 REPO=/home/scott/git/auto-finetune
 STATE=/media/scott/data/finetune-staging/launch-next.state
 MARKER=done-lfm25-sft-r1
@@ -26,6 +34,13 @@ while ! grep -qx "$MARKER" "$STATE" 2>/dev/null; do
   sleep 300
 done
 echo "[cascade] $MARKER detected $(date)"
+
+# Fail closed BEFORE scratch, GPU probing, model loading or other side effects.
+if ! PYTHONPATH=/home/scott/git/auto-finetune \
+    /media/scott/data/finetune-venv/bin/python -m src.training_admission; then
+  echo "[training-hold] xwing fine-tuning/inference admission HOLD." >&2
+  exit 78
+fi
 
 echo "[cascade] running serve_lfm25.sh (merge -> GGUF -> :8095)..."
 if bash "$REPO/scripts/serve_lfm25.sh" >> /media/scott/data/fleet-power/cascade.log 2>&1; then

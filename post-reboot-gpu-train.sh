@@ -4,6 +4,14 @@
 # finetune run. Override TRAIN_ARGS to switch datasets (default: Hermes).
 # All output is logged to /media/scott/data/finetune-staging/logs/.
 set -u
+
+# Fail closed BEFORE scratch, GPU probing, model loading or other side effects.
+if ! PYTHONPATH=/home/scott/git/auto-finetune \
+    /media/scott/data/finetune-venv/bin/python -m src.training_admission; then
+  echo "[training-hold] xwing fine-tuning/inference admission HOLD." >&2
+  exit 78
+fi
+
 V=/media/scott/data/finetune-venv/bin
 export PATH="$V:$PATH"
 export PYTHONPATH=/home/scott/git/auto-finetune
@@ -48,6 +56,13 @@ echo "[$(date)] GPU healthy."
 # 2) Dry-run sanity (dataset + tokenizer).
 cd /home/scott/git/auto-finetune
 $V/python -m src.cli train $TRAIN_ARGS --dry-run 2>&1 | tail -5
+
+# Fail closed BEFORE scratch, GPU probing, model loading or other side effects.
+if ! PYTHONPATH=/home/scott/git/auto-finetune \
+    /media/scott/data/finetune-venv/bin/python -m src.training_admission; then
+  echo "[training-hold] xwing fine-tuning/inference admission HOLD." >&2
+  exit 78
+fi
 
 # 3) Launch the real run (fresh local output dir).
 # guard: don't launch if a train process is already running

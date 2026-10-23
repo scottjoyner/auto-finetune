@@ -11,6 +11,14 @@
 #   4. run one harness task as a smoke gate; report PASS/FAIL
 set -euo pipefail
 
+# Fail closed BEFORE scratch, GPU probing, model loading or other side effects.
+if ! PYTHONPATH=/home/scott/git/auto-finetune \
+    /media/scott/data/finetune-venv/bin/python -m src.training_admission; then
+  echo "[training-hold] xwing fine-tuning/inference admission HOLD." >&2
+  exit 78
+fi
+
+
 REPO=/home/scott/git/auto-finetune
 LLAMA=/home/scott/git/llama.cpp
 VENV=/media/scott/data/finetune-venv/bin
@@ -38,6 +46,13 @@ echo "[serve-lfm25] merged at: $OUT"
 echo "[serve-lfm25] 2/4 converting to GGUF q8_0..."
 mkdir -p "$GGUF_DIR"
 python "$LLAMA/convert_hf_to_gguf.py" "$OUT" --outfile "$GGUF" --outtype q8_0
+
+# Fail closed BEFORE scratch, GPU probing, model loading or other side effects.
+if ! PYTHONPATH=/home/scott/git/auto-finetune \
+    /media/scott/data/finetune-venv/bin/python -m src.training_admission; then
+  echo "[training-hold] xwing fine-tuning/inference admission HOLD." >&2
+  exit 78
+fi
 
 echo "[serve-lfm25] 3/4 restarting llama-server on :$PORT..."
 pkill -f "llama-server.*8095" 2>/dev/null || true

@@ -2,6 +2,14 @@
 # LFM2.5 showdown: stock (8094) vs finetuned (8095) through identical harness.
 # Run after serve_lfm25.sh has deployed the SFT model on 8095.
 set -uo pipefail
+
+# Fail closed BEFORE scratch, GPU probing, model loading or other side effects.
+if ! PYTHONPATH=/home/scott/git/auto-finetune \
+    /media/scott/data/finetune-venv/bin/python -m src.training_admission; then
+  echo "[training-hold] xwing fine-tuning/inference admission HOLD." >&2
+  exit 78
+fi
+
 REPO=/home/scott/git/auto-finetune
 TASKS=/media/scott/data/finetune-staging/data/analysis/bench-tasks-lfm25.jsonl
 export PATH="/media/scott/data/finetune-venv/bin:$PATH" PYTHONPATH="$REPO"
