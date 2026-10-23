@@ -9,6 +9,11 @@
 #   * provenance/                  (run manifests)
 #   * per-label final adapter files (adapter_model.safetensors etc.,
 #     excluding checkpoint-N intermediates)
+#
+# IMPORTANT: this is an adapter/provenance backup, NOT a verified training
+# resume backup. No intermediate checkpoint-N optimizer/scheduler/RNG state
+# is included. Do not use its size or latest.txt as resume custody proof.
+# See scripts/resume_backup_audit.py for a read-only verifier.
 set -uo pipefail
 
 STAGING=/media/scott/data/finetune-staging
