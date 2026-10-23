@@ -1,0 +1,32 @@
+name: xwing-resume-backup-history
+
+on:
+  pull_request:
+    paths:
+      - scripts/resume_backup_history.py
+      - tests/test_resume_backup_history.py
+      - .github/workflows/xwing-resume-backup-history.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/resume_backup_history.py
+      - tests/test_resume_backup_history.py
+      - .github/workflows/xwing-resume-backup-history.yml
+
+permissions:
+  contents: read
+
+jobs:
+  no-network-custody-history-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'pytest>=8,<10' 'PyYAML>=6,<7'
+      - name: Synthetic generation and integrity coverage
+        run: |
+          python -m py_compile scripts/resume_backup_history.py
+          python -m pytest -o addopts= tests/test_resume_backup_history.py tests/test_resume_backup_audit.py -q
