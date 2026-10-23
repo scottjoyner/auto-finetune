@@ -2,6 +2,14 @@
 # Post-reboot GPU + finetune verification. Run AFTER rebooting into the
 # GRUB-default kernel (7.0.0-28-generic).
 set -u
+
+# Fail closed BEFORE scratch, GPU probing, model loading or other side effects.
+if ! PYTHONPATH=/home/scott/git/auto-finetune \
+    /media/scott/data/finetune-venv/bin/python -m src.training_admission; then
+  echo "[training-hold] xwing fine-tuning/inference admission HOLD." >&2
+  exit 78
+fi
+
 V=/media/scott/data/finetune-venv/bin
 export PATH="$V:$PATH"
 export PYTHONPATH=/home/scott/git/auto-finetune
