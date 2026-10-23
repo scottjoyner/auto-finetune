@@ -26,10 +26,11 @@ jobs:
           bash -n scripts/xwing_finetune_guardian.sh
           python -m py_compile scripts/finetune_guardian.py
           python -m py_compile scripts/prune_checkpoints.py
+          python -m py_compile scripts/resume_backup_audit.py
           for script in post-reboot-gpu-train.sh post-reboot-check.sh post-queue.sh \
               scripts/sft_cascade_watcher.sh scripts/serve_lfm25.sh \
               scripts/lfm25_showdown.sh scripts/legacy_boot/*.sh; do
             bash -n "$script"
           done
       - name: Run synthetic policy and entrypoint regressions
-        run: python -m pytest -o addopts= tests/test_training_admission.py tests/test_fleet_training_placement.py tests/test_r9700_recovery_report.py tests/test_shell_training_hold.py tests/test_finetune_guardian.py tests/test_prune_checkpoint_custody.py -q
+        run: python -m pytest -o addopts= tests/test_training_admission.py tests/test_fleet_training_placement.py tests/test_r9700_recovery_report.py tests/test_shell_training_hold.py tests/test_finetune_guardian.py tests/test_prune_checkpoint_custody.py tests/test_resume_backup_audit.py -q
