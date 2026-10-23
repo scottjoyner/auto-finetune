@@ -24,4 +24,4 @@ jobs:
           python -m py_compile src/training_admission.py src/cli.py src/train.py
           bash -n launch-next.sh
       - name: Run synthetic policy and entrypoint regressions
-        run: python -m pytest -o addopts= tests/test_training_admission.py tests/test_fleet_training_placement.py -q
+        run: python -m pytest -o addopts= tests/test_training_admission.py tests/test_fleet_training_placement.py tests/test_r9700_recovery_report.py -q
