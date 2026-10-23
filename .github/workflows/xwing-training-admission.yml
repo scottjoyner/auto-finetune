@@ -23,10 +23,12 @@ jobs:
         run: |
           python -m py_compile src/training_admission.py src/cli.py src/train.py
           bash -n launch-next.sh
+          bash -n scripts/xwing_finetune_guardian.sh
+          python -m py_compile scripts/finetune_guardian.py
           for script in post-reboot-gpu-train.sh post-reboot-check.sh post-queue.sh \
               scripts/sft_cascade_watcher.sh scripts/serve_lfm25.sh \
               scripts/lfm25_showdown.sh scripts/legacy_boot/*.sh; do
             bash -n "$script"
           done
       - name: Run synthetic policy and entrypoint regressions
-        run: python -m pytest -o addopts= tests/test_training_admission.py tests/test_fleet_training_placement.py tests/test_r9700_recovery_report.py tests/test_shell_training_hold.py -q
+        run: python -m pytest -o addopts= tests/test_training_admission.py tests/test_fleet_training_placement.py tests/test_r9700_recovery_report.py tests/test_shell_training_hold.py tests/test_finetune_guardian.py -q
