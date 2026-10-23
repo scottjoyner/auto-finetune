@@ -34,4 +34,4 @@ jobs:
             bash -n "$script"
           done
       - name: Run synthetic policy and entrypoint regressions
-        run: python -m pytest -o addopts= tests/test_training_admission.py tests/test_fleet_training_placement.py tests/test_r9700_recovery_report.py tests/test_shell_training_hold.py tests/test_finetune_guardian.py tests/test_prune_checkpoint_custody.py tests/test_resume_backup_audit.py tests/test_qwen_resume_preflight.py -q
+        run: python -m pytest -o addopts= tests/test_training_admission.py tests/test_fleet_training_placement.py tests/test_r9700_recovery_report.py tests/test_shell_training_hold.py tests/test_finetune_guardian.py tests/test_prune_checkpoint_custody.py tests/test_resume_backup_audit.py tests/test_qwen_resume_preflight.py tests/test_direct_train_admission.py -q
