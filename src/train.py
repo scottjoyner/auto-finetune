@@ -369,9 +369,16 @@ def _reject_held_out(data_path: str) -> str:
 
 
 def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: str | None = None, max_examples: int | None = None, tokenized_dir: str | None = None) -> int:
+    # Direct callers of src.train.main bypass the src.cli dispatcher.
+    # Admission MUST run before dataset scanning, tokenization or GPU load.
+    # A read failure denies the work, rather than assuming free GPU capacity.
     if not dry_run:
-        from src.training_admission import read_live
-        decision = read_live()
+        try:
+            from src.training_admission import read_live
+            decision = read_live()
+        except Exception:
+            print("[train-admission] HOLD: admission_unavailable", flush=True)
+            return 78
         if not decision.allowed:
             print(f"[train-admission] HOLD: {decision.reason}", flush=True)
             return 78
