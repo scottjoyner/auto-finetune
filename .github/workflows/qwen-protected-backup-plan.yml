@@ -1,0 +1,33 @@
+name: qwen-protected-backup-plan
+
+on:
+  pull_request:
+    paths:
+      - scripts/qwen_protected_backup_plan.py
+      - tests/test_qwen_protected_backup_plan.py
+      - .github/workflows/qwen-protected-backup-plan.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/qwen_protected_backup_plan.py
+      - tests/test_qwen_protected_backup_plan.py
+      - .github/workflows/qwen-protected-backup-plan.yml
+
+permissions:
+  contents: read
+
+jobs:
+  no-network-full-checkpoint-custody:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install synthetic fixture tests
+        run: python -m pip install 'pytest>=8,<10' 'PyYAML>=6,<7'
+      - name: Read-only checkpoint planning and historical custody checks
+        run: |
+          python -m py_compile scripts/qwen_protected_backup_plan.py
+          python -m pytest -o addopts= tests/test_qwen_protected_backup_plan.py tests/test_resume_backup_history.py tests/test_resume_backup_audit.py -q
