@@ -254,3 +254,119 @@ def test_pinned_nfs_mount_must_be_verified_before_any_copy(tmp_path,monkeypatch)
         with pytest.raises(c.CustodyHold,match="pinned_nfs_backup_mount_not_verified"):
             action(objects)
         assert not list(dest.iterdir())
+
+
+def test_concurrent_generation_creation_cannot_be_replaced(tmp_path,monkeypatch):
+    # The generation did NOT exist at the first guard. Inject a concurrent
+    # writer immediately before the final kernel rename; RENAME_NOREPLACE
+    # must preserve its contents, refuse promotion and clean our stage.
+    with inputs(tmp_path) as objects:
+        source,dest,manifest,sha,stop,repo=objects
+        original=c._atomic_noreplace_publish
+        def race(stage,final):
+            final.mkdir(mode=0o700)
+            (final/"other_writer.txt").write_text("preserve")
+            return original(stage,final)
+        monkeypatch.setattr(c,"_atomic_noreplace_publish",race)
+        with pytest.raises(c.CustodyHold,match="backup_generation_conflict"):
+            action(objects)
+        assert (dest/GEN/"other_writer.txt").read_text()=="preserve"
+        assert sorted(p.name for p in dest.iterdir())==[GEN]
+
+
+def test_concurrent_symlink_generation_is_never_replaced(tmp_path,monkeypatch):
+    with inputs(tmp_path) as objects:
+        source,dest,manifest,sha,stop,repo=objects
+        original=c._atomic_noreplace_publish
+        external=tmp_path/"unrelated-destination"
+        external.mkdir()
+        (external/"keep.txt").write_text("not ours")
+        def race(stage,final):
+            final.symlink_to(external,target_is_directory=True)
+            return original(stage,final)
+        monkeypatch.setattr(c,"_atomic_noreplace_publish",race)
+        with pytest.raises(c.CustodyHold,match="backup_generation_conflict"):
+            action(objects)
+        assert (external/"keep.txt").read_text()=="not ours"
+        assert (dest/GEN).is_symlink()
+        assert sorted(p.name for p in dest.iterdir())==[GEN]
+
+
+def test_atomic_rename_unsupported_never_falls_back(tmp_path,monkeypatch):
+    with inputs(tmp_path) as objects:
+        source,dest,manifest,sha,stop,repo=objects
+        def unsupported(*args):
+            raise c.CustodyHold("atomic_noreplace_not_supported")
+        monkeypatch.setattr(c,"_atomic_noreplace_publish",unsupported)
+        with pytest.raises(c.CustodyHold,match="atomic_noreplace_not_supported"):
+            action(objects)
+        assert not list(dest.iterdir())
+
+
+def test_directory_sync_failure_prevents_generation_publication(tmp_path,monkeypatch):
+    with inputs(tmp_path) as objects:
+        source,dest,manifest,sha,stop,repo=objects
+        sync=c._sync_dir
+        def denied(path):
+            if "checkpoint-150" in path.parts:
+                raise c.CustodyHold("backup_directory_fsync_failed")
+            return sync(path)
+        monkeypatch.setattr(c,"_sync_dir",denied)
+        with pytest.raises(c.CustodyHold,match="backup_directory_fsync_failed"):
+            action(objects)
+        assert not list(dest.iterdir())
+
+
+def test_parent_sync_after_rename_failure_reports_uncertain_durability(tmp_path,monkeypatch):
+    with inputs(tmp_path) as objects:
+        source,dest,manifest,sha,stop,repo=objects
+        sync=c._sync_dir
+        def denied(path):
+            if path == dest:
+                raise c.CustodyHold("backup_directory_fsync_failed")
+            return sync(path)
+        monkeypatch.setattr(c,"_sync_dir",denied)
+        with pytest.raises(c.CustodyHold,match="backup_directory_fsync_failed"):
+            action(objects)
+        # Do not delete an already published full snapshot after a parent
+        # sync failure; treat state as unknown and reconcile it separately.
+        final=dest/GEN
+        assert final.is_dir()
+        assert (final/"custody-copy-receipt.json").is_file()
+        assert not any(x.name.startswith(".pending-qwen-") for x in dest.iterdir())
+
+
+def test_snapshot_does_not_mutate_process_global_umask(tmp_path):
+    with inputs(tmp_path) as objects:
+        current=os.umask(0o027)
+        try:
+            result=action(objects)
+            observed=os.umask(0o027)
+            assert observed==0o027
+            assert result["may_resume"] is False
+        finally:
+            os.umask(current)
+
+
+def test_two_concurrent_custody_publishers_only_one_generation(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    with inputs(tmp_path) as objects:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures=[pool.submit(action,objects) for _ in range(2)]
+            results=[]
+            for task in futures:
+                try:
+                    results.append(task.result(timeout=15))
+                except c.CustodyHold as error:
+                    results.append(str(error))
+        assert sum(isinstance(r,dict) and
+                   r.get("status")=="FULL_FILE_HASH_MATCH_ONLY" for r in results)==1
+        assert sum(isinstance(r,str) and
+                   "backup_generation_" in r for r in results)==1
+        target=objects[1]/GEN
+        assert target.is_dir()
+        report=v.verify(target/"source-manifest.json",
+                        target/"resume-checkpoints")
+        assert report["candidate_file_count_matching"]==22
+        assert not any(p.name.startswith(".pending-qwen-")
+                       for p in objects[1].iterdir())

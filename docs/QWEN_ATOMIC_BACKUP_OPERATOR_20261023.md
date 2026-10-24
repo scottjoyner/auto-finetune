@@ -77,3 +77,34 @@ Independent requirements still open:
 - Never release or prune checkpoint source from copy evidence alone
 
 Tracked in scottjoyner/auto-finetune issue 37.
+
+## October 24 concurrency and crash-consistency hardening
+
+Previously a separate existence check preceded the normal rename,
+creating a potential race in which a second writer could publish an
+empty target directory before the copy stage was renamed. A normal
+rename could overwrite that target. The runner now requires Linux
+renameat2 with RENAME_NOREPLACE. An existing generation or symlink,
+including one created in the final instant, is refused. Unsupported
+kernel/filesystem rename behavior returns HOLD without fallback.
+
+The runner fsyncs both new checkpoint directories, their parent
+directories, and staging before publication, then syncs the final
+backup-root directory after publication. A prepublication failure
+removes only the private stage created by this execution. A failure
+after publication leaves that candidate directory in place for
+manual reconciliation, but explicitly refuses to certify the result.
+
+All newly created dirs/files specify restrictive creation modes;
+therefore the prior global process umask mutation was removed.
+Tests exercise destination races with directories and symlinks,
+unsupported atomic rename, before/after durability failures,
+umask preservation, and concurrent publishers racing for one
+generation. One publisher wins; the final synthetic file copy
+can be verified by the separate independent 22-file checker.
+
+IMPORTANT: the physical NFS4 destination has NOT been tested for
+support of atomic no-replace or directory sync. Local synthetic
+success is not evidence of NFS compatibility. Any actual production
+transfer remains separately approval-gated. The runner must remain
+HOLD rather than downgrade durability or overwrite protection.

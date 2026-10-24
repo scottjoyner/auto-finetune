@@ -8,6 +8,8 @@ Default CLI mode is a read-only readiness report, exit78.
 from __future__ import annotations
 
 import argparse
+import ctypes
+import errno
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -206,6 +208,48 @@ def _write_json_exclusive(path: Path, doc: dict) -> None:
     finally:os.close(fd)
 
 
+def _sync_dir(path: Path) -> None:
+    """Require directory metadata durability before publishing a backup."""
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        os.fsync(fd)
+    except OSError as exc:
+        raise CustodyHold("backup_directory_fsync_failed") from exc
+    finally:
+        os.close(fd)
+
+
+def _atomic_noreplace_publish(stage: Path, final: Path) -> None:
+    """Linux renameat2(RENAME_NOREPLACE); refuse unsupported filesystems.
+
+    An existence check followed by os.rename() could replace an empty
+    concurrent generation. Never downgrade to standard os.rename().
+    """
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise CustodyHold("atomic_noreplace_not_supported")
+    renameat2.argtypes = (
+        ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p,
+        ctypes.c_uint,
+    )
+    renameat2.restype = ctypes.c_int
+    AT_FDCWD = -100
+    RENAME_NOREPLACE = 1
+    result = renameat2(
+        AT_FDCWD, os.fsencode(stage), AT_FDCWD, os.fsencode(final),
+        RENAME_NOREPLACE,
+    )
+    if result == 0:
+        return
+    error = ctypes.get_errno()
+    if error == errno.EEXIST:
+        raise CustodyHold("backup_generation_conflict")
+    if error in (errno.EINVAL, errno.ENOSYS, errno.EOPNOTSUPP, errno.ENOTSUP):
+        raise CustodyHold("atomic_noreplace_not_supported")
+    raise CustodyHold("atomic_noreplace_publish_failed")
+
+
 def copy_snapshot(
     manifest_path: Path, manifest_sha256: str, source: Path,
     dest_parent: Path, stop_file: Path, train_repo: Path,
@@ -229,7 +273,8 @@ def copy_snapshot(
     stage=dest_parent/(".pending-qwen-"+token)
     if stage.exists():
         raise CustodyHold("backup_stage_exists")
-    previous_umask=os.umask(0o077)
+    # Explicit 0700 directories and 0600 O_EXCL file modes make a
+    # process-global os.umask mutation unnecessary and prevent thread races.
     created=False
     try:
         stage.mkdir(mode=0o700)
@@ -265,12 +310,21 @@ def copy_snapshot(
             "may_release_source":False,
         })
         _assert_hold(stop_file,train_repo,check_admission=True)
-        # Stage and destination are in the same trusted filesystem.
-        # Randomized private staging and exact timestamp, no overwrite.
-        if final.exists() or final.is_symlink():
-            raise CustodyHold("backup_generation_conflict")
-        os.rename(stage, final)
+        # Durably sync the content-bearing directories before publication,
+        # refusing a backend that cannot acknowledge directory metadata.
+        for row in manifest["protected_checkpoints"]:
+            _sync_dir(label / row["checkpoint"])
+        _sync_dir(label)
+        _sync_dir(checkpoint_root)
+        _sync_dir(stage)
+        _assert_hold(stop_file,train_repo,check_admission=True)
+        # Refuse overwrites even if a second writer creates the generation
+        # after the earlier existence check.
+        _atomic_noreplace_publish(stage, final)
         created=False
+        # If this sync fails, the generation exists but is NOT certified as
+        # durably published: fail closed and leave it for reconciliation.
+        _sync_dir(dest_parent)
         return {
             "status":"FULL_FILE_HASH_MATCH_ONLY",
             "generation":generation,
@@ -284,7 +338,6 @@ def copy_snapshot(
             "existing_latest_pointer_untouched":True,
         }
     finally:
-        os.umask(previous_umask)
         if created and stage.exists():
             shutil.rmtree(stage)
 
