@@ -370,3 +370,83 @@ def test_two_concurrent_custody_publishers_only_one_generation(tmp_path):
         assert report["candidate_file_count_matching"]==22
         assert not any(p.name.startswith(".pending-qwen-")
                        for p in objects[1].iterdir())
+
+
+def test_published_manifest_bytes_match_original_trusted_sha(tmp_path):
+    with inputs(tmp_path) as objects:
+        source, dest, manifest, sha, stop, repo = objects
+        result = action(objects)
+        assert result["status"] == "FULL_FILE_HASH_MATCH_ONLY"
+        staged = dest / GEN / "source-manifest.json"
+        assert staged.read_bytes() == manifest.read_bytes()
+        assert hashlib.sha256(staged.read_bytes()).hexdigest() == sha
+
+
+def test_source_manifest_reformatted_midcopy_is_refused(tmp_path, monkeypatch):
+    with inputs(tmp_path) as objects:
+        source, dest, manifest, sha, stop, repo = objects
+        original = c._file_copy
+        changed = False
+        def modify(*args, **kwargs):
+            nonlocal changed
+            original(*args, **kwargs)
+            if not changed:
+                changed = True
+                # Same policy and file hashes, different *approved bytes*.
+                doc = json.loads(manifest.read_text())
+                manifest.write_text(json.dumps(doc, indent=2))
+        monkeypatch.setattr(c, "_file_copy", modify)
+        with pytest.raises(c.CustodyHold, match="trusted_manifest_changed_during_copy"):
+            action(objects)
+        assert not list(dest.iterdir())
+
+
+def test_staged_manifest_reformatting_rejected_before_hash_verifier(tmp_path, monkeypatch):
+    with inputs(tmp_path) as objects:
+        source, dest, manifest, sha, stop, repo = objects
+        original = c._write_pinned_manifest
+        def reformat(*args, **kwargs):
+            original(*args, **kwargs)
+            stage = args[1]
+            stage.write_text(json.dumps(json.loads(stage.read_text()), indent=1))
+        monkeypatch.setattr(c, "_write_pinned_manifest", reformat)
+        with pytest.raises(c.CustodyHold, match="staged_manifest_digest_mismatch"):
+            action(objects)
+        assert not list(dest.iterdir())
+
+
+def test_forged_stage_manifest_and_modified_file_cannot_qualify(tmp_path, monkeypatch):
+    with inputs(tmp_path) as objects:
+        source, dest, manifest, sha, stop, repo = objects
+        original = c._write_pinned_manifest
+        def forge(*args, **kwargs):
+            original(*args, **kwargs)
+            stage_manifest = args[1]
+            payload = json.loads(stage_manifest.read_text())
+            checkpoint = payload["protected_checkpoints"][1]
+            entry = next(x for x in checkpoint["files"]
+                         if x["filename"] == "README.md")
+            output = stage_manifest.parent / "resume-checkpoints" / source_plan.LABEL /                      checkpoint["checkpoint"] / entry["filename"]
+            changed = b"X" * entry["bytes"]
+            output.write_bytes(changed)
+            entry["sha256"] = hashlib.sha256(changed).hexdigest()
+            stage_manifest.write_text(json.dumps(payload))
+        monkeypatch.setattr(c, "_write_pinned_manifest", forge)
+        with pytest.raises(c.CustodyHold, match="staged_manifest_digest_mismatch"):
+            action(objects)
+        assert not list(dest.iterdir())
+
+
+def test_manifest_replaced_during_independent_check_refused(tmp_path, monkeypatch):
+    with inputs(tmp_path) as objects:
+        source, dest, manifest, sha, stop, repo = objects
+        original = c.integrity.verify
+        def reformat_after_check(path, root):
+            result = original(path, root)
+            path.write_text(json.dumps(json.loads(path.read_text()), indent=1))
+            return result
+        monkeypatch.setattr(c.integrity, "verify", reformat_after_check)
+        with pytest.raises(c.CustodyHold, match="staged_manifest_changed_during_verify"):
+            action(objects)
+        assert not list(dest.iterdir()
+                   )
