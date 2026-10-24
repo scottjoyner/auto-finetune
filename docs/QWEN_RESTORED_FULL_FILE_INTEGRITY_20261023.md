@@ -11,7 +11,7 @@ backup, deserialize an optimizer, load a model or run a trainer.
   of 22 files totaling 547,737,523 bytes in checkpoint-100/150, as
   implemented in merged auto-finetune PR #52.
 - One private source-hash manifest exists on x1-370 at
-  /home/scott/.local/state/fleet-recovery/qwen-checkpoint-manifests/full-source-manifest-20261023T2220EDT.json,
+  /home/scott/.fleet-custody/qwen-manifests/full-source-manifest-20261023T2220EDT.json,
   mode 0600. The file's own SHA256 is
   366c2b9f327f8ec2d1359c428a20da8d7c76f95d0fdc91066560df3c24c2b8ed.
   This is a source evidence record, not a restore receipt.
@@ -57,3 +57,17 @@ resume entrypoint. All current training and checkpoint-prune holds
 remain in force; no source data can be released.
 
 See auto-finetune issue 37.
+
+The original private x1 witness was first saved under a symlinked
+.local ancestor. This verifier correctly refused that ancestor as a
+trust-boundary violation. An unchanged 3,667-byte manifest copy with
+the same SHA-256 was therefore placed in the canonical owner-private
+.fleet-custody directory, with mode 0600 on the file, mode 0700 on
+its private parents, and no symlinked path components. The older
+metadata witness remains unchanged. No source checkpoint was copied.
+
+Live read-only check against this canonical manifest found
+full_file_manifest_trusted=true, but the deliberately nonexistent
+candidate restoration root still returned NO_VERIFIED_RESTORE,
+candidate_file_count_matching=0, may_resume=false. The absence of a
+real restored candidate remains the correct safety verdict.
