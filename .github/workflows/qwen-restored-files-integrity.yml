@@ -1,0 +1,33 @@
+name: qwen-restored-files-integrity
+
+on:
+  pull_request:
+    paths:
+      - scripts/qwen_restored_file_integrity.py
+      - tests/test_qwen_restored_file_integrity.py
+      - .github/workflows/qwen-restored-files-integrity.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/qwen_restored_file_integrity.py
+      - tests/test_qwen_restored_file_integrity.py
+      - .github/workflows/qwen-restored-files-integrity.yml
+
+permissions:
+  contents: read
+
+jobs:
+  full-file-recovery-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline fixture test dependencies
+        run: python -m pip install 'pytest>=8,<10' 'PyYAML>=6,<7'
+      - name: Verify copy mismatch controls and fail-closed admission
+        run: |
+          python -m py_compile scripts/qwen_restored_file_integrity.py
+          python -m pytest -o addopts= tests/test_qwen_restored_file_integrity.py tests/test_qwen_protected_backup_plan.py tests/test_resume_backup_history.py tests/test_resume_backup_audit.py -q
