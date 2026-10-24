@@ -153,3 +153,17 @@ def test_cli_requires_explicit_args_and_always_exits_78(tmp_path,monkeypatch,cap
     payload=json.loads(capsys.readouterr().out)
     assert payload["file_hash_match_only"]
     assert payload["restore_test_passed"] is False
+
+
+def test_trusted_manifest_with_symlinked_parent_refused(tmp_path):
+    m,r=fixture(tmp_path)
+    target=tmp_path/"manifests"
+    target.mkdir()
+    moved=target/"manifest.json"
+    m.rename(moved)
+    alias=tmp_path/"alias-manifests"
+    alias.symlink_to(target,target_is_directory=True)
+    out=v.verify(alias/"manifest.json",r)
+    assert "trusted_manifest_file_unavailable_or_linked" in out["reasons"]
+    assert not out["full_file_manifest_trusted"]
+    assert not out["may_resume"]
