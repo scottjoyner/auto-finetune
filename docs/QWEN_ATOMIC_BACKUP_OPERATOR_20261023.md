@@ -108,3 +108,26 @@ support of atomic no-replace or directory sync. Local synthetic
 success is not evidence of NFS compatibility. Any actual production
 transfer remains separately approval-gated. The runner must remain
 HOLD rather than downgrade durability or overwrite protection.
+
+## October 24 staged-manifest provenance fencing
+
+The approved source manifest is identified by an externally pinned SHA256,
+not just by file names and a JSON policy flag. A prior implementation wrote
+a newly serialized JSON copy of that manifest to the private backup stage
+then verified checkpoint files against the staged JSON. If the staged JSON
+and files were jointly modified, that stage-local verification alone would
+not prove correspondence to the independently approved source manifest.
+
+The runner now transfers the *exact approved manifest bytes* into the
+private stage with exclusive file creation, checks its source SHA256 and
+policy contents at staging time, checks the staged manifest SHA256 before
+the independent 22-file verifier, and checks it again after verification.
+A mid-copy source manifest change, equivalent JSON reformat, replacement
+of staged manifest, and forged staged manifest plus file content all
+fail closed before publication. Five synthetic tests cover these cases.
+
+This establishes an explicit provenance link between the source witness
+and any future backup-copy receipt. It does not prove the NFS server is
+trusted, eliminate all concurrent-write races by a privileged remote
+writer, or replace a real isolated trainer restore. All current
+training/resume/prune/source-release holds remain unchanged.

@@ -208,6 +208,42 @@ def _write_json_exclusive(path: Path, doc: dict) -> None:
     finally:os.close(fd)
 
 
+def _write_pinned_manifest(
+    trusted_path: Path, stage_path: Path, pinned_sha256: str, trusted_doc: dict,
+) -> None:
+    """Copy the exact approved manifest bytes, not a reserialized document.
+
+    Rechecking the hash, policy payload and on-disk staging prevents the
+    staged verifier from inadvertently using another manifest authority.
+    """
+    if not integrity._safe_file(trusted_path):
+        raise CustodyHold("trusted_manifest_replaced_before_staging")
+    try:
+        payload = trusted_path.read_bytes()
+    except OSError as exc:
+        raise CustodyHold("trusted_manifest_unavailable_before_staging") from exc
+    if (len(payload) > integrity.MAX_MANIFEST_BYTES
+            or hashlib.sha256(payload).hexdigest() != pinned_sha256):
+        raise CustodyHold("trusted_manifest_changed_during_copy")
+    try:
+        if json.loads(payload) != trusted_doc:
+            raise CustodyHold("trusted_manifest_changed_during_copy")
+    except (UnicodeError, ValueError, TypeError) as exc:
+        raise CustodyHold("trusted_manifest_invalid_before_staging") from exc
+    fd = os.open(
+        stage_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
+    )
+    try:
+        with os.fdopen(os.dup(fd), "wb") as writer:
+            writer.write(payload)
+            writer.flush()
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    if _hash_bytes(stage_path) != pinned_sha256:
+        raise CustodyHold("staged_manifest_digest_mismatch")
+
+
 def _sync_dir(path: Path) -> None:
     """Require directory metadata durability before publishing a backup."""
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
@@ -291,12 +327,20 @@ def copy_snapshot(
                 _assert_hold(stop_file,train_repo,check_admission=True)
                 _file_copy(source/plan_source.LABEL/row["checkpoint"]/entry["filename"],
                            dest/entry["filename"],expected=entry)
-        _write_json_exclusive(stage/"source-manifest.json",manifest)
-        # Force verification from the COPIED immutable-seeming staged data,
-        # never rely solely on the write() SHA computed during transfer.
-        verification=integrity.verify(stage/"source-manifest.json",checkpoint_root)
+        staged_manifest = stage / "source-manifest.json"
+        _write_pinned_manifest(
+            manifest_path, staged_manifest, manifest_sha256, manifest
+        )
+        # Always tie the independent verifier to the externally pinned
+        # original digest. A hash match to an arbitrary staged manifest
+        # alone cannot establish source-to-copy custody.
+        if _hash_bytes(staged_manifest) != manifest_sha256:
+            raise CustodyHold("staged_manifest_digest_mismatch")
+        verification=integrity.verify(staged_manifest,checkpoint_root)
         if not verification["file_hash_match_only"] or verification["candidate_file_count_matching"]!=22:
             raise CustodyHold("staged_copy_did_not_match_all_22_hashes")
+        if _hash_bytes(staged_manifest) != manifest_sha256:
+            raise CustodyHold("staged_manifest_changed_during_verify")
         _write_json_exclusive(stage/"custody-copy-receipt.json",{
             "status":"FULL_FILE_HASH_MATCH_ONLY",
             "source_manifest_sha256":manifest_sha256,
