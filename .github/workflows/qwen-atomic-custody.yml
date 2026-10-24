@@ -1,0 +1,33 @@
+name: qwen-atomic-custody
+
+on:
+  pull_request:
+    paths:
+      - scripts/qwen_atomic_custody_copy.py
+      - tests/test_qwen_atomic_custody_copy.py
+      - .github/workflows/qwen-atomic-custody.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/qwen_atomic_custody_copy.py
+      - tests/test_qwen_atomic_custody_copy.py
+      - .github/workflows/qwen-atomic-custody.yml
+
+permissions:
+  contents: read
+
+jobs:
+  fail-closed-synthetic-custody:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install offline dependencies
+        run: python -m pip install 'pytest>=8,<10' 'PyYAML>=6,<7'
+      - name: Synthetic separate-filesystem copy and denial checks
+        run: |
+          python -m py_compile scripts/qwen_atomic_custody_copy.py
+          python -m pytest -o addopts= tests/test_qwen_atomic_custody_copy.py tests/test_qwen_restored_file_integrity.py tests/test_qwen_protected_backup_plan.py tests/test_resume_backup_history.py tests/test_resume_backup_audit.py -q
