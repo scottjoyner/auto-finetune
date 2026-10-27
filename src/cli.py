@@ -1000,14 +1000,11 @@ def main(argv: list[str]) -> int:
     cmd = argv[1] if len(argv) > 1 else "help"
     dry = "--dry-run" in argv
     if cmd in {"train", "dpo"} and not dry:
-        if os.environ.get("AF_SKIP_UNMANAGED_CHECK") != "1":
-            from src.training_admission import read_live
-            decision = read_live()
-            if not decision.allowed:
-                print(f"[train-admission] HOLD: {decision.reason}", flush=True)
-                return 78
-        else:
-            print("[train-admission] HOLD: skipped (AF_SKIP_UNMANAGED_CHECK=1)", flush=True)
+        from src.training_admission import read_live
+        decision = read_live()
+        if not decision.allowed:
+            print(f"[train-admission] HOLD: {decision.reason}", flush=True)
+            return 78
     cfg = load()
     label = _parse_label(argv)
     from src.locking import (

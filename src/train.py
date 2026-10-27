@@ -383,7 +383,7 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
     # Direct callers of src.train.main bypass the src.cli dispatcher.
     # Admission MUST run before dataset scanning, tokenization or GPU load.
     # A read failure denies the work, rather than assuming free GPU capacity.
-    if not dry_run and os.environ.get("AF_SKIP_UNMANAGED_CHECK") != "1":
+    if not dry_run:
         try:
             from src.training_admission import read_live
             decision = read_live()
