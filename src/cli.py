@@ -164,6 +164,9 @@ def _dispatch(argv: list[str], cfg=None) -> int:
         if cmd == "fuse":
             from src.multi_source_fusion import main as run
             return run(argv[2:])
+        if cmd == "auto-promote":
+            from src.auto_promote import main as run
+            return run(argv[2:])
         if cmd == "quality":
             from src.data_quality import main as run
             return run(argv[2:])
@@ -969,7 +972,7 @@ def _dispatch(argv: list[str], cfg=None) -> int:
         print(f"[error] {e}")
         return 2
     print(__doc__)
-    print("Commands: extract | hermes | neo4j-traces | neo4j-watch | neo4j-cdc | realtime-pipeline | quality | model-registry | feedback | freshness | alerts | autoscale | fuse | clean | format | combine | analyze | strata | verify | verify-exec | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | dedup | profile | pretokenize | subagent-harness | pipeline-health | all")
+    print("Commands: extract | hermes | neo4j-traces | neo4j-watch | neo4j-cdc | realtime-pipeline | quality | model-registry | feedback | freshness | alerts | autoscale | fuse | auto-promote | clean | format | combine | analyze | strata | verify | verify-exec | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | dedup | profile | pretokenize | subagent-harness | pipeline-health | all")
     print("Flags:    --source=hermes|opencode  --label=<name>  --all-split  --dry-run  --max-examples=<n>  --frac=<held-out-frac>  --loss-only  --report  --metric=<loss|tool_exact>")
     print("Analyze:  analyze [--out=<dir>]   strata [--out=<dir>] [--bucket-map=<json>] [--balance] [--cap=<n>]")
     print("CPU:      dedup [--threshold=0.85]  profile [--out=<dir>]  pretokenize [--model=<path>] [--max-length=2048]")
