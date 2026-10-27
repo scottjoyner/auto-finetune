@@ -167,6 +167,12 @@ def _dispatch(argv: list[str], cfg=None) -> int:
         if cmd == "auto-promote":
             from src.auto_promote import main as run
             return run(argv[2:])
+        if cmd == "export":
+            from src.model_export import main as run
+            return run(argv[2:])
+        if cmd == "validate-config":
+            from src.config_validator import main as run
+            return run(argv[2:])
         if cmd == "scheduled-retrain":
             from src.scheduled_retrain import main as run
             return run(argv[2:])
@@ -209,19 +215,8 @@ def _dispatch(argv: list[str], cfg=None) -> int:
                     return 3
             return 0
         if cmd == "pipeline-health":
-            from src.pipeline_health import check_pipeline, validate_synergy
-            result = check_pipeline(cfg)
-            print(f"[pipeline-health] {result['summary']}")
-            for err in result["errors"]:
-                print(f"  ISSUE: {err}")
-            issues = validate_synergy(cfg)
-            if issues:
-                print("[pipeline-health] synergy issues:")
-                for issue in issues:
-                    print(f"  - {issue}")
-            else:
-                print("[pipeline-health] synergy: OK")
-            return 0 if result["status"] == "healthy" else 1
+            from src.pipeline_health import main as run
+            return run(argv[2:])
         if cmd == "combine":
             from src.analyze import benchmark_session_ids
             from src.format_dataset import combine as run
@@ -975,7 +970,7 @@ def _dispatch(argv: list[str], cfg=None) -> int:
         print(f"[error] {e}")
         return 2
     print(__doc__)
-    print("Commands: extract | hermes | neo4j-traces | neo4j-watch | neo4j-cdc | realtime-pipeline | quality | model-registry | feedback | freshness | alerts | autoscale | fuse | auto-promote | scheduled-retrain | clean | format | combine | analyze | strata | verify | verify-exec | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | dedup | profile | pretokenize | subagent-harness | pipeline-health | all")
+    print("Commands: extract | hermes | neo4j-traces | neo4j-watch | neo4j-cdc | realtime-pipeline | quality | model-registry | feedback | freshness | alerts | autoscale | fuse | auto-promote | scheduled-retrain | export | validate-config | clean | format | combine | analyze | strata | verify | verify-exec | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | dedup | profile | pretokenize | subagent-harness | pipeline-health | all")
     print("Flags:    --source=hermes|opencode  --label=<name>  --all-split  --dry-run  --max-examples=<n>  --frac=<held-out-frac>  --loss-only  --report  --metric=<loss|tool_exact>")
     print("Analyze:  analyze [--out=<dir>]   strata [--out=<dir>] [--bucket-map=<json>] [--balance] [--cap=<n>]")
     print("CPU:      dedup [--threshold=0.85]  profile [--out=<dir>]  pretokenize [--model=<path>] [--max-length=2048]")

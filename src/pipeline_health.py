@@ -180,3 +180,35 @@ def validate_synergy(cfg: Config) -> list[str]:
             issues.append("cleaned data exists but no .jsonl dataset files found")
 
     return issues
+
+
+def main(argv=None) -> int:
+    import argparse
+    parser = argparse.ArgumentParser(description="Pipeline health check")
+    parser.add_argument("--json", action="store_true", help="Output as JSON")
+    args = parser.parse_args(argv)
+
+    from src.config import load
+    cfg = load()
+    result = check_pipeline(cfg)
+    issues = validate_synergy(cfg)
+
+    if args.json:
+        import json as j
+        print(j.dumps({"health": result, "synergy_issues": issues}, indent=2))
+    else:
+        print(f"[pipeline-health] {result['summary']}")
+        for err in result["errors"]:
+            print(f"  ISSUE: {err}")
+        if issues:
+            print("[pipeline-health] synergy issues:")
+            for issue in issues:
+                print(f"  - {issue}")
+        else:
+            print("[pipeline-health] synergy: OK")
+    return 0 if result["status"] == "healthy" else 1
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())
