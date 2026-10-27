@@ -14,10 +14,9 @@ import os
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any
 
-from src.locking import atomic_write_json
 from src.config import Config
+from src.locking import atomic_write_json
 
 
 def _estimate_tokens(text: str) -> int:

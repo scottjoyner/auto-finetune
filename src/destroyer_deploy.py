@@ -11,11 +11,13 @@ Usage:
   python src/destroyer_deploy.py --status          # check deployment status
 """
 
-import subprocess, json, socket, time
+import json
+import socket
+import subprocess
+from datetime import datetime
 from pathlib import Path
 
 from src.config import scratch_dir
-from datetime import datetime
 
 NODE_IP = "100.81.57.77"
 NODE_NAME = "destroyer"
@@ -55,26 +57,30 @@ def check_connectivity():
         r = subprocess.run(["ping", "-c", 2, "-W", "2", NODE_IP],
                            capture_output=True, timeout=5)
         results["ping"] = r.returncode == 0
-    except: pass
+    except Exception:
+        pass
     try:
         r = subprocess.run(["tailscale", "ping", "-c", NODE_IP],
                            capture_output=True, timeout=5)
         results["tailscale"] = r.returncode == 0
-    except: pass
+    except Exception:
+        pass
     try:
         r = subprocess.run(["ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
                             "-o", "StrictHostKeyChecking=no", "-i", SSH_KEY,
                             f"scott@{NODE_IP}", "hostname"],
                            capture_output=True, timeout=7)
         results["ssh"] = r.returncode == 0
-    except: pass
+    except Exception:
+        pass
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(3)
         s.connect((NODE_IP, 8300))
         results["port"] = True
         s.close()
-    except: pass
+    except Exception:
+        pass
     return results
 
 

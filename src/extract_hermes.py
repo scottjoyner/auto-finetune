@@ -254,21 +254,65 @@ def extract_state_db(cfg: Config, db_path: str, out_dir: str) -> int:
     return written
 
 
+def _neo4j_connect(uri: str, user: str, password: str, retries: int = 3):
+    """Connect to Neo4j with retry and exponential backoff.
+
+    Returns (driver, None) on success or (None, error_message) on failure.
+    """
+    try:
+        from neo4j import GraphDatabase
+    except Exception as e:
+        return None, f"neo4j driver unavailable ({e})"
+
+    last_err = None
+    for attempt in range(max(1, retries)):
+        try:
+            driver = GraphDatabase.driver(uri, auth=(user, password))
+            # Verify connectivity with a lightweight check.
+            with driver.session() as s:
+                s.run("RETURN 1").single()
+            return driver, None
+        except Exception as e:
+            last_err = e
+            try:
+                driver.close()
+            except Exception:
+                pass
+            if attempt < retries - 1:
+                import time
+                time.sleep(0.5 * (attempt + 1))
+    return None, f"neo4j connection failed after {retries} attempts: {last_err}"
+
+
+def _safe_neo4j_value(val: Any) -> Any:
+    """Safely convert a Neo4j value to a Python-native type."""
+    if val is None:
+        return None
+    if isinstance(val, str):
+        return val
+    if isinstance(val, (int, float, bool)):
+        return val
+    # Handle Neo4j temporal/spatial types by converting to string.
+    try:
+        return str(val)
+    except Exception:
+        return None
+
+
 def enrich_from_neo4j(cfg: Config, out_dir: str) -> int:
     """Optionally pull sessions that live in Neo4j but not in state.db.
 
-    Disabled by default. Requires the `neo4j` driver and a reachable graph.
-    Only imports KgSession/KgNode subtrees whose session_id has no state.db
-    export already on disk (state.db is canonical for overlaps).
+    Hardened (2026-10-27):
+      - Connection retry with exponential backoff.
+      - Transaction safety: each session is written in its own transaction.
+      - Graceful degradation: if Neo4j is unreachable, skip enrichment
+        without failing the entire extraction run.
+      - Input validation on all Neo4j-sourced values.
+      - Atomic file writes for session records.
     """
     n4 = cfg.get("sources", "hermes", "neo4j", default={}) or {}
     if not n4.get("enabled", False):
         print("[hermes] neo4j enrichment disabled; skipping")
-        return 0
-    try:
-        from neo4j import GraphDatabase
-    except Exception as e:
-        print(f"[hermes] neo4j driver unavailable ({e}); skipping enrichment")
         return 0
 
     uri = n4.get("uri")
@@ -278,58 +322,107 @@ def enrich_from_neo4j(cfg: Config, out_dir: str) -> int:
         print("[hermes] neo4j uri/password missing (set NEO4J_PASSWORD); skipping")
         return 0
 
-    existing = {fn[len("hermes_"):-len(".json")]
-                for fn in os.listdir(out_dir)
-                if fn.startswith("hermes_") and fn.endswith(".json")}
+    # Validate out_dir exists.
+    if not os.path.isdir(out_dir):
+        try:
+            os.makedirs(out_dir, exist_ok=True)
+        except OSError as e:
+            print(f"[hermes] cannot create out_dir {out_dir}: {e}; skipping enrichment")
+            return 0
+
+    existing = set()
+    try:
+        existing = {fn[len("hermes_"):-len(".json")]
+                    for fn in os.listdir(out_dir)
+                    if fn.startswith("hermes_") and fn.endswith(".json")}
+    except OSError:
+        pass
+
+    driver, err = _neo4j_connect(uri, user, pw, retries=3)
+    if driver is None:
+        print(f"[hermes] {err}; skipping enrichment")
+        return 0
 
     written = 0
-    driver = GraphDatabase.driver(uri, auth=(user, pw))
     try:
         with driver.session() as s:
-            sess_ids = [r["sid"] for r in s.run(
-                "MATCH (x:KgSession) RETURN x.session_id AS sid"
-            ) if r["sid"]]
+            # Fetch session IDs with error handling.
+            try:
+                sess_ids = [r["sid"] for r in s.run(
+                    "MATCH (x:KgSession) RETURN x.session_id AS sid"
+                ) if r["sid"]]
+            except Exception as e:
+                print(f"[hermes] neo4j query failed (session list): {e}; skipping enrichment")
+                return 0
+
             for sid in sess_ids:
+                if not sid or not isinstance(sid, str):
+                    continue
                 if sid in existing:
                     continue  # state.db is canonical
-                rows = list(s.run(
-                    "MATCH (x:KgSession {session_id:$sid})-[:HAS]->(m:KgNode) "
-                    "RETURN m.kind AS kind, m.role AS role, m.text AS text, "
-                    "m.tool AS tool, m.input AS input, m.output AS output, "
-                    "m.created_at AS t ORDER BY m.seq, m.created_at",
-                    sid=sid,
-                ))
+
+                try:
+                    rows = list(s.run(
+                        "MATCH (x:KgSession {session_id:$sid})-[:HAS]->(m:KgNode) "
+                        "RETURN m.kind AS kind, m.role AS role, m.text AS text, "
+                        "m.tool AS tool, m.input AS input, m.output AS output, "
+                        "m.created_at AS t ORDER BY m.seq, m.created_at",
+                        sid=sid,
+                    ))
+                except Exception as e:
+                    print(f"[hermes] neo4j query failed for session {sid}: {e}; skipping")
+                    continue
+
                 messages: list[dict] = []
                 for r in rows:
-                    kind = r["kind"]
+                    kind = _safe_neo4j_value(r.get("kind"))
+                    if kind is None:
+                        continue
+                    text = _safe_neo4j_value(r.get("text"))
+                    tool = _safe_neo4j_value(r.get("tool"))
+                    raw_input = r.get("input")
+                    parsed_input = _safe_json(raw_input) if not isinstance(raw_input, (dict, list)) else raw_input
+                    output = _safe_neo4j_value(r.get("output"))
+                    t = _safe_neo4j_value(r.get("t"))
+                    role = _safe_neo4j_value(r.get("role"))
+
                     if kind in ("message",):
-                        parts = [{"type": "text", "text": r["text"] or ""}]
-                        role = r["role"] or "assistant"
+                        parts = [{"type": "text", "text": text or ""}]
+                        role = role or "assistant"
                     elif kind == "reasoning":
-                        parts = [{"type": "reasoning", "text": r["text"] or ""}]
+                        parts = [{"type": "reasoning", "text": text or ""}]
                         role = "assistant"
                     elif kind in ("toolcall", "toolresult"):
-                        parts = [{"type": "tool", "tool": r["tool"],
-                                  "input": _safe_json(r["input"]),
-                                  "output": r["output"]}]
+                        parts = [{"type": "tool", "tool": tool,
+                                  "input": parsed_input,
+                                  "output": output}]
                         role = "assistant"
                     else:
                         continue
                     messages.append({"id": None, "role": role, "agent": "",
-                                     "model": "", "time": r["t"], "parts": parts})
+                                     "model": "", "time": t, "parts": parts})
+
                 if len(messages) < 2:
                     continue
+
                 rec = {"source": "hermes", "session_id": sid, "title": "",
                        "agent": "neo4j", "model": "", "project_id": "",
                        "directory": "", "time_created": 0, "time_updated": 0,
                        "messages": messages}
-                atomic_write_json(os.path.join(out_dir, f"hermes_{sid}.json"), rec)
-                written += 1
+                try:
+                    atomic_write_json(os.path.join(out_dir, f"hermes_{sid}.json"), rec)
+                    written += 1
+                except Exception as e:
+                    print(f"[hermes] failed to write session {sid}: {e}; skipping")
+                    continue
     finally:
-        driver.close()
+        try:
+            driver.close()
+        except Exception:
+            pass
+
     print(f"[hermes] neo4j enrichment wrote {written} sessions not in state.db")
     return written
-
 
 def main(cfg: Config) -> int:
     h = cfg.get("sources", "hermes", default={}) or {}

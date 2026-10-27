@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Deploy and test MiniCPM5-1B on destroyer node continuously."""
-import json, urllib.request, time, subprocess, sys, os
+import json
+import os
+import subprocess
+import sys
+import time
+import urllib.request
 
 sys.path.insert(0, "/home/scott/git/auto-finetune")
 from src.config import scratch_dir
@@ -24,7 +29,7 @@ def ssh_run(cmd, password=PASSWORD):
 def start_server():
     """Start MiniCPM5 server on destroyer port 8300."""
     print("=== Starting MiniCPM5-1B on destroyer (port 8300) ===")
-    cmd = f'''
+    cmd = '''
     LIB_DIR="/home/scott/.lmstudio/extensions/backends/llama.cpp-linux-x86_64-avx2-2.33.0"
     export LD_LIBRARY_PATH="$LIB_DIR:/home/scott/fleet-data/lib:$LD_LIBRARY_PATH"
     pkill -f "port 8300" 2>/dev/null
@@ -80,13 +85,13 @@ if __name__ == "__main__":
     # Start destroyer server
     start_server()
     time.sleep(3)
-    
+
     # Test locally
     local_res = test_inference(LOCAL_URL, "localhost (xwing GPU)")
-    
+
     # Test destroyer
     destroyer_res = test_inference(SERVER_URL, "destroyer (100.81.57.77:8300 CPU)")
-    
+
     # Compare
     print("\n=== COMPARISON ===")
     print(f"{'Endpoint':<25} {'Tok/s':>8} {'Success':>8} {'Content':>8}")
@@ -95,7 +100,7 @@ if __name__ == "__main__":
         print(f"{'localhost (xwing)':<25} {local_res['tok_s']:>8.1f} {'✅':>8} {local_res['content_len']:>8}")
     if destroyer_res["success"]:
         print(f"{'destroyer (port 8300)':<25} {destroyer_res['tok_s']:>8.1f} {'✅':>8} {destroyer_res['content_len']:>8}")
-    
+
     # Save results
     results = {
         "localhost": local_res,

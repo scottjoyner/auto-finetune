@@ -16,6 +16,12 @@ from src.clean import _dedup_by_session
 from src.config import Config
 from src.locking import atomic_write_json
 
+try:
+    from src.audit import decontaminate as _ORIGINAL_DECONTAMINATE
+except Exception:  # pragma: no cover
+    _ORIGINAL_DECONTAMINATE = None
+decontaminate = _ORIGINAL_DECONTAMINATE
+
 
 def _atomic_text(path: "str | Path", text: str) -> None:
     """Replace a text file atomically (tmp file in the same dir, then rename)."""
@@ -39,6 +45,11 @@ def _atomic_text(path: "str | Path", text: str) -> None:
 
 
 def _render_part(p: dict) -> str:
+    if not isinstance(p, dict):
+        return ""
+    t = p.get("type")
+    if not t or not isinstance(t, str):
+        return ""
     t = p.get("type")
     if t == "text":
         return p.get("text", "")
@@ -64,6 +75,11 @@ def _render_part(p: dict) -> str:
 
 
 def _render_message(m: dict) -> str:
+    if not isinstance(m, dict):
+        return ""
+    parts = m.get("parts", [])
+    if not isinstance(parts, list):
+        return ""
     return "\n".join(_render_part(p) for p in m.get("parts", []) if _render_part(p)).strip()
 
 
@@ -293,7 +309,11 @@ def main(cfg: Config, source: str | None = None, label: str | None = None,
             sids.extend(got_sids)
         _write_dataset(out_path, examples, sids)
         print(f"[format] opencode-all: {len(examples)} examples -> {out_path}")
-        return len(examples)
+        dropped = 0
+        if exclude:
+            dropped = _decontaminate_outputs(dataset_dir, exclude,
+                                             paths=[out_path])
+        return len(examples) - dropped
     if label:
         # Format a single labeled cleaned subdir.
         src_dir = os.path.join(cleaned_dir, label)
@@ -303,13 +323,18 @@ def main(cfg: Config, source: str | None = None, label: str | None = None,
         out_path = os.path.join(dataset_dir, f"train{suffix}.jsonl")
         n = _format_one(src_dir, out_path, source)
         print(f"[format] {label} ({source or 'all'}): {n} examples -> {out_path}")
-        return n
+        dropped = 0
+        if exclude:
+            dropped = _decontaminate_outputs(dataset_dir, exclude,
+                                             paths=[out_path])
+        return n - dropped
     else:
         # Hermes cleaning writes flat files into cleaned_dir/ directly, plus
         # opencode sources live in per-source subdirs. Emit one train.<label>.jsonl
         # per subdir, a merged train.jsonl, and (when --source is given) a
         # train.<source>.jsonl. Each output file is written exactly once.
         total = 0
+        written_files: list[str] = []
         for entry in sorted(os.listdir(cleaned_dir)):
             src_dir = os.path.join(cleaned_dir, entry)
             if not os.path.isdir(src_dir):
@@ -318,12 +343,14 @@ def main(cfg: Config, source: str | None = None, label: str | None = None,
             n = _format_one(src_dir, out_path, None)  # always full for per-label
             print(f"[format] {entry}: {n} examples -> {out_path}")
             total += n
+            written_files.append(out_path)
         # Merged (optionally source-filtered) train.jsonl.
         out_path = os.path.join(dataset_dir, "train.jsonl")
         n = _format_one(cleaned_dir, out_path, source)
         label_str = source or "merged"
         print(f"[format] {label_str}: {n} examples -> {out_path}")
         total += n
+        written_files.append(out_path)
         # Per-source file only when a --source filter is active (otherwise it
         # would duplicate the merged file written just above).
         if source:
@@ -331,13 +358,19 @@ def main(cfg: Config, source: str | None = None, label: str | None = None,
             n = _format_one(cleaned_dir, out_path, source)
             print(f"[format] {source}: {n} examples -> {out_path}")
             total += n
+            written_files.append(out_path)
+        dropped = 0
+        if exclude:
+            dropped = _decontaminate_outputs(dataset_dir, exclude,
+                                             paths=written_files)
+        total -= dropped
     if exclude:
         print(f"[format] held out {held_out_totals[0]} benchmark session(s) "
               f"(recorded per row in *.provenance.jsonl)")
     if exclude_sources:
-        print(f"[format] excluded sources: "
+        print("[format] excluded sources: "
               + ", ".join(f"{k}={v} sessions dropped" for k, v in sorted(dropped_counts.items()))
-              + f" | kept: " + ", ".join(f"{k}={v}" for k, v in sorted(kept_counts.items())))
+              + " | kept: " + ", ".join(f"{k}={v}" for k, v in sorted(kept_counts.items())))
     return total
 
 
@@ -535,7 +568,6 @@ def emit_strata(cfg: "Config", bucket_map: dict, out_dir: str,
         counts["balanced"] = total
     if exclude is not None:
         counts["excluded"] = excluded
-    from src.locking import atomic_write_json
     atomic_write_json(os.path.join(out_dir, "strata-manifest.json"),
                       {"counts": counts, "strata": provenance,
                        "excluded_sessions": sorted(exclude) if exclude else []})
@@ -649,3 +681,107 @@ def verify_holdout(out_dir: str, held_out: set[str] | None) -> dict:
     return {"status": "contaminated" if leaked else "clean",
             "leaked": leaked[:50], "n_rows": n_rows, "n_sessions": n_sessions,
             "checked": [p.name for p in files]}
+
+
+def _resolve_decontaminate():
+    """Resolve decontaminate, honoring patches on either module."""
+    local = globals().get("decontaminate")
+    try:
+        import src.audit as _am
+        remote = getattr(_am, "decontaminate", None)
+    except Exception:
+        remote = None
+    if local is not None and local is not _ORIGINAL_DECONTAMINATE:
+        return local
+    if remote is not None:
+        return remote
+    return local
+
+
+def _load_bench_rows() -> list[dict]:
+    candidates = [
+        os.path.join(os.getcwd(), "eval", "tasks", "auto-verified.jsonl"),
+        os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                     "eval", "tasks", "auto-verified.jsonl"),
+    ]
+    for bp in candidates:
+        if not os.path.isfile(bp):
+            continue
+        try:
+            rows: list[dict] = []
+            with open(bp) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        rows.append(json.loads(line))
+            return rows
+        except Exception:
+            continue
+    return []
+
+
+def _load_jsonl(path: str) -> list[dict]:
+    rows: list[dict] = []
+    if not os.path.exists(path):
+        return rows
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                rows.append(json.loads(line))
+    return rows
+
+
+def _decontaminate_outputs(dataset_dir: str, exclude: set[str] | None,
+                           paths: list[str] | None = None) -> int:
+    """Run content-level decontamination on the given output files.
+
+    Returns the total number of rows dropped. Only acts when ``verify_holdout``
+    reports the output as contaminated.
+    """
+    exclude = exclude or set()
+    if not exclude:
+        return 0
+    v = verify_holdout(dataset_dir, exclude)
+    if v.get("status") != "contaminated":
+        return 0
+    bench_rows = _load_bench_rows()
+    if paths is None:
+        paths = [os.path.join(dataset_dir, "train.jsonl")]
+        paths += [str(p) for p in sorted(Path(dataset_dir).glob("train.*.jsonl"))]
+    decontaminate_fn = _resolve_decontaminate()
+    if decontaminate_fn is None:
+        return 0
+    seen: set[str] = set()
+    total_dropped = 0
+    for path in paths:
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        if not os.path.isfile(path):
+            continue
+        if ".provenance." in str(path):
+            continue
+        if str(path).endswith(".decontaminated.jsonl"):
+            continue
+        rows = _load_jsonl(str(path))
+        if not rows:
+            continue
+        kept, dropped, res = decontaminate_fn(rows, bench_rows)
+        dropped_set = set(dropped) if dropped is not None else set()
+        if dropped:
+            _atomic_text(path, "".join(json.dumps(r, ensure_ascii=False) + "\n"
+                                       for r in (kept or [])))
+            sids = read_provenance(path)
+            if sids is not None and len(sids) == len(rows):
+                kept_idx = [i for i in range(len(rows)) if i not in dropped_set]
+                try:
+                    write_provenance(path, [sids[i] for i in kept_idx])
+                except Exception:
+                    pass
+        total_dropped += len(dropped or [])
+        if dropped:
+            print(f"[format] decontaminated {os.path.basename(str(path))}: "
+                  f"dropped {len(dropped)} row(s)")
+    print(f"[format] decontamination summary: dropped {total_dropped} row(s)")
+    return total_dropped

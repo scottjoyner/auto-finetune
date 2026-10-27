@@ -9,15 +9,23 @@ the whole export.
 from __future__ import annotations
 
 import apsw
+import os
 
 
 class CorruptDB:
     """Minimal resilient wrapper around a (possibly corrupt) SQLite file."""
 
     def __init__(self, path: str):
-        self.path = path
+        if not path or not isinstance(path, str):
+            raise ValueError("path must be a non-empty string")
+        self.path = os.path.expanduser(path)
+        if not os.path.exists(self.path):
+            raise FileNotFoundError(f"database not found: {self.path}")
         # writable_schema lets us read past some structural inconsistencies.
-        self._con = apsw.Connection(path, flags=apsw.SQLITE_OPEN_READONLY)
+        try:
+            self._con = apsw.Connection(self.path, flags=apsw.SQLITE_OPEN_READONLY)
+        except Exception as e:
+            raise RuntimeError(f"cannot open database: {e}") from e
         self._con.execute("PRAGMA writable_schema=ON")
         self._con.execute("PRAGMA busy_timeout=60000")
 

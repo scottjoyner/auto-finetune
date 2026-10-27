@@ -12,13 +12,10 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass, asdict
-from pathlib import Path
-from typing import Any
+from dataclasses import asdict, dataclass
 
 from src import flags
 from src.config import Config
-
 
 COSTS_FILE = "cost-tracking.json"
 
@@ -213,7 +210,7 @@ def main(cfg: Config, argv: list[str]) -> int:
         summary = tracker.get_summary(label_filter)
         by_label = tracker.get_by_label()
 
-        print(f"[cost-summary]")
+        print("[cost-summary]")
         print(f"  runs: {summary['count']}")
         print(f"  total hours: {summary.get('total_hours', 0):.1f}")
         print(f"  training hours: {summary.get('training_hours', 0):.1f}")
@@ -221,7 +218,7 @@ def main(cfg: Config, argv: list[str]) -> int:
         print(f"  avg hours/run: {summary.get('avg_hours_per_run', 0):.1f}")
 
         if by_label:
-            print(f"\n  by label:")
+            print("\n  by label:")
             for lbl, stats in sorted(by_label.items(), key=lambda x: -x[1]['total_hours']):
                 print(f"    {lbl}: {stats['runs']} runs, {stats['total_hours']:.1f}h")
         return 0

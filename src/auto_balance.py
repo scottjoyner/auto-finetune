@@ -14,11 +14,9 @@ import os
 import random
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any
 
-from src.locking import atomic_write_json
 from src.config import Config
-
+from src.locking import atomic_write_json
 
 # Bucket priority weights (higher = more important to keep)
 BUCKET_WEIGHTS = {
@@ -166,7 +164,6 @@ def main(cfg: Config, label: str | None = None, cap: int = 500,
     """Auto-balance training data from bucket analysis."""
     analysis_dir = cfg.path("analysis_dir")
     cleaned_dir = cfg.path("cleaned_dir")
-    dataset_dir = cfg.path("dataset_dir")
 
     # Load bucket map
     bucket_map_path = os.path.join(analysis_dir, "buckets.json")

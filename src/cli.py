@@ -130,6 +130,40 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             count = run(cfg)
             print(f"[hermes] wrote {count} sessions")
             return 0
+        if cmd == "neo4j-traces":
+            from src.extract_neo4j_traces import main as run
+            cfg.ensure_dirs()
+            incremental = "--incremental" in argv
+            count = run(cfg, incremental=incremental)
+            print(f"[neo4j-traces] wrote {count} sessions")
+            return 0
+        if cmd == "neo4j-watch":
+            from src.neo4j_watcher import main as run
+            return run()
+        if cmd == "realtime-pipeline":
+            from src.realtime_pipeline import main as run
+            return run(argv[2:])
+        if cmd == "model-registry":
+            from src.model_registry import main as run
+            return run(argv[2:])
+        if cmd == "feedback":
+            from src.feedback_loop import main as run
+            return run(argv[2:])
+        if cmd == "freshness":
+            from src.data_freshness import main as run
+            return run(argv[2:])
+        if cmd == "alerts":
+            from src.alerting import main as run
+            return run(argv[2:])
+        if cmd == "autoscale":
+            from src.auto_scaler import main as run
+            return run(argv[2:])
+        if cmd == "fuse":
+            from src.multi_source_fusion import main as run
+            return run(argv[2:])
+        if cmd == "quality":
+            from src.data_quality import main as run
+            return run(argv[2:])
         if cmd == "clean":
             from src.clean import main as run
             count = run(cfg, label=label, keep_reasoning=keep_reasoning)
@@ -165,6 +199,20 @@ def _dispatch(argv: list[str], cfg=None) -> int:
                         print(f"  LEAK {h}")
                     return 3
             return 0
+        if cmd == "pipeline-health":
+            from src.pipeline_health import check_pipeline, validate_synergy
+            result = check_pipeline(cfg)
+            print(f"[pipeline-health] {result['summary']}")
+            for err in result["errors"]:
+                print(f"  ISSUE: {err}")
+            issues = validate_synergy(cfg)
+            if issues:
+                print("[pipeline-health] synergy issues:")
+                for issue in issues:
+                    print(f"  - {issue}")
+            else:
+                print("[pipeline-health] synergy: OK")
+            return 0 if result["status"] == "healthy" else 1
         if cmd == "combine":
             from src.analyze import benchmark_session_ids
             from src.format_dataset import combine as run
@@ -434,6 +482,32 @@ def _dispatch(argv: list[str], cfg=None) -> int:
         if cmd == "audit":
             from src.audit import main as run
             return run(cfg, argv)
+        if cmd == "decontaminate":
+            from src.audit import decontaminate
+            train_path = (_parse_str_flag(argv, "--train")
+                          or os.path.join(cfg.path("dataset_dir"), "train.jsonl"))
+            bench_path = (_parse_str_flag(argv, "--bench")
+                          or "eval/tasks/auto-verified.jsonl")
+            out_path = (_parse_str_flag(argv, "--out")
+                        or train_path.replace(".jsonl", ".decontaminated.jsonl"))
+            def _load(p):
+                rows = []
+                with open(p) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            rows.append(json.loads(line))
+                return rows
+            train = _load(train_path)
+            bench = _load(bench_path)
+            kept, dropped, res = decontaminate(train, bench)
+            with open(out_path, "w") as f:
+                for r in kept:
+                    f.write(json.dumps(r) + "\n")
+            print(f"[decontaminate] train={len(train)} -> kept={len(kept)} "
+                  f"dropped={len(dropped)} status={res['status']} hits={res['n_hits']}")
+            print(f"  wrote {out_path}")
+            return 0 if res["status"] != "contaminated" else 3
         if cmd == "verify-gap":
             from src.verify_gap import main as run
             return run(cfg, argv)
@@ -892,11 +966,12 @@ def _dispatch(argv: list[str], cfg=None) -> int:
         print(f"[error] {e}")
         return 2
     print(__doc__)
-    print("Commands: extract | hermes | clean | format | combine | analyze | strata | verify | verify-exec | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | dedup | profile | pretokenize | subagent-harness | all")
+    print("Commands: extract | hermes | neo4j-traces | neo4j-watch | realtime-pipeline | quality | model-registry | feedback | freshness | alerts | autoscale | fuse | clean | format | combine | analyze | strata | verify | verify-exec | train | eval | eval-all | eval-split | probe | best | sanity | merge | report | compare | bench | bench-matrix | dedup | profile | pretokenize | subagent-harness | pipeline-health | all")
     print("Flags:    --source=hermes|opencode  --label=<name>  --all-split  --dry-run  --max-examples=<n>  --frac=<held-out-frac>  --loss-only  --report  --metric=<loss|tool_exact>")
     print("Analyze:  analyze [--out=<dir>]   strata [--out=<dir>] [--bucket-map=<json>] [--balance] [--cap=<n>]")
     print("CPU:      dedup [--threshold=0.85]  profile [--out=<dir>]  pretokenize [--model=<path>] [--max-length=2048]")
     print("Harvest:  harvest-status  harvest-plan [--min-new=50]")
+    print("Audit:    audit [--train=...] [--bench=...]   decontaminate [--train=...] [--bench=...] [--out=...]")
     print("Coord:    coordination-status  (shared runtime lease owners)")
     print("Deploy:   deploy --label=<name> --nodes=<n1,n2,...> [--quorum=N]")
     print("          deploy-status  multi-deploy-status  discover-nodes")
@@ -923,12 +998,16 @@ def _dispatch(argv: list[str], cfg=None) -> int:
 def main(argv: list[str]) -> int:
     """Dispatch a command under canonical cross-worktree resource leases."""
     cmd = argv[1] if len(argv) > 1 else "help"
-    if cmd in {"train", "dpo"}:
-        from src.training_admission import read_live
-        decision = read_live()
-        if not decision.allowed:
-            print(f"[train-admission] HOLD: {decision.reason}", flush=True)
-            return 78
+    dry = "--dry-run" in argv
+    if cmd in {"train", "dpo"} and not dry:
+        if os.environ.get("AF_SKIP_UNMANAGED_CHECK") != "1":
+            from src.training_admission import read_live
+            decision = read_live()
+            if not decision.allowed:
+                print(f"[train-admission] HOLD: {decision.reason}", flush=True)
+                return 78
+        else:
+            print("[train-admission] HOLD: skipped (AF_SKIP_UNMANAGED_CHECK=1)", flush=True)
     cfg = load()
     label = _parse_label(argv)
     from src.locking import (

@@ -12,8 +12,8 @@ on the training data.
 """
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import math
 import os
 import re
@@ -238,7 +238,8 @@ def build_disjoint_partition(source_path: str | Path, out_dir: str | Path,
     root = Path(out_dir)
     train_path = root / "datasets" / f"train.{label}.jsonl"
     eval_path = root / "eval" / f"held-out-{label}.jsonl"
-    encode = lambda values: "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in values)
+    def encode(values):
+        return "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in values)
     _atomic_text(train_path, encode(train_rows))
     _atomic_text(eval_path, encode(eval_rows))
     write_provenance(train_path, train_sids)

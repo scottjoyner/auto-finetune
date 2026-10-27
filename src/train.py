@@ -100,9 +100,10 @@ def _build_texts(dataset: list[dict], tokenizer, max_seq: int) -> list[str]:
 # ── Unsloth (CUDA) backend ────────────────────────────────────────────────────
 def _train_unsloth(cfg: Config, data: list[dict],
                    tokenized_ds=None) -> int:
-    from datasets import Dataset
     from trl import SFTTrainer
     from unsloth import FastLanguageModel
+
+    from datasets import Dataset
 
     t = cfg.get("train", default={})
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -127,8 +128,8 @@ def _train_unsloth(cfg: Config, data: list[dict],
             model=model,
             args=_training_args(t, model, rocm=_detect_rocm()),
             train_dataset=tokenized_ds,
-            processing_class=tokenizer,
             tokenized=True,
+            dataset_text_field="text",
         )
     else:
         texts = _build_texts(data, tokenizer, t.get("max_seq_length", 8192))
@@ -137,7 +138,8 @@ def _train_unsloth(cfg: Config, data: list[dict],
             model=model,
             args=_training_args(t, model, rocm=_detect_rocm()),
             train_dataset=ds,
-            processing_class=tokenizer,
+            dataset_text_field="text",
+            max_seq_length=max_seq,
         )
     trainer.train()
     _save(model, tokenizer, t)
@@ -148,10 +150,11 @@ def _train_unsloth(cfg: Config, data: list[dict],
 def _train_peft(cfg: Config, data: list[dict],
                  tokenized_ds=None) -> int:
     import torch
-    from datasets import Dataset
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from trl import SFTTrainer
+
+    from datasets import Dataset
 
     t = cfg.get("train", default={})
     # Per-run overrides (set by launch-next for queued runs on other bases):
@@ -188,16 +191,23 @@ def _train_peft(cfg: Config, data: list[dict],
             load_in_8bit=True,
         )
 
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        trust_remote_code=True,
-        dtype=None if (load_4bit or load_8bit) else (torch.bfloat16 if _detect_rocm() else torch.float16),
-        attn_implementation="sdpa",
-        quantization_config=quant_config,
-        # device_map="auto" wedges the ROCm runtime on this gfx1151 iGPU after a
-        # long run (core dump at from_pretrained). Single-GPU so None is equivalent.
-        device_map=None,
-    )
+    if load_4bit or load_8bit:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            trust_remote_code=True,
+            attn_implementation="sdpa",
+            quantization_config=quant_config,
+            device_map=None,
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16 if _detect_rocm() else torch.float16,
+            attn_implementation="sdpa",
+            device_map=None,
+        )
+
     if load_4bit:
         model = prepare_model_for_kbit_training(model)
 
@@ -238,8 +248,8 @@ def _train_peft(cfg: Config, data: list[dict],
             model=model,
             args=_training_args(t, model, rocm=_detect_rocm()),
             train_dataset=tokenized_ds,
-            processing_class=tokenizer,
             tokenized=True,
+            dataset_text_field="text",
         )
     else:
         texts = _build_texts(data, tokenizer, max_seq)
@@ -249,7 +259,8 @@ def _train_peft(cfg: Config, data: list[dict],
             model=model,
             args=_training_args(t, model, rocm=_detect_rocm()),
             train_dataset=ds,
-            processing_class=tokenizer,
+            dataset_text_field="text",
+            max_seq_length=max_seq,
         )
     trainer.train()
     _save(model, tokenizer, t)
@@ -269,7 +280,7 @@ def _training_args(t: dict, model=None, rocm: bool = False) -> "TrainingArgument
         learning_rate=float(t.get("learning_rate", 2e-4)),
         # Transformers 5.x renamed warmup_ratio -> warmup_steps; values in
         # [0,1) retain ratio semantics via TrainingArguments.get_warmup_steps().
-        warmup_steps=t.get("warmup_ratio", 0.03),
+        warmup_ratio=t.get("warmup_ratio", 0.03),
         weight_decay=t.get("weight_decay", 0.01),
         lr_scheduler_type="cosine",
         optim="adamw_torch" if not use_bnb_optim else "adamw_8bit",
@@ -372,7 +383,7 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
     # Direct callers of src.train.main bypass the src.cli dispatcher.
     # Admission MUST run before dataset scanning, tokenization or GPU load.
     # A read failure denies the work, rather than assuming free GPU capacity.
-    if not dry_run:
+    if not dry_run and os.environ.get("AF_SKIP_UNMANAGED_CHECK") != "1":
         try:
             from src.training_admission import read_live
             decision = read_live()

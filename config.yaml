@@ -45,9 +45,21 @@ sources:
     # Optional Neo4j enrichment for sessions/nodes not yet in state.db.
     neo4j:
       enabled: false
-      uri: bolt://100.64.43.123:7687
+      uri: bolt://100.64.43.123:7688
       user: neo4j
+      # password: set via NEO4J_PASSWORD env var
     enabled: true
+  neo4j_traces:
+    # Trace data from x1-370 Tailscale node (assistx database).
+    # Contains TraceGroups, TraceEvents, AgentSessions, Tasks, ToolCalls.
+    enabled: true
+    uri: bolt://100.64.43.123:7688
+    database: assistx
+    user: neo4j
+    # password: set via NEO4J_TRACES_PASSWORD or NEO4J_PASSWORD env var
+    extract_trace_groups: true
+    max_trace_groups: 10000
+    max_tool_calls: 5000
 
 # ── Extraction ──────────────────────────────────────────────────────────────
 extract:

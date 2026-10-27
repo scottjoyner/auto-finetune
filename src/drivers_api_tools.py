@@ -18,7 +18,6 @@ import json
 import os
 import re
 import urllib.request
-from typing import Optional
 
 from src.bench import ModelDriver, register_runner  # noqa: E402
 

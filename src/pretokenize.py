@@ -12,10 +12,9 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any
 
-from src.locking import atomic_write_json
 from src.config import Config
+from src.locking import atomic_write_json
 
 
 def _load_tokenizer(model_name: str):

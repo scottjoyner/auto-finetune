@@ -15,7 +15,6 @@ import os
 import re
 
 
-
 def _norm(text: str) -> str:
     """Lowercase, keep alphanumerics + spaces, collapse whitespace."""
     if not text:

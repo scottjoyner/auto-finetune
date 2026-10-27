@@ -8,10 +8,10 @@ import json
 import os
 import re
 import subprocess
-
-from src.config import scratch_dir
 import time
 import urllib.request
+
+from src.config import scratch_dir
 
 
 def call_2b(messages, model="minicpm5-2b", max_tokens=512,

@@ -65,7 +65,28 @@ def _build_part(d: dict) -> dict:
     return part
 
 
+_MAX_SESSIONS = 100_000
+_MAX_SCAN_ROWS = 50_000_000
+
+
+def _validate_db_path(db_path: str) -> str:
+    if not db_path or not isinstance(db_path, str):
+        raise ValueError("db_path must be a non-empty string")
+    p = os.path.expanduser(db_path)
+    if not os.path.exists(p):
+        raise FileNotFoundError(f"database not found: {p}")
+    if not os.path.isfile(p):
+        raise ValueError(f"not a file: {p}")
+    return p
+
+
 def extract_db(cfg: Config, db_path: str, out_dir: str, progress_every: int = 10) -> int:
+    db_path = _validate_db_path(db_path)
+    if not isinstance(out_dir, str) or not out_dir.strip():
+        raise ValueError("out_dir must be a non-empty string")
+    os.makedirs(out_dir, exist_ok=True)
+    progress_every = max(1, int(progress_every or 10))
+
     print(f"[extract] opening {db_path}")
     db = CorruptDB(db_path)
 
@@ -75,7 +96,15 @@ def extract_db(cfg: Config, db_path: str, out_dir: str, progress_every: int = 10
                     "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write",
                     "revert", "permission", "agent", "model", "time_created", "time_updated",
                     "time_compacting", "time_archived")
-    sessions = {r[0]: r for r in db.iter_rows("session", session_cols)}
+    try:
+        sessions = {r[0]: r for r in db.iter_rows("session", session_cols)}
+    except Exception as e:
+        print(f"[extract] failed to read sessions: {e}")
+        db.close()
+        return 0
+    if len(sessions) > _MAX_SESSIONS:
+        print(f"[extract] WARNING: {len(sessions)} sessions exceeds cap {_MAX_SESSIONS}; truncating")
+        sessions = dict(list(sessions.items())[:_MAX_SESSIONS])
     print(f"[extract] found {len(sessions)} sessions in {os.path.basename(db_path)}")
 
     excl = set(cfg.get("extract", "exclude_agents", default=[]) or [])
@@ -92,6 +121,9 @@ def extract_db(cfg: Config, db_path: str, out_dir: str, progress_every: int = 10
         "message", ("id", "session_id", "time_created", "time_updated", "data")
     ):
         total_msgs += 1
+        if total_msgs > _MAX_SCAN_ROWS:
+            print(f"[extract] WARNING: message scan exceeded {_MAX_SCAN_ROWS}; stopping")
+            break
         if s_id not in sessions:
             continue
         d = _safe_json(data)
@@ -116,6 +148,9 @@ def extract_db(cfg: Config, db_path: str, out_dir: str, progress_every: int = 10
         "part", ("id", "message_id", "session_id", "time_created", "time_updated", "data")
     ):
         total_parts += 1
+        if total_parts > _MAX_SCAN_ROWS:
+            print(f"[extract] WARNING: part scan exceeded {_MAX_SCAN_ROWS}; stopping")
+            break
         if mid not in msgs:
             continue
         d = _safe_json(data)

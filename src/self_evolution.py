@@ -10,9 +10,10 @@ Usage:
   python -m src.self_evolution --evaluate_checkpoint=<path> --harness=v6
   python -m src.self_evolution --show_matrix
 """
-import json, os, sys, time, subprocess
-from pathlib import Path
+import json
+import os
 from datetime import datetime
+from pathlib import Path
 
 # Repository paths continuously
 STAGING = Path("/media/scott/data/finetune-staging")
@@ -59,7 +60,7 @@ def next_checkpoint(current_step=240, increment=50):
 
 def recommend_next_train():
     """Self-evaluate and recommend next training iteration."""
-    ckpt_db = CKPT_DB_PATH = ADAPTER_BASE
+    ckpt_db = ADAPTER_BASE
     checkpoints = sorted([d for d in os.listdir(ckpt_db) if d.startswith("checkpoint-")],
                          key=lambda x: int(x.split("-")[1]))
 

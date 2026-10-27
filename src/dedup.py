@@ -12,13 +12,11 @@ import hashlib
 import json
 import os
 import re
-import textwrap
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
 
-from src.locking import atomic_write_json
 from src.config import Config
+from src.locking import atomic_write_json
 
 
 def _normalize(text: str) -> str:

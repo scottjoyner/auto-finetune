@@ -14,8 +14,8 @@ import os
 import re
 from typing import Any
 
-from src.locking import atomic_write_json
 from src.config import Config
+from src.locking import atomic_write_json
 
 # Patterns that look like secrets / credentials. Matched case-insensitively and
 # replaced with a placeholder. Tuned to avoid nuking normal code.
@@ -26,6 +26,11 @@ _SECRET_PATTERNS = [
     (re.compile(r"(?i)ghp_[A-Za-z0-9]{20,}"), "<REDACTED_GITHUB>"),
     (re.compile(r"(?i)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"), "<REDACTED_KEY>"),
     (re.compile(r"(?i)(password|passwd|secret)\s*[:=]\s*['\"]?.{8,}"), r"\1=<REDACTED>"),
+    (re.compile(r"(?i)AKIA[0-9A-Z]{16}"), "<REDACTED_AWS_KEY>"),
+    (re.compile(r"(?i)xox[baprs]-[A-Za-z0-9-]{10,}"), "<REDACTED_SLACK>"),
+    (re.compile(r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+"), "<REDACTED_JWT>"),
+    (re.compile(r"(?i)github_pat_[A-Za-z0-9_]{20,}"), "<REDACTED_GITHUB_FINE>"),
+    (re.compile(r"(?i)(client[_-]?secret|client[_-]?id)\s*[:=]\s*['\"]?[A-Za-z0-9_\-]{16,}"), r"\1=<REDACTED>"),
 ]
 
 
@@ -47,7 +52,22 @@ def _redact_obj(obj: Any) -> Any:
     return obj
 
 
+def _validate_msg(msg: Any) -> bool:
+    """Validate that a message has the minimum required structure."""
+    if not isinstance(msg, dict):
+        return False
+    if "parts" not in msg:
+        return False
+    if not isinstance(msg.get("parts"), list):
+        return False
+    return True
+
+
 def clean_message(msg: dict, cfg: Config, keep_reasoning: bool | None = None) -> dict | None:
+    if not _validate_msg(msg):
+        return None
+    if not isinstance(cfg, Config):
+        return None
     if keep_reasoning is None:
         keep_reasoning = cfg.get("clean", "keep_reasoning_as_context", default=False)
     max_chars = cfg.get("clean", "max_chars_per_message", default=32000)
@@ -115,6 +135,12 @@ def _dedup_by_session(recs: list[dict]) -> dict[str, dict]:
 
 
 def clean_session(rec: dict, cfg: Config, keep_reasoning: bool | None = None) -> dict | None:
+    if not isinstance(rec, dict):
+        return None
+    if not isinstance(cfg, Config):
+        return None
+    if "messages" not in rec or not isinstance(rec.get("messages"), list):
+        return None
     cleaned_msgs = []
     for m in rec.get("messages", []):
         cm = clean_message(m, cfg, keep_reasoning=keep_reasoning)

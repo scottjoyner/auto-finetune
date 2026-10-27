@@ -12,9 +12,13 @@ from typing import Optional
 from src.subagent_harness import (
     LOCAL_PROFILE,
     HarnessContext,
-    handle_request as shared_handle_request,
     make_default_context,
     result_block,
+)
+from src.subagent_harness import (
+    handle_request as shared_handle_request,
+)
+from src.subagent_harness import (
     serve_stdio as shared_serve_stdio,
 )
 

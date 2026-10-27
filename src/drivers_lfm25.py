@@ -32,7 +32,7 @@ import ast
 import json
 import re
 import urllib.request
-from typing import Any, Optional
+from typing import Any
 
 from src.bench import ModelDriver, register_runner  # noqa: E402
 

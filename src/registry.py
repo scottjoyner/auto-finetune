@@ -12,12 +12,9 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass, asdict
-from pathlib import Path
-from typing import Any
+from dataclasses import asdict, dataclass
 
 from src.config import Config
-
 
 REGISTRY_FILE = "model-registry.json"
 

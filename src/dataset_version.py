@@ -15,12 +15,10 @@ import json
 import os
 import shutil
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
 
 from src.config import Config
-
 
 VERSIONS_FILE = "dataset-versions.json"
 

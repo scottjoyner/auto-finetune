@@ -13,16 +13,12 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 import time
-from dataclasses import dataclass, asdict
-from pathlib import Path
-from typing import Any
+from dataclasses import dataclass
 
 from src import flags
 from src.config import Config
 from src.locking import atomic_write_json
-
 
 # Default inference node paths (shared SSD mount)
 DEFAULT_INFERENCE_BASE = "/media/scott/SSD_4TB/inference"
@@ -591,7 +587,7 @@ def main(cfg: Config, argv: list[str]) -> int:
         for node, models in status.items():
             print(f"  {node}:")
             if not models:
-                print(f"    (no models)")
+                print("    (no models)")
                 continue
             for m in models:
                 size_mb = m.size_bytes / (1024 * 1024)
