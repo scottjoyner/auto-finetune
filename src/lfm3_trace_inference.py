@@ -10,6 +10,38 @@ from trace_memory_bridge import (
     MemoryBridgeError,_NoRedirect,validate_packet,compose_inference_messages,
 )
 ALLOWED_MODEL = "LiquidAI/LFM3-1.7B"
+def verify_local_model(endpoint: str, expected_model: str = ALLOWED_MODEL) -> dict:
+    """Fail closed if the local runtime does not advertise the exact LFM3 model.
+
+    Model-list membership is runtime *readiness*, not checkpoint SHA/license
+    attestation. It must not certify a model revision or trained LoRA.
+    """
+    parsed = urlsplit(endpoint)
+    if (parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "::1")
+        or parsed.username or parsed.password or parsed.query or parsed.fragment
+        or parsed.path not in ("", "/", "/v1", "/v1/")):
+        raise MemoryBridgeError("model catalog must be numeric loopback")
+    if expected_model != ALLOWED_MODEL:
+        raise MemoryBridgeError("unsupported LFM3 model identity")
+    request = Request("http://" + parsed.netloc + "/v1/models",
+                      headers={"Accept":"application/json"}, method="GET")
+    with build_opener(_NoRedirect()).open(request, timeout=3) as reply:
+        if reply.status != 200:
+            raise MemoryBridgeError("LFM3 model catalog not ready")
+        raw = reply.read(8193)
+    if len(raw) > 8192:
+        raise MemoryBridgeError("oversized model catalog")
+    packet = json.loads(raw)
+    data = packet.get("data") if isinstance(packet, dict) else None
+    if not isinstance(data, list) or len(data) > 64:
+        raise MemoryBridgeError("unexpected model catalog")
+    ids = [entry.get("id") for entry in data if isinstance(entry, dict)]
+    if expected_model not in ids:
+        raise MemoryBridgeError("requested LFM3 checkpoint not loaded locally")
+    return {"model": expected_model, "present": True,
+            "checkpoint_digest_verified": False,
+            "signed_weights_verified": False}
+
 def complete_local(
     endpoint: str, prompt: str, evidence: dict, *, enabled: bool = False,
     model: str = ALLOWED_MODEL, max_tokens: int = 128,
@@ -24,6 +56,7 @@ def complete_local(
     if model!=ALLOWED_MODEL or type(max_tokens) is not int or not 1<=max_tokens<=512:
         raise MemoryBridgeError("unsupported or unpinned model/options")
     validate_packet(evidence)
+    verify_local_model(endpoint, model)
     messages=compose_inference_messages(prompt,evidence)
     payload=json.dumps({"model":model,"messages":messages,
                         "max_tokens":max_tokens,"temperature":0.0}).encode()
