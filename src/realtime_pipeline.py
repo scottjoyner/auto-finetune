@@ -21,6 +21,10 @@ from typing import Any
 from src.config import Config, load
 from src.locking import atomic_write_json
 from src.pipeline_health import check_pipeline, validate_synergy
+from src.alerting import AlertManager
+from src.data_freshness import assess_freshness
+from src.data_quality import quality_gate
+from src.model_registry import ModelRegistry
 
 
 @dataclass
@@ -144,6 +148,10 @@ class RealtimePipeline:
         if rc != 0:
             print(f"[pipeline] Extraction failed: {out[-500:]}")
             self.state.last_error = out[-200:]
+            try:
+                AlertManager(self.cfg).fire("error", "extraction", out[-200:])
+            except Exception:
+                pass
             return False
 
         # Count new files
@@ -172,6 +180,23 @@ class RealtimePipeline:
         self.state.total_cleaned = self._count_cleaned_files()
         self.state.last_clean = time.time()
         print(f"[pipeline] Cleaned: {self.state.total_cleaned} total files")
+
+        # Quality gate: filter bad data before formatting
+        try:
+            am = AlertManager(self.cfg)
+            qresult = quality_gate(
+                self.cfg,
+                os.path.join(self.cfg.path("dataset_dir"), "train.neo4j-traces.jsonl"),
+                os.path.join(self.cfg.path("dataset_dir"), "train.neo4j-traces.filtered.jsonl"),
+            )
+            print(f"[pipeline] Quality gate: {qresult['passed']}/{qresult['total']} passed "
+                  f"(avg={qresult['avg_score']})")
+            if qresult["failed"] > qresult["total"] * 0.5:
+                am.fire("warning", "quality_gate",
+                        f"High failure rate: {qresult['failed']}/{qresult['total']}")
+        except Exception as e:
+            print(f"[pipeline] Quality gate skipped: {e}")
+
         return True
 
     def _format(self) -> bool:
@@ -196,6 +221,19 @@ class RealtimePipeline:
 
     def _should_train(self) -> bool:
         """Determine if training should be triggered."""
+        # Freshness check
+        try:
+            report = assess_freshness(self.cfg)
+            if report.overall_staleness == "critical":
+                print(f"[pipeline] Data critically stale; blocking training")
+                am = AlertManager(self.cfg)
+                am.fire("critical", "freshness", "Data critically stale; training blocked")
+                return False
+            if report.recommendations:
+                print(f"[pipeline] Freshness warnings: {report.recommendations}")
+        except Exception as e:
+            print(f"[pipeline] Freshness check skipped: {e}")
+
         if self.state.new_since_train < self.state.min_new_for_train:
             print(f"[pipeline] Not enough new data for training: {self.state.new_since_train} < {self.state.min_new_for_train}")
             return False
@@ -236,6 +274,21 @@ class RealtimePipeline:
         self.state.new_since_train = 0
         self.state.last_train = time.time()
         self.state.runs_completed += 1
+
+        # Auto-register model version
+        try:
+            registry = ModelRegistry(self.cfg)
+            vid = registry.register(
+                label=f"auto-{int(time.time())}",
+                checkpoint_path="/media/scott/data/finetune-staging/outputs/checkpoints/toolcall-v5-3b-hermes",
+                base_model="Qwen/Qwen2.5-0.5B-Instruct",
+                metrics={"loss": 0.0},
+                notes="Auto-registered by realtime pipeline",
+            )
+            print(f"[pipeline] Model registered: {vid}")
+        except Exception as e:
+            print(f"[pipeline] Model registration skipped: {e}")
+
         print(f"[pipeline] Training complete: {self.state.total_trained} total trained")
         return True
 
