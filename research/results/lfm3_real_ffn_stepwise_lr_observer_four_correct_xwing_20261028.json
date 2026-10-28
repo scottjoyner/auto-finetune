@@ -134,7 +134,7 @@
   ],
   "node": "xwing",
   "experiment_date": "2026-10-28",
-  "source_commit": "dead850068467fd9b6167ade8db0e0204a945f80",
+  "source_commit": "db06a8b35b504f55fc6fc27a7f6f1af9ec82b628",
   "network_disabled": true,
   "independently_authenticated": false
 }
