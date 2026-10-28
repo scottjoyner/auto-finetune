@@ -10,7 +10,7 @@ class NativeRetrievalSmokeTests(unittest.TestCase):
         self.assertEqual(len(baseline), 2)
         self.assertEqual(with_context[:2], baseline)
         self.assertEqual(with_context[2]["role"], "user")
-        self.assertNotIn("previous_event", baseline[1]["content"])
+        self.assertNotIn("FICTIONAL LAB SESSION METADATA", baseline[1]["content"])
         self.assertIn(QUESTION, baseline[1]["content"])
 
     def test_authentication_and_extraction_are_separate_tasks(self):
