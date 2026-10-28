@@ -147,7 +147,10 @@ class AutoPromoter:
 
         # Check if test duration exceeded
         elapsed_hours = (time.time() - ab.start_time) / 3600
-        if elapsed_hours < self.config.ab_test_duration_hours and total < self.config.min_feedback_samples * 2:
+        # Early review is allowed only when BOTH arms have double the usual
+        # sample minimum. A large single arm cannot bypass test duration.
+        if (elapsed_hours < self.config.ab_test_duration_hours
+                and min(count_a, count_b) < self.config.min_feedback_samples * 2):
             result["details"] = f"Test still running: {elapsed_hours:.1f}h / {self.config.ab_test_duration_hours}h"
             return result
 
