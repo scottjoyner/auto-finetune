@@ -187,7 +187,7 @@ def canonical_state_sha(value) -> str:
             t=v.detach().cpu().contiguous()
             h.update(b"T"+str(t.dtype).encode()+repr(tuple(t.shape)).encode())
             h.update(t.view(torch.uint8).numpy().tobytes())
-        elif type(v) is dict:
+        elif isinstance(v, dict):
             h.update(b"D")
             for k in sorted(v,key=lambda x:(str(type(x)),str(x))):
                 walk(k);walk(v[k])
