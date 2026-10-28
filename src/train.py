@@ -18,8 +18,19 @@ import json
 import os
 import sys
 
+# Pre-import transformers.configuration_utils so it's fully loaded
+# before LFM3 config is loaded as a dynamic module
+import transformers.configuration_utils  # noqa: F401
 
 from src.lfm3_support import patch_transformers_for_lfm3, is_lfm3_model, LFM3_MODEL_LOCAL_PATH
+
+# Debug: patch PreTrainedModel.__init__ to trace calls
+import transformers.modeling_utils as _mu
+_orig_ptm_init = _mu.PreTrainedModel.__init__
+def _patched_ptm_init(self, config, *args, **kwargs):
+    print(f"[DEBUG] PreTrainedModel.__init__ called with config type: {type(config).__name__}", file=__import__('sys').stderr)
+    return _orig_ptm_init(self, config, *args, **kwargs)
+_mu.PreTrainedModel.__init__ = _patched_ptm_init
 
 from src.config import Config
 
@@ -218,34 +229,17 @@ def _train_peft(cfg: Config, data: list[dict],
 
     # Load model with LFM3 support (transformers patches applied in train.main())
     if is_lfm3_model(model_name):
-        # Direct load of LFM3 model from local files to avoid
-        # transformers dynamic module loading issues
-        import inspect
-        original_getfile = inspect.getfile
-        def patched_getfile(obj):
-            try:
-                return original_getfile(obj)
-            except TypeError:
-                return '<dynamically loaded>'
-        inspect.getfile = patched_getfile
-
+        # Direct load of LFM3 model from local files
+        import importlib.util
+        import transformers.configuration_utils  # Ensure PreTrainedConfig is available
         model_dir = LFM3_MODEL_LOCAL_PATH
         sys.path.insert(0, model_dir)
 
-        # Load config module
-        spec = importlib.util.spec_from_file_location('configuration_lfm3', f'{model_dir}/configuration_lfm3.py')
-        config_mod = importlib.util.module_from_spec(spec)
-        sys.modules['configuration_lfm3'] = config_mod
-        spec.loader.exec_module(config_mod)
-        config = config_mod.Lfm3Config()
+        from configuration_lfm3 import Lfm3Config
+        config = Lfm3Config()
 
-        # Load model module
-        spec2 = importlib.util.spec_from_file_location('lfm3_model', f'{model_dir}/modeling_lfm3.py')
-        model_mod = importlib.util.module_from_spec(spec2)
-        sys.modules['lfm3_model'] = model_mod
-        spec2.loader.exec_module(model_mod)
-
-        model = model_mod.Lfm3ForCausalLM(config)
+        from modeling_lfm3 import Lfm3ForCausalLM
+        model = Lfm3ForCausalLM(config)
         model = model.to(dtype=torch.bfloat16 if _detect_rocm() else torch.float16)
         model.config._name_or_path = model_dir  # Point to local path for tokenizer loading
     elif load_4bit or load_8bit:

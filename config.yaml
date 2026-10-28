@@ -113,7 +113,7 @@ train:
   # with tool calling (qwen2 architecture, 3B params, 131K context).
   # Local mirror (2026-08-23): NAS models-fast/ was emptied; fresh HF snapshot
   # lives on the fast local data drive.
-  model_name: LiquidAI/LFM3-1.7B
+  model_name: Qwen/Qwen2.5-0.5B-Instruct
   # LFM3-1.7B: LiquidAI hybrid architecture (conv + full_attention + sliding_attention)
   # 1.7B params, bf16, fits on 15GB AMD iGPU without quantization
   # Local mirror: /media/scott/data/finetune-staging/models/LFM3-1.7B
