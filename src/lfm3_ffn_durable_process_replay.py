@@ -32,7 +32,7 @@ MANIFEST_NAME = "manifest.json"
 
 
 def scratch_directory(path: Path, *, must_exist=True) -> Path:
-    if type(path) is not Path or not path.is_absolute():
+    if not isinstance(path, Path) or not path.is_absolute():
         raise ResearchRefused("research checkpoint needs an absolute pathlib.Path")
     if path.parent != Path("/tmp") or not path.name.startswith("lfm3-durable-"):
         raise ResearchRefused("checkpoint directory must be /tmp/lfm3-durable-*")
