@@ -15,6 +15,8 @@ import statistics
 from pathlib import Path
 
 SCHEMA = "sg-lfm3-ab.v1"
+REVISION = "40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd"
+CONFIG_SHA256 = "8c6ae8b8f6d88c87cfb98cf4b5e34e943d0ee07e24215c4121b3159a46e1399d"
 CONDITIONS = ("baseline", "retrieval", "gates", "retrieval_gates",
               "retrieval_lora", "distilled")
 PROOFS = {
@@ -75,7 +77,7 @@ def validate_manifest(data: object) -> dict:
         raise EvaluationRefused("manifest schema mismatch")
     if data["schema"] != SCHEMA or data["model_id"] != "LiquidAI/LFM3-1.7B":
         raise EvaluationRefused("unsupported benchmark model")
-    if (not re.fullmatch(r"[0-9a-f]{40}", str(data["revision"]))
+    if (data["revision"] != REVISION or data["config_sha256"] != CONFIG_SHA256
         or not all(_sha(data[key]) for key in
                    ("checkpoint_sha256", "config_sha256", "tokenizer_sha256"))):
         raise EvaluationRefused("model assets must be SHA-pinned")
@@ -209,14 +211,19 @@ def evaluate(manifest: dict, records: list) -> dict:
     }
 
 
+def _read_bounded(path: Path, limit: int) -> bytes:
+    with path.open("rb") as handle:
+        return handle.read(limit + 1)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--offline-only", action="store_true", required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--results", type=Path, required=True)
     args = parser.parse_args()
-    manifest = validate_manifest(_load(args.manifest.read_bytes(), 524288))
-    raw = args.results.read_bytes()
+    manifest = validate_manifest(_load(_read_bounded(args.manifest, 524288), 524288))
+    raw = _read_bounded(args.results, 2_097_152)
     if len(raw) > 2_097_152:
         raise EvaluationRefused("results exceed byte budget")
     records = [_load(line, 4096) for line in raw.splitlines() if line.strip()]
