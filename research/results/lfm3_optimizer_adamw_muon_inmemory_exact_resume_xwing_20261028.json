@@ -1,0 +1,47 @@
+{
+  "arms": [
+    {
+      "bit_exact_optimizer_state_resume": true,
+      "bit_exact_parameter_resume": true,
+      "checkpoint_bytes": 15920,
+      "checkpoint_written_to_disk": false,
+      "in_memory_checkpoint_sha256": "14c6a887dd60f8d565023f5cce2eeda93fd39bc7b2dc0fce2896cd98513a2c0a",
+      "interrupted_after_step": 5,
+      "optimizer": "adamw",
+      "production_ready": false,
+      "real_lfm3_weights_trained": false,
+      "resumed_parameters_sha256": "9168724df47a7b8458e35795b415567db4ef9bd90c0d0dd7ff81083dd7d45ae1",
+      "schema": "sg-lfm3-optimizer-resume-proof.v1",
+      "seed": 97,
+      "source": "fabricated-cpu-toy-only",
+      "steps": 12,
+      "uninterrupted_parameters_sha256": "9168724df47a7b8458e35795b415567db4ef9bd90c0d0dd7ff81083dd7d45ae1",
+      "untrusted_external_state_loaded": false
+    },
+    {
+      "bit_exact_optimizer_state_resume": true,
+      "bit_exact_parameter_resume": true,
+      "checkpoint_bytes": 14582,
+      "checkpoint_written_to_disk": false,
+      "in_memory_checkpoint_sha256": "c00859d2bd273d73a7db06131a08cae40d0d65e814933cc4a31cfb99065e2822",
+      "interrupted_after_step": 5,
+      "optimizer": "muon_hybrid",
+      "production_ready": false,
+      "real_lfm3_weights_trained": false,
+      "resumed_parameters_sha256": "bf149fd1b1e2610ae81075c14ac298520974e509f72382baf19b980ad7415f5e",
+      "schema": "sg-lfm3-optimizer-resume-proof.v1",
+      "seed": 97,
+      "source": "fabricated-cpu-toy-only",
+      "steps": 12,
+      "uninterrupted_parameters_sha256": "bf149fd1b1e2610ae81075c14ac298520974e509f72382baf19b980ad7415f5e",
+      "untrusted_external_state_loaded": false
+    }
+  ],
+  "production_ready": false,
+  "schema": "sg-lfm3-resume-paired-lab.v1",
+  "experiment_date": "2026-10-28",
+  "node": "xwing",
+  "runtime": "native PyTorch 2.14.1 CPU",
+  "independent_source_witness": false,
+  "restart_after_process_exit_tested": false
+}
