@@ -7,7 +7,6 @@ fixed set of six previously measured FFN-LoRA trials. No training happens here.
 from __future__ import annotations
 import math
 import statistics
-from src.lfm3_checkpoint_attestor import PINNED_CHECKPOINT_SHA256
 from src.lfm3_real_checkpoint_smoke import ResearchRefused
 
 SEEDS=(20261028,20261029,20261030)
