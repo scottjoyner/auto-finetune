@@ -117,6 +117,17 @@ class ABProtocolTest(unittest.TestCase):
         with self.assertRaises(EvaluationRefused):
             validate_manifest(manifest)
 
+    def test_gates_regressing_against_retrieval_are_counted(self):
+        manifest, rows = fixture()
+        for row in rows:
+            if row["condition"] == "retrieval_gates" and row["case_id"] == "example-two":
+                row["answer"] = "wrong"
+        receipt = evaluate(manifest, rows)
+        scored = [m for m in receipt["metrics"]
+                  if m["split"] == "heldout" and m["condition"] == "retrieval_gates"][0]
+        self.assertEqual(scored["paired_wins_vs_retrieval"], 0)
+        self.assertEqual(scored["paired_losses_vs_retrieval"], 1)
+
     def test_unknown_fields_and_duplicate_json_refused(self):
         manifest, rows = fixture()
         manifest["raw_trace"] = "do not accept"
