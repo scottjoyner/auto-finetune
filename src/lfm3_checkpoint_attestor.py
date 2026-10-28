@@ -63,8 +63,13 @@ def verify_snapshot(snapshot: pathlib.Path) -> dict:
         raise CheckpointRefused("snapshot outside model cache")
     for name, (size, sha256) in ASSETS.items():
         f = snapshot / name
-        if not f.resolve(strict=True).is_relative_to(cache_base):
-            raise CheckpointRefused("model asset escapes its cache directory")
+        target = f.resolve(strict=True)
+        # Hugging Face Xet may store pinned model bytes in shared hub/blobs.
+        # Every opened byte is still checked against an exact SHA-256 pin.
+        shared_blobs = cache_base.parent / "blobs"
+        if not (target.is_relative_to(cache_base)
+                or target.is_relative_to(shared_blobs)):
+            raise CheckpointRefused("model asset escapes approved cache roots")
         verify_file(f, size, sha256)
     return {
         "schema": "lfm3-bf16-offline-assets.v1",
