@@ -22,6 +22,7 @@ RANK = 4
 LEARNING_RATE = 0.002
 OPTIMIZERS = ("adamw", "muon_match_rms_adamw")
 RESEARCH_SEEDS = (20261028, 20261029, 20261030)
+MUON_SCALING_OPTIONS = ("muon_original", "muon_match_rms_adamw")
 
 
 def install_adapter(layer, *, rank: int = RANK, seed: int = 20261028):
@@ -55,10 +56,13 @@ def install_adapter(layer, *, rank: int = RANK, seed: int = 20261028):
     return A, B, handle
 
 
-def run(snapshot: Path, *, steps: int = 1, multi_seed: bool = False) -> dict:
+def run(snapshot: Path, *, steps: int = 1, multi_seed: bool = False,
+        compare_muon_scaling: bool = False) -> dict:
     if (type(steps) is not int or steps not in (1, 3)
             or type(multi_seed) is not bool
-            or (multi_seed and steps != 3)):
+            or type(compare_muon_scaling) is not bool
+            or (multi_seed and steps != 3)
+            or (compare_muon_scaling and not multi_seed)):
         raise ResearchRefused("only fixed three-seed, three-step research or approved smoke allowed")
     verify_restricted_environment()
     assert_fixed_lab_contract()
@@ -119,7 +123,7 @@ def run(snapshot: Path, *, steps: int = 1, multi_seed: bool = False) -> dict:
 
     records = []
     for seed in (RESEARCH_SEEDS if multi_seed else RESEARCH_SEEDS[:1]):
-        for optimizer_kind in OPTIMIZERS:
+        for optimizer_kind in (MUON_SCALING_OPTIONS if compare_muon_scaling else OPTIMIZERS):
             A, B, handle = install_adapter(target, seed=seed)
             trainables = list(A.parameters()) + list(B.parameters())
             if optimizer_kind == "adamw":
@@ -127,7 +131,8 @@ def run(snapshot: Path, *, steps: int = 1, multi_seed: bool = False) -> dict:
             else:
                 opt = torch.optim.Muon(
                     trainables, lr=LEARNING_RATE, momentum=0.95,
-                    ns_steps=5, adjust_lr_fn="match_rms_adamw", weight_decay=0.0
+                    ns_steps=5, adjust_lr_fn=("original" if optimizer_kind == "muon_original"
+                                              else "match_rms_adamw"), weight_decay=0.0
                 )
             A_before = A.weight.detach().clone()
             try:
@@ -185,7 +190,9 @@ def run(snapshot: Path, *, steps: int = 1, multi_seed: bool = False) -> dict:
             or any(p.grad is not None or p.requires_grad for p in base)):
         raise ResearchRefused("frozen pretrained LFM3 was mutated")
     return {
-        "schema": ("sg-lfm3-real-last-layer-lora-3seed-3step.v1" if multi_seed
+        "schema": ("sg-lfm3-real-last-layer-muon-scaling-3seed.v1"
+                   if compare_muon_scaling else
+                   "sg-lfm3-real-last-layer-lora-3seed-3step.v1" if multi_seed
                    else "sg-lfm3-real-last-layer-lora-backprop-3step.v1"
                    if steps == 3 else "sg-lfm3-real-last-layer-lora-backprop.v1"),
         "checkpoint_sha256": proof["checkpoint_sha256"],
@@ -206,10 +213,14 @@ def run(snapshot: Path, *, steps: int = 1, multi_seed: bool = False) -> dict:
                 records[2*i]["dev_loss_after"] < records[2*i+1]["dev_loss_after"]
                 for i in range(len(RESEARCH_SEEDS))
             ],
-            "eligible_for_manual_review_only": all(
+            "eligible_for_manual_review_only": (not compare_muon_scaling and all(
                 records[2*i]["dev_loss_after"] < records[2*i+1]["dev_loss_after"]
                 for i in range(len(RESEARCH_SEEDS))
-            )} if multi_seed else {}),
+            ))} if multi_seed else {}),
+        **({"muon_scaling_original_vs_rms": True,
+            "muon_scaling_options": list(MUON_SCALING_OPTIONS),
+            "may_nominate_optimizer_from_scaling_study": False}
+           if compare_muon_scaling else {}),
         "heldout_evaluated": False,
         "source_custody_independently_verified": False,
         "base_model_weights_modified": False,
@@ -226,7 +237,10 @@ if __name__ == "__main__":
     p.add_argument("--snapshot", required=True, type=Path)
     p.add_argument("--three-step-research", action="store_true")
     p.add_argument("--multi-seed-ffn-research", action="store_true")
+    p.add_argument("--compare-muon-scaling-research", action="store_true")
     a = p.parse_args()
-    print(json.dumps(run(a.snapshot, steps=3 if a.three_step_research
-                         or a.multi_seed_ffn_research else 1,
-                         multi_seed=a.multi_seed_ffn_research), sort_keys=True))
+    print(json.dumps(run(
+        a.snapshot, steps=3 if a.three_step_research or a.multi_seed_ffn_research
+        or a.compare_muon_scaling_research else 1,
+        multi_seed=a.multi_seed_ffn_research or a.compare_muon_scaling_research,
+        compare_muon_scaling=a.compare_muon_scaling_research), sort_keys=True))
