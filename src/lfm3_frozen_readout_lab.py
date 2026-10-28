@@ -55,10 +55,16 @@ def target_tokens(tokenizer) -> dict[str, int]:
 
 
 def fit_readout_adapter(features, targets, frozen_lm_head, *,
-                        lr: float, steps: int = STEPS) -> dict:
+                        lr: float, steps: int = STEPS,
+                        optimizer_kind: str = "adamw",
+                        explicit_toy_muon_review: bool = False) -> dict:
     if (type(lr) not in (float, int) or lr not in LRS
             or type(steps) is not int or not 1 <= steps <= STEPS):
         raise ResearchRefused("unsupported adapter optimizer budget")
+    if optimizer_kind not in ("adamw", "muon_readout_research"):
+        raise ResearchRefused("only pinned AdamW or reviewed toy Muon option")
+    if optimizer_kind != "adamw" and explicit_toy_muon_review is not True:
+        raise ResearchRefused("Muon on low-rank readout prohibited without lab exception")
     import torch
     from torch import nn
     import torch.nn.functional as F
@@ -84,7 +90,20 @@ def fit_readout_adapter(features, targets, frozen_lm_head, *,
     for p in frozen_lm_head.parameters():
         if p.requires_grad:
             raise ResearchRefused("official vocabulary readout must be frozen")
-    opt = torch.optim.AdamW(trainables, lr=lr, weight_decay=0.0)
+    if optimizer_kind == "adamw":
+        opt = torch.optim.AdamW(trainables, lr=lr, weight_decay=0.0)
+    else:
+        # The residual is not an approved LFM3 LoRA or pretrained parameter.
+        # This is an explicit experiment on two known 2-D toy matrices only.
+        if not hasattr(torch.optim, "Muon"):
+            raise ResearchRefused("native Torch Muon unavailable; no substitution")
+        if (tuple(first.weight.shape) != (RANK, 2048)
+                or tuple(last.weight.shape) != (2048, RANK)):
+            raise ResearchRefused("Muon toy matrix layout changed")
+        opt = torch.optim.Muon(
+            trainables, lr=lr, momentum=0.95, weight_decay=0.0,
+            ns_steps=5, adjust_lr_fn="original"
+        )
 
     def loss_on(x, y):
         # Readout residual computed in fp32, official LM head remains in bf16.
@@ -117,7 +136,8 @@ def fit_readout_adapter(features, targets, frozen_lm_head, *,
     )):
         raise ResearchRefused("invalid adapter score")
     return {
-        "optimizer": "adamw_torch",
+        "optimizer": ("adamw_torch" if optimizer_kind == "adamw"
+                      else "muon_torch_on_toy_readout_only"),
         "learning_rate": lr,
         "steps": steps,
         "rank": RANK,
@@ -128,11 +148,12 @@ def fit_readout_adapter(features, targets, frozen_lm_head, *,
         "dev_loss_after": after_dev,
         "max_preclip_grad_norm": worst_grad,
         "weights_saved": False,
+        "muon_on_actual_lfm3_weights": False,
         "production_ready": False,
     }
 
 
-def run(snapshot: Path) -> dict:
+def run(snapshot: Path, *, allow_toy_muon: bool = False) -> dict:
     verify_restricted_environment()
     assert_fixed_lab_contract()
     assets = verify_snapshot(snapshot)
@@ -186,10 +207,19 @@ def run(snapshot: Path) -> dict:
         raise ResearchRefused("pretrained LFM3 gradient isolation failed")
     arms = [fit_readout_adapter(tuple(features), tuple(labels), model.lm_head,
                                 lr=lr) for lr in LRS]
+    if allow_toy_muon is True:
+        arms.extend(fit_readout_adapter(
+            tuple(features), tuple(labels), model.lm_head, lr=lr,
+            optimizer_kind="muon_readout_research",
+            explicit_toy_muon_review=True,
+        ) for lr in LRS)
+    elif allow_toy_muon is not False:
+        raise ResearchRefused("research Muon flag must be an explicit boolean")
     if tuple(p._version for p in base_params) != base_versions:
         raise ResearchRefused("a pretrained tensor changed unexpectedly")
     return {
-        "schema": "sg-lfm3-frozen-readout-adapter.v1",
+        "schema": ("sg-lfm3-frozen-readout-muon-grid.v1" if allow_toy_muon
+                   else "sg-lfm3-frozen-readout-adapter.v1"),
         "source": "fabricated-toy-not-actual-agent-traces",
         "checkpoint_sha256": assets["checkpoint_sha256"],
         "model_revision": assets["revision"],
@@ -204,7 +234,8 @@ def run(snapshot: Path) -> dict:
         "no_heldout_evaluation": True,
         "no_finetune_of_pretrained_model": True,
         "no_model_weights_saved": True,
-        "no_muon_adapter_optimization_executed": True,
+        "no_muon_adapter_optimization_executed": not allow_toy_muon,
+        "muon_research_exception_only_for_two_readout_matrices": allow_toy_muon,
         "cannot_promote_fleet": True,
         "production_ready": False,
     }
@@ -215,9 +246,13 @@ def main() -> int:
     p.add_argument("--offline-only", action="store_true", required=True)
     p.add_argument("--ack-sandbox-research", action="store_true", required=True)
     p.add_argument("--snapshot", type=Path, required=True)
+    p.add_argument("--toy-muon-readout-explicit-exception", action="store_true")
     args = p.parse_args()
     try:
-        print(json.dumps(run(args.snapshot), sort_keys=True))
+        print(json.dumps(run(
+            args.snapshot,
+            allow_toy_muon=args.toy_muon_readout_explicit_exception,
+        ), sort_keys=True))
         return 0
     except (ResearchRefused, OSError, ValueError) as exc:
         raise SystemExit("frozen feature adapter refused: " + str(exc)) from None
