@@ -32,9 +32,11 @@ TARGET = "model.lm_head.weight"
 def fit_frozen_lm_head_lora(
     features, labels, frozen_head, *, learning_rate: float,
     optimizer: str = "adamw", muon_research_exception: bool = False,
-    steps: int = STEPS, muon_lr_scaling: str = "original"
+    steps: int = STEPS, muon_lr_scaling: str = "original",
+    seed: int = 20261028
 ) -> dict:
-    if (type(learning_rate) is not float or learning_rate not in RATES
+    if (type(seed) is not int or seed not in (20261028, 20261029, 20261030)
+            or type(learning_rate) is not float or learning_rate not in RATES
             or type(steps) is not int or not 1 <= steps <= STEPS
             or optimizer not in ("adamw", "muon_research")
             or muon_lr_scaling not in ("original", "match_rms_adamw")
@@ -70,7 +72,7 @@ def fit_frozen_lm_head_lora(
         base_train = frozen_head(xt.to(torch.bfloat16)).float().detach()
         base_dev = frozen_head(xd.to(torch.bfloat16)).float().detach()
     with torch.random.fork_rng(devices=[]):
-        torch.manual_seed(20261028)
+        torch.manual_seed(seed)
         A = nn.Linear(2048, RANK, bias=False, dtype=torch.float32)
         B = nn.Linear(RANK, vocab_size, bias=False, dtype=torch.float32)
         nn.init.zeros_(B.weight)
@@ -122,6 +124,7 @@ def fit_frozen_lm_head_lora(
                 (after_train, after_dev, peak_grad_norm))):
         raise ResearchRefused("frozen head integrity or adapter gradient check failed")
     return {
+        "seed": seed,
         "optimizer": ("adamw" if optimizer == "adamw" else (
             "muon_experimental" if muon_lr_scaling == "original"
             else "muon_experimental_match_rms_adamw"
