@@ -1,11 +1,9 @@
 """Offline contract tests: synthetic cases only, no checkpoint or network."""
 import hashlib
-import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from lfm3_ab_protocol import (EvaluationRefused, evaluate, validate_manifest,
+from src.lfm3_ab_protocol import (EvaluationRefused, evaluate, validate_manifest,
                               REVISION, CONFIG_SHA256,
                               validate_results, _load, sha_text)
 
