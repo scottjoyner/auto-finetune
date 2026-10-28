@@ -32,11 +32,13 @@ TARGET = "model.lm_head.weight"
 def fit_frozen_lm_head_lora(
     features, labels, frozen_head, *, learning_rate: float,
     optimizer: str = "adamw", muon_research_exception: bool = False,
-    steps: int = STEPS
+    steps: int = STEPS, muon_lr_scaling: str = "original"
 ) -> dict:
     if (type(learning_rate) is not float or learning_rate not in RATES
             or type(steps) is not int or not 1 <= steps <= STEPS
             or optimizer not in ("adamw", "muon_research")
+            or muon_lr_scaling not in ("original", "match_rms_adamw")
+            or (optimizer == "adamw" and muon_lr_scaling != "original")
             or (optimizer == "muon_research" and muon_research_exception is not True)
             or (optimizer == "adamw" and muon_research_exception is not False)):
         raise ResearchRefused("LoRA optimizer admission/budget refused")
@@ -85,7 +87,7 @@ def fit_frozen_lm_head_lora(
             raise ResearchRefused("unreviewed Muon LoRA projection shape")
         opt = torch.optim.Muon(
             trainables, lr=learning_rate, momentum=0.95,
-            ns_steps=5, weight_decay=0.0, adjust_lr_fn="original"
+            ns_steps=5, weight_decay=0.0, adjust_lr_fn=muon_lr_scaling
         )
     scale = 1.0 / RANK
 
@@ -120,7 +122,10 @@ def fit_frozen_lm_head_lora(
                 (after_train, after_dev, peak_grad_norm))):
         raise ResearchRefused("frozen head integrity or adapter gradient check failed")
     return {
-        "optimizer": "adamw" if optimizer == "adamw" else "muon_experimental",
+        "optimizer": ("adamw" if optimizer == "adamw" else (
+            "muon_experimental" if muon_lr_scaling == "original"
+            else "muon_experimental_match_rms_adamw"
+        )),
         "learning_rate": learning_rate,
         "steps": steps,
         "target": TARGET,
@@ -139,11 +144,14 @@ def fit_frozen_lm_head_lora(
     }
 
 
-def run(snapshot: Path, *, allow_muon: bool = False) -> dict:
+def run(snapshot: Path, *, allow_muon: bool = False,
+        compare_muon_lr_scaling: bool = False) -> dict:
     verify_restricted_environment()
     assert_fixed_lab_contract()
-    if type(allow_muon) is not bool:
-        raise ResearchRefused("Muon exception must be explicit")
+    if (type(allow_muon) is not bool
+            or type(compare_muon_lr_scaling) is not bool
+            or compare_muon_lr_scaling and not allow_muon):
+        raise ResearchRefused("Muon scaling comparison needs explicit research exception")
     proof = verify_snapshot(snapshot)
     import torch
     import transformers
@@ -197,12 +205,21 @@ def run(snapshot: Path, *, allow_muon: bool = False) -> dict:
             learning_rate=lr, optimizer="muon_research",
             muon_research_exception=True
         ) for lr in RATES)
+    if compare_muon_lr_scaling:
+        arms.extend(fit_frozen_lm_head_lora(
+            tuple(split_features), tuple(split_targets), model.lm_head,
+            learning_rate=lr, optimizer="muon_research",
+            muon_research_exception=True,
+            muon_lr_scaling="match_rms_adamw",
+        ) for lr in RATES)
     if tuple(x._version for x in weights) != versions:
         raise ResearchRefused("base LFM3 parameters modified")
     if any(x.grad is not None for x in weights):
         raise ResearchRefused("gradient attached to pretrained weight")
     return {
-        "schema": "sg-lfm3-frozen-head-lora-lab.v1",
+        "schema": ("sg-lfm3-frozen-head-lora-muon-calibration.v1"
+                   if compare_muon_lr_scaling
+                   else "sg-lfm3-frozen-head-lora-lab.v1"),
         "source": "fixed-fabricated-two-train-two-dev-only",
         "checkpoint_sha256": proof["checkpoint_sha256"],
         "revision": proof["revision"],
@@ -219,6 +236,10 @@ def run(snapshot: Path, *, allow_muon: bool = False) -> dict:
         "model_or_adapter_weights_written": False,
         "may_promote_to_fleet": False,
         "production_ready": False,
+        **({"muon_rms_scaling_compare_enabled": True,
+            "muon_rms_scaling_arm_indices": [4, 5],
+            "muon_scaling_original_arm_indices": [2, 3]}
+           if compare_muon_lr_scaling else {}),
     }
 
 
@@ -228,6 +249,9 @@ if __name__ == "__main__":
     parser.add_argument("--ack-sandbox-research", required=True, action="store_true")
     parser.add_argument("--snapshot", required=True, type=Path)
     parser.add_argument("--experimental-muon-lora-exception", action="store_true")
+    parser.add_argument("--compare-muon-rms-scaling", action="store_true")
     args = parser.parse_args()
-    print(json.dumps(run(args.snapshot, allow_muon=args.experimental_muon_lora_exception),
-                     sort_keys=True))
+    print(json.dumps(run(
+        args.snapshot, allow_muon=args.experimental_muon_lora_exception,
+        compare_muon_lr_scaling=args.compare_muon_rms_scaling
+    ), sort_keys=True))
