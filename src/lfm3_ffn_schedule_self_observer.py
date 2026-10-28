@@ -110,6 +110,24 @@ def independent_judge(gate:dict,votes:object):
             or gate.get("may_execute_optimizer_proposal") is not False
             or type(votes) is not list or len(votes)!=4):
         raise OptimizerResearchRefused("invalid external advisor gate")
+    if (gate.get("checkpoint_sha256")!=SNAPSHOT_SHA
+            or gate.get("original_backbone_frozen") is not True
+            or gate.get("all_fixed_lrs_better_than_switches") is not True
+            or gate.get("model_selected_lr_change") is not False
+            or gate.get("independent_task_generalization_proven") is not False
+            or gate.get("authentic_producer_witness") is not False
+            or gate.get("heldout_evaluated") is not False
+            or gate.get("may_change_fleet_optimizer") is not False
+            or gate.get("may_save_model_weights") is not False
+            or gate.get("may_promote") is not False
+            or gate.get("production_ready") is not False
+            or type(gate.get("comparisons")) is not list
+            or len(gate["comparisons"])!=2
+            or any(item.get("optimizer")!=expected
+                   or item.get("fixed_004_better_each_seed")!=[True,True,True]
+                   or item.get("switch_improves_all_seeds") is not False
+                   for item,expected in zip(gate["comparisons"],OPTIMIZERS))):
+        raise OptimizerResearchRefused("untrusted model-observer external metric gate")
     verdicts=[]
     for index,vote in enumerate(votes):
         expected_optimizer=OPTIMIZERS[index//2]
