@@ -86,13 +86,13 @@ class AutoPromoter:
                                 f"A/B test started: {active.version_id} vs {vid}")
                 return vid
             else:
-                print("[promote] Failed to start A/B test; promoting directly")
-                self.registry.promote(vid)
+                print("[promote] A/B test unavailable; candidate held for review")
+                self.alerts.fire("warning", "auto_promote",
+                                 f"A/B test unavailable for {vid}; no model promoted")
                 return vid
         else:
-            # No active model; promote directly
-            self.registry.promote(vid)
-            print(f"[promote] No active model; promoted {vid} directly")
+            # A missing baseline cannot authorize model activation.
+            print(f"[promote] No active baseline; {vid} held for review")
             return vid
 
     def record_inference(self, model_version: str, session_id: str,
