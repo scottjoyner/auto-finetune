@@ -21,7 +21,7 @@ class ConstrainedOptimizerTests(unittest.TestCase):
 
     def test_prompt_is_metric_only_not_heldout(self):
         prompts = choice_messages(observer_view(baseline()))
-        self.assertIn("fabricated", prompts[1]["content"].lower())
+        self.assertIn("synthetic", prompts[1]["content"].lower())
         self.assertNotIn("train_session_sha256", prompts[1]["content"])
         self.assertNotIn("heldout_loss", prompts[1]["content"])
         self.assertIn("Output only", prompts[0]["content"])
