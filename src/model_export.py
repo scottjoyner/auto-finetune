@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from src.config import Config, load
+from src.lfm3_support import patch_transformers_for_lfm3, is_lfm3_model
 from src.locking import atomic_write_json
 
 
@@ -39,6 +40,10 @@ def export_merged(checkpoint_path: str, output_path: str,
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from peft import PeftModel
         import torch
+
+        # Apply LFM3 patches if needed
+        if is_lfm3_model(base_model):
+            patch_transformers_for_lfm3()
 
         os.makedirs(output_path, exist_ok=True)
 
@@ -128,6 +133,10 @@ def export_onnx(checkpoint_path: str, output_path: str,
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from peft import PeftModel
+
+        # Apply LFM3 patches if needed
+        if is_lfm3_model(base_model):
+            patch_transformers_for_lfm3()
 
         os.makedirs(output_path, exist_ok=True)
 

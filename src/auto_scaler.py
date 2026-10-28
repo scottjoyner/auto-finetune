@@ -83,7 +83,17 @@ def detect_vram() -> tuple[float, float]:
 def recommend(available_vram_gb: float | None = None,
               total_vram_gb: float | None = None,
               model_params_b: float = 0.5,
-              prefer_quality: bool = False) -> ScalingConfig:
+              prefer_quality: bool = False,
+              model_name: str = "") -> ScalingConfig:
+    """Recommend scaling parameters based on available VRAM.
+
+    Args:
+        available_vram_gb: Available VRAM in GB (auto-detected if None)
+        total_vram_gb: Total VRAM in GB (auto-detected if None)
+        model_params_b: Model size in billions of parameters
+        prefer_quality: If True, prefer longer sequences over larger batches
+        model_name: Model name for model-specific recommendations (e.g. LFM3-1.7B)
+    """
     """Recommend scaling parameters based on available VRAM.
 
     Args:
@@ -103,6 +113,15 @@ def recommend(available_vram_gb: float | None = None,
         estimated_vram_gb=total_vram_gb,
         available_vram_gb=available_vram_gb,
     )
+
+    # LFM3-1.7B specific: hybrid conv/attention, fits in bf16 on 15GB VRAM
+    if "lfm3" in model_name.lower() and model_params_b < 2:
+        config.max_seq_length = 4096
+        config.per_device_batch_size = 1
+        config.gradient_accumulation_steps = 16
+        config.load_in_4bit = False
+        config.throughput_estimate = 2.0
+        return config
 
     # Model memory estimate (bf16): params * 2 bytes + optimizer (2x) + gradients
     model_mem_gb = model_params_b * 2 * 3  # weights + grad + optimizer state

@@ -113,12 +113,16 @@ train:
   # with tool calling (qwen2 architecture, 3B params, 131K context).
   # Local mirror (2026-08-23): NAS models-fast/ was emptied; fresh HF snapshot
   # lives on the fast local data drive.
-  model_name: /media/scott/data/finetune-staging/models/RefinedToolCallV5-3b
-  # LoRA / QLoRA settings (adjusted for 3B continued finetune)
+  model_name: LiquidAI/LFM3-1.7B
+  # LFM3-1.7B: LiquidAI hybrid architecture (conv + full_attention + sliding_attention)
+  # 1.7B params, bf16, fits on 15GB AMD iGPU without quantization
+  # Local mirror: /media/scott/data/finetune-staging/models/LFM3-1.7B
+  # LoRA / QLoRA settings (adjusted for LFM3-1.7B)
   lora_r: 16
   lora_alpha: 32
   lora_dropout: 0.05
-  # Explicit target modules for Qwen2 architecture
+  # Explicit target modules for LFM3 hybrid architecture
+  # LFM3 uses conv layers (no LoRA on conv), full_attention, sliding_attention
   target_modules:
     - "q_proj"
     - "k_proj"
@@ -127,14 +131,14 @@ train:
     - "gate_proj"
     - "up_proj"
     - "down_proj"
-  max_seq_length: 8192
+  max_seq_length: 4096  # LFM3 supports 128K but 4K is practical for 15GB VRAM
   gradient_checkpointing: true
   # 4-bit quantization for fitting large models on modest GPUs.
   # UNLOCKED 2026-08-24: bitsandbytes 0.50.1 pip wheels ship ROCm builds
   # targeting gfx1151 explicitly; NF4 quantize/dequantize and AdamW8bit
   # verified working on the Radeon 8050S. Keep false for small bases where
   # bf16 is fine (less quant noise); flip true for >=7B bases.
-  load_in_4bit: false
+  load_in_4bit: false  # LFM3-1.7B fits in bf16 on 15GB VRAM; no quant needed
   # Optimizer / schedule
   learning_rate: 1e-4
   num_train_epochs: 2

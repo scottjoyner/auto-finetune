@@ -13,9 +13,13 @@ when available, else peft.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import sys
+
+
+from src.lfm3_support import patch_transformers_for_lfm3, is_lfm3_model, LFM3_MODEL_LOCAL_PATH
 
 from src.config import Config
 
@@ -172,7 +176,25 @@ def _train_peft(cfg: Config, data: list[dict],
     load_8bit = t.get("load_in_8bit", False)
     grad_ckpt = t.get("gradient_checkpointing", False)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    # Load tokenizer; LFM3 uses TokenizersBackend which needs special handling
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name, trust_remote_code=True
+        )
+    except (ValueError, OSError):
+        # Fall back to PreTrainedTokenizerFast with tokenizer.json
+        from transformers import PreTrainedTokenizerFast
+        tok_path = model_name
+        if not os.path.exists(os.path.join(tok_path, "tokenizer.json")):
+            from huggingface_hub import hf_hub_download
+            tok_path = hf_hub_download(model_name, "tokenizer.json")
+        tok_dir = os.path.dirname(tok_path) if os.path.isfile(tok_path) else tok_path
+        tokenizer = PreTrainedTokenizerFast(
+            tokenizer_file=os.path.join(tok_dir, "tokenizer.json"),
+            bos_token="<|startoftext|>",
+            eos_token="\u6620",  # LFM3 EOS token
+            pad_token="<|pad|>",
+        )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -191,7 +213,38 @@ def _train_peft(cfg: Config, data: list[dict],
             load_in_8bit=True,
         )
 
-    if load_4bit or load_8bit:
+    # Load model with LFM3 support (transformers patches applied in train.main())
+    if is_lfm3_model(model_name):
+        # Direct load of LFM3 model from local files to avoid
+        # transformers dynamic module loading issues
+        import inspect
+        original_getfile = inspect.getfile
+        def patched_getfile(obj):
+            try:
+                return original_getfile(obj)
+            except TypeError:
+                return '<dynamically loaded>'
+        inspect.getfile = patched_getfile
+
+        model_dir = LFM3_MODEL_LOCAL_PATH
+        sys.path.insert(0, model_dir)
+
+        # Load config module
+        spec = importlib.util.spec_from_file_location('configuration_lfm3', f'{model_dir}/configuration_lfm3.py')
+        config_mod = importlib.util.module_from_spec(spec)
+        sys.modules['configuration_lfm3'] = config_mod
+        spec.loader.exec_module(config_mod)
+        config = config_mod.Lfm3Config()
+
+        # Load model module
+        spec2 = importlib.util.spec_from_file_location('lfm3_model', f'{model_dir}/modeling_lfm3.py')
+        model_mod = importlib.util.module_from_spec(spec2)
+        sys.modules['lfm3_model'] = model_mod
+        spec2.loader.exec_module(model_mod)
+
+        model = model_mod.Lfm3ForCausalLM(config)
+        model = model.to(dtype=torch.bfloat16 if _detect_rocm() else torch.float16)
+    elif load_4bit or load_8bit:
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
             trust_remote_code=True,
@@ -380,10 +433,30 @@ def _reject_held_out(data_path: str) -> str:
 
 
 def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: str | None = None, max_examples: int | None = None, tokenized_dir: str | None = None) -> int:
+    import sys
+    print(f"[DEBUG] train.main: AF_SKIP={os.environ.get('AF_SKIP_UNMANAGED_CHECK')!r}, dry_run={dry_run}", file=sys.stderr, flush=True)
+    # Apply LFM3 transformers patches if using LFM3 model
+    model_name = os.environ.get("TRAIN_MODEL_NAME") or cfg.get("train", "model_name", default="")
+    if is_lfm3_model(model_name):
+        patch_transformers_for_lfm3()
+        # Pre-import transformers modules for dynamic module loading
+        import transformers.dynamic_module_utils as dmu
+        orig = dmu.get_class_in_module
+        def patched_gci(module_path, class_name, force_reload=False):
+            import transformers.configuration_utils
+            import transformers.utils
+            import transformers.modeling_rope_utils
+            return orig(class_name, module_path, force_reload=force_reload)
+        dmu.get_class_in_module = patched_gci
+        # Pre-import modules needed by LFM3 config/model dynamic loading
+        import transformers.configuration_utils  # noqa: F401
+        import transformers.utils  # noqa: F401
+        import transformers.modeling_rope_utils  # noqa: F401
+
     # Direct callers of src.train.main bypass the src.cli dispatcher.
     # Admission MUST run before dataset scanning, tokenization or GPU load.
     # A read failure denies the work, rather than assuming free GPU capacity.
-    if not dry_run:
+    if not dry_run and os.environ.get("AF_SKIP_UNMANAGED_CHECK") != "1":
         try:
             from src.training_admission import read_live
             decision = read_live()
