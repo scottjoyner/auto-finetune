@@ -28,7 +28,7 @@ ARM_EXTRA = {"muon_on_actual_lfm3_weights"}
 
 def readout_grid_view(data: object) -> tuple[dict, str]:
     if (type(data) is not dict
-            or set(data) != RECEIPT_FIELDS | EXTRA
+            or set(data) != (RECEIPT_FIELDS - {"verified_train_dev_source_authentication"}) | EXTRA
             or data["schema"] != "sg-lfm3-frozen-readout-muon-grid.v1"
             or data["muon_research_exception_only_for_two_readout_matrices"] is not True
             or data["actual_full_lfm3_finetuning"] is not False
@@ -43,6 +43,9 @@ def readout_grid_view(data: object) -> tuple[dict, str]:
         adamw_part.pop(key)
     adamw_part["schema"] = "sg-lfm3-frozen-readout-adapter.v1"
     adamw_part["no_muon_adapter_optimization_executed"] = True
+    # The four-arm original never asserted custody. Its absence is not
+    # permission; reconstruct the stricter earlier schema as explicitly false.
+    adamw_part["verified_train_dev_source_authentication"] = False
     adamw_part["arms"] = []
     for arm in arms[:2]:
         if type(arm) is not dict or set(arm) != ARM_FIELDS | ARM_EXTRA:
