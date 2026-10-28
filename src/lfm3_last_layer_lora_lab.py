@@ -53,7 +53,9 @@ def install_adapter(layer, *, rank: int = RANK):
     return A, B, handle
 
 
-def run(snapshot: Path) -> dict:
+def run(snapshot: Path, *, steps: int = 1) -> dict:
+    if type(steps) is not int or steps not in (1, 3):
+        raise ResearchRefused("only explicitly budgeted one- or three-step research allowed")
     verify_restricted_environment()
     assert_fixed_lab_contract()
     proof = verify_snapshot(snapshot)
@@ -122,26 +124,32 @@ def run(snapshot: Path) -> dict:
                 trainables, lr=LEARNING_RATE, momentum=0.95,
                 ns_steps=5, adjust_lr_fn="match_rms_adamw", weight_decay=0.0
             )
+        A_before = A.weight.detach().clone()
         try:
             with torch.no_grad():
                 before_train = float(loss_for(samples[0]))
                 before_dev = float(loss_for(samples[1]))
-            opt.zero_grad(set_to_none=True)
-            train_loss = loss_for(samples[0])
-            if not bool(torch.isfinite(train_loss)):
-                raise ResearchRefused("nonfinite end-to-end LoRA loss")
-            train_loss.backward()
-            grads = [p.grad for p in trainables]
-            if (grads[1] is None or not bool(torch.isfinite(grads[1]).all())
-                    or float(grads[1].abs().sum()) <= 0.0):
-                raise ResearchRefused("LoRA output matrix received no real-model gradient")
-            grad_norm = torch.nn.utils.clip_grad_norm_(trainables, max_norm=1.0)
-            if not bool(torch.isfinite(grad_norm)):
-                raise ResearchRefused("nonfinite LoRA gradient")
-            opt.step()
-            if (not all(bool(torch.isfinite(p).all()) for p in trainables)
-                    or float(B.weight.abs().sum()) <= 0.0):
-                raise ResearchRefused("LoRA matrices failed to update")
+            max_grad_norm = 0.0
+            for _ in range(steps):
+                opt.zero_grad(set_to_none=True)
+                train_loss = loss_for(samples[0])
+                if not bool(torch.isfinite(train_loss)):
+                    raise ResearchRefused("nonfinite end-to-end LoRA loss")
+                train_loss.backward()
+                grads = [p.grad for p in trainables]
+                if (grads[1] is None or not bool(torch.isfinite(grads[1]).all())
+                        or float(grads[1].detach().abs().sum()) <= 0.0):
+                    raise ResearchRefused("LoRA output matrix received no real-model gradient")
+                grad_norm = torch.nn.utils.clip_grad_norm_(trainables, max_norm=1.0)
+                if not bool(torch.isfinite(grad_norm)):
+                    raise ResearchRefused("nonfinite LoRA gradient")
+                max_grad_norm = max(max_grad_norm, float(grad_norm))
+                opt.step()
+                if (not all(bool(torch.isfinite(p).all()) for p in trainables)
+                        or float(B.weight.detach().abs().sum()) <= 0.0):
+                    raise ResearchRefused("LoRA matrices failed to update")
+            if steps == 3 and bool(torch.equal(A.weight.detach(), A_before)):
+                raise ResearchRefused("three-step LoRA input matrix never updated")
             with torch.no_grad():
                 after_train = float(loss_for(samples[0]))
                 after_dev = float(loss_for(samples[1]))
@@ -151,7 +159,7 @@ def run(snapshot: Path) -> dict:
             records.append({
                 "optimizer": optimizer_kind,
                 "learning_rate": LEARNING_RATE,
-                "steps": 1,
+                "steps": steps,
                 "target": TARGET,
                 "rank": RANK,
                 "trainable_adapter_parameters": sum(p.numel() for p in trainables),
@@ -159,7 +167,8 @@ def run(snapshot: Path) -> dict:
                 "train_loss_after": after_train,
                 "dev_loss_before": before_dev,
                 "dev_loss_after": after_dev,
-                "gradient_norm_before_clipping": float(grad_norm),
+                "gradient_norm_before_clipping": max_grad_norm,
+                "input_matrix_updated": not bool(torch.equal(A.weight.detach(), A_before)),
                 "verified_real_model_gradient": True,
                 "base_weight_update_executed": False,
                 "adapter_checkpoint_written": False,
@@ -170,7 +179,8 @@ def run(snapshot: Path) -> dict:
             or any(p.grad is not None or p.requires_grad for p in base)):
         raise ResearchRefused("frozen pretrained LFM3 was mutated")
     return {
-        "schema": "sg-lfm3-real-last-layer-lora-backprop.v1",
+        "schema": ("sg-lfm3-real-last-layer-lora-backprop-3step.v1"
+                   if steps == 3 else "sg-lfm3-real-last-layer-lora-backprop.v1"),
         "checkpoint_sha256": proof["checkpoint_sha256"],
         "model_revision": proof["revision"],
         "target_module": TARGET,
@@ -182,6 +192,7 @@ def run(snapshot: Path) -> dict:
         "two_train_two_dev_fabricated_only": True,
         "arms": records,
         "optimizer_model_chosen": False,
+        "train_steps_per_arm": steps,
         "heldout_evaluated": False,
         "source_custody_independently_verified": False,
         "base_model_weights_modified": False,
@@ -196,5 +207,6 @@ if __name__ == "__main__":
     p.add_argument("--offline-only", required=True, action="store_true")
     p.add_argument("--ack-sandbox-research", required=True, action="store_true")
     p.add_argument("--snapshot", required=True, type=Path)
+    p.add_argument("--three-step-research", action="store_true")
     a = p.parse_args()
-    print(json.dumps(run(a.snapshot), sort_keys=True))
+    print(json.dumps(run(a.snapshot, steps=3 if a.three_step_research else 1), sort_keys=True))
