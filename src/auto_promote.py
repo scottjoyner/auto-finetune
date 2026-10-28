@@ -50,13 +50,19 @@ class AutoPromoter:
         self.state = self._load_state()
 
     def _load_state(self) -> dict:
-        if os.path.exists(self.state_path):
-            try:
-                with open(self.state_path) as f:
-                    return json.load(f)
-            except Exception:
-                pass
-        return {"active_ab_test": None, "last_promotion": 0, "last_rollback": 0}
+        # Failing to parse persisted A/B review state must not quietly
+        # erase the pending review or the last activation/rollback record.
+        if not os.path.exists(self.state_path):
+            return {"active_ab_test": None, "last_promotion": 0, "last_rollback": 0}
+        with open(self.state_path) as stream:
+            data = json.load(stream)
+        if (type(data) is not dict
+                or set(data) != {"active_ab_test", "last_promotion", "last_rollback"}
+                or (data["active_ab_test"] is not None
+                    and (type(data["active_ab_test"]) is not str
+                         or not data["active_ab_test"]))):
+            raise ValueError("invalid auto-promote review state; operator repair required")
+        return data
 
     def _save_state(self) -> None:
         atomic_write_json(self.state_path, self.state)
