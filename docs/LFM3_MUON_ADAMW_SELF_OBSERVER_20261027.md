@@ -56,3 +56,20 @@ Official model revision `40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd`; full BF16 ch
 5. Fix existing CI coverage gap to ≥69% **without relaxing the threshold**, and investigate SensorGraft parallel journal lock contention (issue #8).
 
 **Current status: both PRs remain drafts and unmerged.**
+
+## Six-arm actual training sweep and second LFM3 observation
+
+A subsequent fixed, *non-autonomous* sweep used the same freshly initialized toy model, seed 71, synthetic train/dev data and 24 steps per arm:
+
+| Optimizer | LR 0.0005 | LR 0.0010 | LR 0.0020 |
+| --- | ---: | ---: | ---: |
+| AdamW | 0.759391 | 0.670682 | **0.520757** |
+| Muon + AdamW | 0.797437 | 0.739870 | 0.638589 |
+
+All six runs had zero nonfinite updates. The lowest development loss was **AdamW at 0.002**, but this is not a statistically significant real-LFM3 claim (one seed, fabricated tiny task, no heldout run). Saved fixed grid: `research/results/lfm3_optimizer_six_arm_toy_grid_20261027.json`.
+
+The second loop fed only the six optimizer/rate/development-loss tuples to the *same pinned real BF16 LFM3*, via `src/lfm3_optimizer_feedback_lab.py`. LFM3 again chose **A** (AdamW LR 0.001) rather than the measured development argmin **C** (AdamW LR 0.002). The external deterministic gate **refused the model recommendation**, admitted no new trial and did not execute an optimizer step. Exact negative receipt: `research/results/lfm3_optimizer_second_cycle_rejected_20261027.json`.
+
+This explicitly shows that the current LFM3 observer is **not yet a reliable automatic optimizer selector**, even when given a clear numeric development table. No autonomous self-improvement, trained controller, real LFM3 adapter, gradient steering, production promotion or heldout evaluation is demonstrated. A future curriculum may teach the observer to parse optimization telemetry, but its reward function and final evaluation must remain independently controlled.
+
+For more rigorous Muon comparisons, PyTorch offers `adjust_lr_fn="original"` and `"match_rms_adamw"`, which have different scaling across rectangular matrices. Our current synthetic grid held the former fixed and did not establish cross-optimizer LR calibration. Add multi-seed trials, randomized arm order, repeat warm-up, robust memory/energy measurement and an independent heldout final gate before deciding which optimizer wins on actual LFM3 adapters.
