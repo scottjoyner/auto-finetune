@@ -126,7 +126,7 @@ def run(snapshot: Path, gate_plan: Path, zero_plan: Path,
             inp = tok.apply_chat_template(
                 compose_messages(c["prompt"], c["reference"], with_ref),
                 tokenize=True, add_generation_prompt=True, return_dict=True,
-                return_tensors="pt",
+                return_tensors="pt", enable_thinking=False,
             )
             from contextlib import nullcontext
             context = (
@@ -158,6 +158,8 @@ def run(snapshot: Path, gate_plan: Path, zero_plan: Path,
         "learned_controller": False,
         "gate_plan_sha256": proof,
         "correctness_is_exact_raw_response": True,
+        "thinking_enabled": False,
+        "chat_template_sha256": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
     })
     return receipt
 
