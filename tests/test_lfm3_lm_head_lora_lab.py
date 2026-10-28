@@ -46,6 +46,35 @@ class FrozenLoRATests(unittest.TestCase):
             self.assertEqual(result["optimizer"], "muon_experimental")
             self.assertIsNone(h.weight.grad)
 
+    def test_muon_rms_scaling_requires_explicit_review(self):
+        from src.lfm3_lm_head_lora_lab import fit_frozen_lm_head_lora
+        from torch import optim
+        features, labels, head = self.fixture()
+        with self.assertRaises(ResearchRefused):
+            fit_frozen_lm_head_lora(
+                features, labels, head, learning_rate=0.001, steps=1,
+                optimizer="adamw", muon_lr_scaling="match_rms_adamw",
+            )
+        with self.assertRaises(ResearchRefused):
+            fit_frozen_lm_head_lora(
+                features, labels, head, learning_rate=0.001, steps=1,
+                optimizer="muon_research", muon_lr_scaling="match_rms_adamw",
+            )
+        with self.assertRaises(ResearchRefused):
+            fit_frozen_lm_head_lora(
+                features, labels, head, learning_rate=0.001, steps=1,
+                optimizer="muon_research", muon_research_exception=True,
+                muon_lr_scaling="unknown",
+            )
+        if hasattr(optim, "Muon"):
+            result = fit_frozen_lm_head_lora(
+                features, labels, head, learning_rate=0.001, steps=1,
+                optimizer="muon_research", muon_research_exception=True,
+                muon_lr_scaling="match_rms_adamw",
+            )
+            self.assertEqual(result["optimizer"], "muon_experimental_match_rms_adamw")
+            self.assertFalse(result["trained_adapter_written"])
+
     def test_unreviewed_learning_rates_refused(self):
         from src.lfm3_lm_head_lora_lab import fit_frozen_lm_head_lora
         f,y,h=self.fixture()
