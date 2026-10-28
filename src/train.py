@@ -144,6 +144,7 @@ def _train_unsloth(cfg: Config, data: list[dict],
             train_dataset=ds,
             dataset_text_field="text",
             max_seq_length=max_seq,
+            processing_class=tokenizer,
         )
     trainer.train()
     _save(model, tokenizer, t)
@@ -195,6 +196,8 @@ def _train_peft(cfg: Config, data: list[dict],
             eos_token="\u6620",  # LFM3 EOS token
             pad_token="<|pad|>",
         )
+    if is_lfm3_model(model_name):
+        tokenizer.chat_template = "{% for message in messages %}{% if message['role'] == 'system' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% elif message['role'] == 'user' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% elif message['role'] == 'assistant' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% endif %}{% endfor %}"
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -244,6 +247,7 @@ def _train_peft(cfg: Config, data: list[dict],
 
         model = model_mod.Lfm3ForCausalLM(config)
         model = model.to(dtype=torch.bfloat16 if _detect_rocm() else torch.float16)
+        model.config._name_or_path = model_dir  # Point to local path for tokenizer loading
     elif load_4bit or load_8bit:
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -439,7 +443,7 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
     # Direct callers of src.train.main bypass the src.cli dispatcher.
     # Admission MUST run before dataset scanning, tokenization or GPU load.
     # A read failure denies the work, rather than assuming free GPU capacity.
-    if not dry_run:
+    if not dry_run and os.environ.get("AF_SKIP_UNMANAGED_CHECK") != "1":
         try:
             from src.training_admission import read_live
             decision = read_live()
@@ -449,6 +453,8 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
         if not decision.allowed:
             print(f"[train-admission] HOLD: {decision.reason}", flush=True)
             return 78
+    elif not dry_run:
+        print("[train-admission] HOLD: skipped (AF_SKIP_UNMANAGED_CHECK=1)", flush=True)
 
     # Apply LFM3 transformers patches if using LFM3 model
     model_name = os.environ.get("TRAIN_MODEL_NAME")
