@@ -77,6 +77,13 @@ class RetrievalBridgeTests(unittest.TestCase):
         with self.assertRaises(UntrustedRetrievalRefused):
             validate_untrusted_packet(obj)
 
+    def test_unhashable_json_categorical_values_fail_closed(self):
+        for field in ("source_type", "trace_kind", "status"):
+            packet = sample()
+            packet["items"][0][field] = ["not", "a", "category"]
+            with self.assertRaises(UntrustedRetrievalRefused):
+                validate_untrusted_packet(packet)
+
     def test_duplicate_json_and_size_caps_are_refused(self):
         with tempfile.TemporaryDirectory() as t:
             f = Path(t) / "packet.json"
