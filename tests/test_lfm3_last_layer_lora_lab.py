@@ -60,6 +60,19 @@ class LayerLoRAGraphTests(unittest.TestCase):
         with self.assertRaises(ResearchRefused):
             run(None, steps=3, multi_seed=1)
 
+    def test_muon_scaling_study_requires_three_seed_fixed_budget(self):
+        from src.lfm3_last_layer_lora_lab import run
+        for steps, multi, compare in (
+            (1, False, True),
+            (3, False, True),
+            (1, True, True),
+            (3, True, "true"),
+        ):
+            with self.subTest(steps=steps, multi=multi, compare=compare):
+                with self.assertRaises(ResearchRefused):
+                    run(None, steps=steps, multi_seed=multi,
+                        compare_muon_scaling=compare)
+
     def test_unreviewed_or_trainable_layer_refused(self):
         from torch import nn
         from src.lfm3_last_layer_lora_lab import install_adapter
