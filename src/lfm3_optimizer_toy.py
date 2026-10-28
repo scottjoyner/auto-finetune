@@ -60,28 +60,33 @@ def classify_for_muon(named_parameters, reviewed_hidden_weights: set[str]):
     return muon, adamw
 
 
-def optimizers_for_toy(model, optimizer: str):
+def optimizers_for_toy(model, optimizer: str, *, learning_rate: float = 0.001):
     import torch
+    if (type(learning_rate) not in (int, float)
+            or not math.isfinite(learning_rate)
+            or not 0.0001 <= learning_rate <= 0.002):
+        raise OptimizerResearchRefused("toy optimizer learning rate outside fixed sweep budget")
     names = list(model.named_parameters())
     muon, adamw = classify_for_muon(names, {"hidden.weight"})
     if optimizer == "adamw":
-        return [torch.optim.AdamW(muon + adamw, lr=0.001, weight_decay=0.01)]
+        return [torch.optim.AdamW(muon + adamw, lr=learning_rate, weight_decay=0.01)]
     if optimizer != "muon_hybrid":
         raise OptimizerResearchRefused("unsupported optimizer")
     if not hasattr(torch.optim, "Muon"):
         raise OptimizerResearchRefused("native torch.optim.Muon unavailable")
     out = [torch.optim.Muon(
-        muon, lr=0.001, momentum=0.95, weight_decay=0.01,
+        muon, lr=learning_rate, momentum=0.95, weight_decay=0.01,
         ns_steps=5, adjust_lr_fn="original",
     )]
     if adamw:
         out.append(torch.optim.AdamW(
-            adamw, lr=0.001, weight_decay=0.01
+            adamw, lr=learning_rate, weight_decay=0.01
         ))
     return out
 
 
-def run_toy_arm(optimizer: str, *, steps: int = STEPS) -> dict:
+def run_toy_arm(optimizer: str, *, steps: int = STEPS,
+                learning_rate: float = 0.001) -> dict:
     if optimizer not in ("adamw", "muon_hybrid") or not 1 <= steps <= 64:
         raise OptimizerResearchRefused("toy training optimizer or budget refused")
     import torch
@@ -104,7 +109,7 @@ def run_toy_arm(optimizer: str, *, steps: int = STEPS) -> dict:
             ])
         ).cpu().float()
     model.train()
-    opts = optimizers_for_toy(model, optimizer)
+    opts = optimizers_for_toy(model, optimizer, learning_rate=learning_rate)
     grad_peak = 0.0
     nonfinite = 0
     elapsed = []
@@ -148,7 +153,7 @@ def run_toy_arm(optimizer: str, *, steps: int = STEPS) -> dict:
         "run_id": "lfm3-optim-toy-20261027",
         "train_session_sha256": train_label, "dev_session_sha256": dev_label,
         "seed": SEED, "steps": steps, "optimizer": optimizer,
-        "learning_rate": 0.001, "weight_decay": 0.01,
+        "learning_rate": learning_rate, "weight_decay": 0.01,
         "momentum": 0.95, "ns_steps": 5 if optimizer == "muon_hybrid" else 0,
         "train_loss_start": start_loss, "train_loss_end": train_end,
         "dev_loss": dev_loss, "max_grad_norm": grad_peak,
