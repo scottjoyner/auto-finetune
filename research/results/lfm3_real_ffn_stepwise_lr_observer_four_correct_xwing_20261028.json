@@ -1,0 +1,140 @@
+{
+  "all_four_original_model_votes_match_external_numeric_gate": true,
+  "any_adapter_created": false,
+  "authentic_source_witness": false,
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "future_synthetic_protocol_review_only": {
+    "execute": false,
+    "human_review_required": true,
+    "learning_rates": [
+      0.004,
+      0.004,
+      0.004
+    ],
+    "optimizer": "adamw",
+    "requires_new_independent_evaluation": true
+  },
+  "independent_numeric_schedule_gate": {
+    "all_fixed_lrs_better_than_switches": true,
+    "authentic_producer_witness": false,
+    "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+    "comparisons": [
+      {
+        "fixed_004_better_each_seed": [
+          true,
+          true,
+          true
+        ],
+        "fixed_004_development_losses": [
+          8.701119422912598,
+          9.079184532165527,
+          9.009269714355469
+        ],
+        "fixed_mean_dev_loss": 8.929857889811197,
+        "optimizer": "adamw",
+        "step1_002_then_004_development_losses": [
+          9.218924522399902,
+          9.521598815917969,
+          9.458869934082031
+        ],
+        "switch_improves_all_seeds": false,
+        "switched_mean_dev_loss": 9.399797757466635,
+        "switched_minus_fixed_by_seed": [
+          0.5178050994873047,
+          0.4424142837524414,
+          0.4496002197265625
+        ]
+      },
+      {
+        "fixed_004_better_each_seed": [
+          true,
+          true,
+          true
+        ],
+        "fixed_004_development_losses": [
+          11.891962051391602,
+          11.876373291015625,
+          11.876313209533691
+        ],
+        "fixed_mean_dev_loss": 11.881549517313639,
+        "optimizer": "muon_match_rms_adamw",
+        "step1_002_then_004_development_losses": [
+          11.891973495483398,
+          11.891962051391602,
+          11.891960144042969
+        ],
+        "switch_improves_all_seeds": false,
+        "switched_mean_dev_loss": 11.89196523030599,
+        "switched_minus_fixed_by_seed": [
+          0.000011444091796875,
+          0.015588760375976562,
+          0.015646934509277344
+        ]
+      }
+    ],
+    "heldout_evaluated": false,
+    "independent_task_generalization_proven": false,
+    "learning_rate_changed_during_bounded_training": true,
+    "may_change_fleet_optimizer": false,
+    "may_execute_optimizer_proposal": false,
+    "may_promote": false,
+    "may_save_model_weights": false,
+    "model_selected_lr_change": false,
+    "original_backbone_frozen": true,
+    "production_ready": false,
+    "schema": "sg-lfm3-real-ffn-native-lr-schedule-review.v1"
+  },
+  "model_can_modify_optimizer": false,
+  "model_can_run_new_training": false,
+  "optimizer_settings_modified": false,
+  "original_backbone_modified": false,
+  "production_ready": false,
+  "schema": "sg-lfm3-real-ffn-stepwise-schedule-self-observation.v1",
+  "votes": [
+    {
+      "choice": "A",
+      "layout": 0,
+      "logits": {
+        "A": 20.875,
+        "B": 13.3125
+      },
+      "matches_external_gate": true,
+      "optimizer": "adamw"
+    },
+    {
+      "choice": "A",
+      "layout": 1,
+      "logits": {
+        "A": 21.375,
+        "B": 16.75
+      },
+      "matches_external_gate": true,
+      "optimizer": "adamw"
+    },
+    {
+      "choice": "A",
+      "layout": 0,
+      "logits": {
+        "A": 20.25,
+        "B": 13.4375
+      },
+      "matches_external_gate": true,
+      "optimizer": "muon_match_rms_adamw"
+    },
+    {
+      "choice": "A",
+      "layout": 1,
+      "logits": {
+        "A": 21.625,
+        "B": 16.625
+      },
+      "matches_external_gate": true,
+      "optimizer": "muon_match_rms_adamw"
+    }
+  ],
+  "node": "xwing",
+  "experiment_date": "2026-10-28",
+  "source_commit": "dead850068467fd9b6167ade8db0e0204a945f80",
+  "network_disabled": true,
+  "independently_authenticated": false
+}
