@@ -16,7 +16,11 @@
     "source_authenticated": false,
     "steps_completed": 3
   },
+  "evidence_is_research_only": true,
   "exact_cross_process_state": true,
+  "experiment_date": "2026-10-28",
+  "independent_power_loss_verification": false,
+  "node": "xwing",
   "optimizer": "muon_match_rms_adamw",
   "power_loss_tested": false,
   "production_ready": false,
@@ -55,9 +59,5 @@
     "steps_completed": 1
   },
   "schema": "sg-lfm3-native-ffn-cross-process-verified.v1",
-  "experiment_date": "2026-10-28",
-  "node": "xwing",
-  "source_commit": "20c5d02651a8868cfca1533ebc664ff90bc9c17e",
-  "evidence_is_research_only": true,
-  "independent_power_loss_verification": false
+  "source_commit": "1b1450d4929ebf97f58d20e7bf765027019ca265"
 }
