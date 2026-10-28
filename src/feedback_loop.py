@@ -10,6 +10,7 @@ and uses them to:
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 from dataclasses import asdict, dataclass, field
@@ -80,6 +81,8 @@ class FeedbackCollector:
                issues: list[str] | None = None,
                metadata: dict | None = None) -> str:
         """Record a feedback entry."""
+        if type(score) not in (int, float) or not math.isfinite(score) or not 0 <= score <= 1:
+            raise ValueError("feedback score must be finite and between 0 and 1")
         entry_id = f"fb-{int(time.time() * 1000)}"
         entry = FeedbackEntry(
             entry_id=entry_id,
@@ -119,7 +122,7 @@ class FeedbackCollector:
         lower = entry.output_text.lower()
         if any(p in lower for p in error_patterns):
             issues.append("error_in_output")
-        return issues
+        return list(dict.fromkeys(issues))
 
     def analyze(self) -> FeedbackSummary:
         """Analyze all feedback and return summary."""
@@ -141,7 +144,7 @@ class FeedbackCollector:
 
         summary.issue_distribution = issue_dist
         summary.low_quality_count = sum(1 for e in self.entries if e.score < 0.5)
-        summary.flagged_sessions = list(flagged)[:100]
+        summary.flagged_sessions = sorted(flagged)[:100]
 
         # Count repair pairs (entries with expected_text)
         summary.repair_pairs = sum(1 for e in self.entries if e.expected_text)
@@ -153,7 +156,8 @@ class FeedbackCollector:
     def get_flagged_sessions(self) -> list[str]:
         """Return session IDs that should be excluded from training."""
         self.analyze()
-        return [s for s in self.entries if s.score < 0.3 or "error_in_output" in s.issues]
+        return list(dict.fromkeys(entry.session_id for entry in self.entries
+                                  if entry.score < 0.3 or "error_in_output" in entry.issues))[:100]
 
     def generate_repair_pairs(self, output_path: str) -> int:
         """Generate contrastive repair pairs from feedback."""
