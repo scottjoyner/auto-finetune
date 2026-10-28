@@ -31,6 +31,15 @@ def strict_budget(seed=SEED, total=TOTAL_STEPS, resume=RESUME_AFTER_STEP):
     return True
 
 
+def admit_checkpoint_bytes(packet: object, digest: object) -> bool:
+    if (type(packet) is not bytes or not 0 < len(packet) <= 64*1024*1024
+            or type(digest) is not str or len(digest) != 64
+            or any(letter not in "0123456789abcdef" for letter in digest)
+            or hashlib.sha256(packet).hexdigest() != digest):
+        raise ResearchRefused("optimizer checkpoint bytes failed bounded SHA256 admission")
+    return True
+
+
 def run(snapshot: Path) -> dict:
     strict_budget()
     verify_restricted_environment()
@@ -127,15 +136,11 @@ def run(snapshot: Path) -> dict:
                 memory=io.BytesIO()
                 torch.save(state,memory)
                 packet=memory.getvalue()
-                if not 0 < len(packet) <= 64*1024*1024:
-                    raise ResearchRefused("in-memory optimizer checkpoint out of bounds")
                 memory_checkpoint_sha=hashlib.sha256(packet).hexdigest()
                 memory_checkpoint_bytes=len(packet)
-                # No filesystem checkpoint. Validate bytes before a strictly
-                # weights-only deserialization, and recreate BOTH trainable
-                # matrices and the native optimizer state.
-                if hashlib.sha256(packet).hexdigest() != memory_checkpoint_sha:
-                    raise ResearchRefused("in-memory optimizer checkpoint altered")
+                # No filesystem checkpoint. Validate byte budget and SHA
+                # before weights-only deserialization into new tensors.
+                admit_checkpoint_bytes(packet, memory_checkpoint_sha)
                 state=torch.load(io.BytesIO(packet),map_location="cpu",weights_only=True)
                 if type(state["step"]) is not int or state["step"] != 1:
                     raise ResearchRefused("checkpoint step identity mismatch")
