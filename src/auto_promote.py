@@ -34,7 +34,7 @@ class PromotionConfig:
     max_regression: float = 0.1  # Max allowed regression from active model
     auto_rollback: bool = True
     ab_test_duration_hours: float = 24.0
-    require_manual_approval: bool = True
+    require_manual_approval: bool = True  # Legacy flag; false cannot bypass review.
 
 
 class AutoPromoter:
@@ -154,58 +154,16 @@ class AutoPromoter:
             result["details"] = f"Test still running: {elapsed_hours:.1f}h / {self.config.ab_test_duration_hours}h"
             return result
 
-        # Completing an A/B test automatically promotes a model. Research
-        # results alone never authorize this side effect in default mode.
-        if self.config.require_manual_approval:
-            result["action"] = "review_required"
-            result["details"] = (
-                f"A/B test {test_id} requires human approval; "
-                "no registry mutation or model activation performed"
-            )
-            return result
-        # Explicit legacy opt-in only.
-        winner = self.registry.complete_ab_test(test_id, "score",
-                                                operator_confirmed=True)
-        if winner:
-            self.state["active_ab_test"] = None
-            self.state["last_promotion"] = time.time()
-            self._save_state()
-
-            # Get winner version
-            winner_v = self.registry.get(winner)
-            loser_id = ab.version_b if winner == ab.version_a else ab.version_a
-
-            # Check for regression
-            avg_winner = ab.metrics_a.get("score", 0) / max(1, ab.metrics_a.get("score_count", 1)) if winner == ab.version_a else ab.metrics_b.get("score", 0) / max(1, ab.metrics_b.get("score_count", 1))
-            avg_loser = ab.metrics_b.get("score", 0) / max(1, ab.metrics_b.get("score_count", 1)) if winner == ab.version_a else ab.metrics_a.get("score", 0) / max(1, ab.metrics_a.get("score_count", 1))
-
-            if avg_winner < self.config.min_score_threshold:
-                # New model doesn't meet minimum; rollback
-                if self.config.auto_rollback:
-                    # Re-promote the loser
-                    self.registry.promote(loser_id, operator_confirmed=True)
-                    self.state["last_rollback"] = time.time()
-                    self._save_state()
-                    self.alerts.fire("warning", "auto_promote",
-                                    f"New model {winner} below threshold ({avg_winner:.3f}); rolled back to {loser_id}")
-                    result = {"action": "rollback", "details": f"Promoted {loser_id} (winner {winner} below threshold)"}
-                else:
-                    result = {"action": "promoted_with_warning", "details": f"Promoted {winner} (below threshold)"}
-            elif avg_loser > 0 and (avg_loser - avg_winner) > self.config.max_regression:
-                # Regression detected
-                if self.config.auto_rollback:
-                    self.registry.promote(loser_id, operator_confirmed=True)
-                    self.state["last_rollback"] = time.time()
-                    self._save_state()
-                    self.alerts.fire("warning", "auto_promote",
-                                    f"Regression detected: {winner} ({avg_winner:.3f}) < {loser_id} ({avg_loser:.3f})")
-                    result = {"action": "rollback", "details": f"Rolled back to {loser_id}"}
-                else:
-                    result = {"action": "promoted_with_regression", "details": f"Promoted {winner} despite regression"}
-            else:
-                result = {"action": "promoted", "details": f"Promoted {winner} (score: {avg_winner:.3f})"}
-                self.alerts.fire("info", "auto_promote", f"Model promoted: {winner} (score: {avg_winner:.3f})")
-
+        # An LFM3 advisor, A/B metric collector, or legacy configuration
+        # is never a trusted actor for model activation.  The only output of
+        # this automated pipeline is a read-only review recommendation.
+        # Human approval must be verified at a separate model-serving boundary;
+        # require_manual_approval=False from old config has NO effect.
+        result["action"] = "review_required"
+        result["details"] = (
+            f"A/B test {test_id} is eligible for independent operator review; "
+            "automatic model activation and rollback are disabled"
+        )
         return result
 
     def status(self) -> dict:
