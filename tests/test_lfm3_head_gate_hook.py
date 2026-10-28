@@ -4,10 +4,8 @@ import hashlib
 import json
 import os
 import subprocess
-import sys
 import unittest
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"src"))
-from lfm3_head_gate_hook import (
+from src.lfm3_head_gate_hook import (
     GateHookRefused,strict_json,validate,synthetic_head_gate_hooks,
     ATTENTION_LAYERS,CONFIG_SHA256
 )
