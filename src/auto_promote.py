@@ -164,7 +164,8 @@ class AutoPromoter:
             )
             return result
         # Explicit legacy opt-in only.
-        winner = self.registry.complete_ab_test(test_id, "score")
+        winner = self.registry.complete_ab_test(test_id, "score",
+                                                operator_confirmed=True)
         if winner:
             self.state["active_ab_test"] = None
             self.state["last_promotion"] = time.time()
@@ -182,7 +183,7 @@ class AutoPromoter:
                 # New model doesn't meet minimum; rollback
                 if self.config.auto_rollback:
                     # Re-promote the loser
-                    self.registry.promote(loser_id)
+                    self.registry.promote(loser_id, operator_confirmed=True)
                     self.state["last_rollback"] = time.time()
                     self._save_state()
                     self.alerts.fire("warning", "auto_promote",
@@ -193,7 +194,7 @@ class AutoPromoter:
             elif avg_loser > 0 and (avg_loser - avg_winner) > self.config.max_regression:
                 # Regression detected
                 if self.config.auto_rollback:
-                    self.registry.promote(loser_id)
+                    self.registry.promote(loser_id, operator_confirmed=True)
                     self.state["last_rollback"] = time.time()
                     self._save_state()
                     self.alerts.fire("warning", "auto_promote",
