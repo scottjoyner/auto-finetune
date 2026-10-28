@@ -46,9 +46,17 @@ class OptimizerToyTests(unittest.TestCase):
         with self.assertRaises(OptimizerResearchRefused):
             classify_for_muon([("hidden.weight", p)], {"hidden.weight"})
 
-    def test_both_native_optimizers_really_step_and_do_not_save_weights(self):
+    def test_native_optimizer_updates_or_explicit_muon_refusal(self):
+        import torch
         from src.lfm3_optimizer_toy import run_toy_arm
         adamw = run_toy_arm("adamw", steps=3)
+        if not hasattr(torch.optim, "Muon"):
+            # Hosted Torch versions without native Muon must refuse rather
+            # than silently swap in AdamW or claim a completed Muon trial.
+            with self.assertRaises(OptimizerResearchRefused):
+                run_toy_arm("muon_hybrid", steps=3)
+            self.assertFalse(adamw["model_weights_written"])
+            return
         muon = run_toy_arm("muon_hybrid", steps=3)
         self.assertEqual(adamw["nonfinite_updates"], 0)
         self.assertEqual(muon["nonfinite_updates"], 0)
