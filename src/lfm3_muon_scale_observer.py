@@ -59,6 +59,7 @@ def validate_six_arm_grid(data: object) -> tuple[list[dict], str]:
         or data["production_ready"] is not False
         or data["network_disabled_bwrap"] is not True
         or data["heldout_final_evaluation"] is not False
+        or type(data["independent_repetitions"]) is not int
         or data["independent_repetitions"] != 0
         or data["node"] != "xwing"
         or data["experiment_date"] != "2026-10-28"
@@ -66,6 +67,8 @@ def validate_six_arm_grid(data: object) -> tuple[list[dict], str]:
         or type(data["dev_split_sha256"]) is not str
         or len(data["training_split_sha256"]) != 64
         or len(data["dev_split_sha256"]) != 64
+        or any(ch not in "0123456789abcdef" for ch in data["training_split_sha256"])
+        or any(ch not in "0123456789abcdef" for ch in data["dev_split_sha256"])
         or data["training_split_sha256"] == data["dev_split_sha256"]
     ):
         raise OptimizerResearchRefused("Muon's calibration source/custody boundary violated")
@@ -82,6 +85,7 @@ def validate_six_arm_grid(data: object) -> tuple[list[dict], str]:
             or type(trial["learning_rate"]) is not float or trial["learning_rate"] != lr
             or type(trial["steps"]) is not int or trial["steps"] != 8
             or type(trial["lora_rank"]) is not int or trial["lora_rank"] != 4
+            or type(trial["lora_alpha"]) not in (int, float)
             or trial["lora_alpha"] != 1.0
             or trial["target"] != "model.lm_head.weight"
             or type(trial["trainable_parameters"]) is not int
