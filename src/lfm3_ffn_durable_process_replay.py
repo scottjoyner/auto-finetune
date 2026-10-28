@@ -165,8 +165,8 @@ def load_durable(directory: Path, optimizer: str):
             or state["model_sha256"]!=MODEL_SHA or state["model_revision"]!=SNAPSHOT_REV
             or state["seed"]!=SEED or state["step"]!=RESUME_STEP
             or state["target"]!=TARGET or state["rank"]!=RANK
-            or type(state["A"]) is not dict or type(state["B"]) is not dict
-            or type(state["optimizer_state"]) is not dict):
+            or not isinstance(state["A"], dict) or not isinstance(state["B"], dict)
+            or not isinstance(state["optimizer_state"], dict)):
         raise ResearchRefused("optimizer checkpoint model/shape/step mismatch")
     A=state["A"].get("weight")
     B=state["B"].get("weight")
