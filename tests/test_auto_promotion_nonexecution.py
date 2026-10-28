@@ -1,4 +1,5 @@
 """No internal automatic model activation, including obsolete config flags."""
+import json
 import tempfile
 import time
 import unittest
@@ -7,6 +8,24 @@ from unittest.mock import MagicMock
 from src.auto_promote import AutoPromoter, PromotionConfig
 
 class NoAutoActivationTests(unittest.TestCase):
+    def test_corrupted_review_state_is_not_silently_reset(self):
+        tmp=tempfile.TemporaryDirectory(prefix="pending-review-corruption-")
+        self.addCleanup(tmp.cleanup)
+        cfg=MagicMock()
+        cfg.path.return_value=tmp.name
+        state_file=__import__("pathlib").Path(tmp.name)/"auto-promote-state.json"
+        for content in ("broken {", "{}", '{"active_ab_test": true, "last_promotion": 0, "last_rollback": 0}'):
+            with self.subTest(contents=content):
+                state_file.write_text(content)
+                with self.assertRaises((ValueError, TypeError)):
+                    AutoPromoter(cfg)
+                self.assertEqual(state_file.read_text(),content)
+        state_file.write_text(json.dumps({
+            "active_ab_test":"fictional-review", "last_promotion":0,
+            "last_rollback":0}))
+        promoter=AutoPromoter(cfg)
+        self.assertEqual(promoter.state["active_ab_test"],"fictional-review")
+
     def test_legacy_config_does_not_bypass_manual_review(self):
         tmp=tempfile.TemporaryDirectory(prefix="activation-boundary-research-")
         self.addCleanup(tmp.cleanup)
