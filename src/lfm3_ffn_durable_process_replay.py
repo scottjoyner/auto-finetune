@@ -186,7 +186,7 @@ def canonical_state_sha(value) -> str:
         if isinstance(v,torch.Tensor):
             t=v.detach().cpu().contiguous()
             h.update(b"T"+str(t.dtype).encode()+repr(tuple(t.shape)).encode())
-            h.update(t.view(torch.uint8).numpy().tobytes())
+            h.update(t.reshape(-1).view(torch.uint8).numpy().tobytes())
         elif isinstance(v, dict):
             h.update(b"D")
             for k in sorted(v,key=lambda x:(str(type(x)),str(x))):
