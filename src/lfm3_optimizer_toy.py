@@ -86,13 +86,15 @@ def optimizers_for_toy(model, optimizer: str, *, learning_rate: float = 0.001):
 
 
 def run_toy_arm(optimizer: str, *, steps: int = STEPS,
-                learning_rate: float = 0.001) -> dict:
-    if optimizer not in ("adamw", "muon_hybrid") or not 1 <= steps <= 64:
+                learning_rate: float = 0.001, seed: int = SEED) -> dict:
+    if (optimizer not in ("adamw", "muon_hybrid") or type(steps) is not int
+            or not 1 <= steps <= 64 or type(seed) is not int
+            or not 0 <= seed < 2**32):
         raise OptimizerResearchRefused("toy training optimizer or budget refused")
     import torch
     from torch import nn
     torch.set_num_threads(2)
-    generator = torch.Generator(device="cpu").manual_seed(SEED)
+    generator = torch.Generator(device="cpu").manual_seed(seed)
     train_x = torch.randn((96, 12), generator=generator)
     dev_x = torch.randn((48, 12), generator=generator)
     truth = torch.randn((12, 4), generator=generator)
@@ -100,7 +102,7 @@ def run_toy_arm(optimizer: str, *, steps: int = STEPS,
     dev_y = torch.tanh(dev_x @ truth)
     # Model params are reset from exactly the same seed for BOTH optimizer arms.
     with torch.random.fork_rng(devices=[]):
-        torch.manual_seed(SEED)
+        torch.manual_seed(seed)
         model = nn.Sequential(
             __import__("collections").OrderedDict([
                 ("hidden", nn.Linear(12, 24)),
@@ -143,16 +145,27 @@ def run_toy_arm(optimizer: str, *, steps: int = STEPS,
         train_end = float(nn.functional.mse_loss(model(train_x), train_y))
         dev_loss = float(nn.functional.mse_loss(model(dev_x), dev_y))
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
-    train_label = hashlib.sha256(b"sg-toy-train-fabricated-v1").hexdigest()
-    dev_label = hashlib.sha256(b"sg-toy-dev-fabricated-v1").hexdigest()
+    # Preserve the frozen original seed-71 receipts; every additional seed
+    # gets distinct train/dev identity digests to avoid false split pairing.
+    if seed == SEED:
+        train_label = hashlib.sha256(b"sg-toy-train-fabricated-v1").hexdigest()
+        dev_label = hashlib.sha256(b"sg-toy-dev-fabricated-v1").hexdigest()
+    else:
+        train_label = hashlib.sha256(
+            f"sg-toy-train-fabricated-v1:seed:{seed}".encode()
+        ).hexdigest()
+        dev_label = hashlib.sha256(
+            f"sg-toy-dev-fabricated-v1:seed:{seed}".encode()
+        ).hexdigest()
     result = {
         "schema": "sg-lfm3-optimizer-observation.v1",
         "source": "fabricated-synthetic-lab-only",
         "model_scope": "toy-proxy-not-lfm3-finetuning",
         "reference_lfm3_checkpoint_sha256": CHECKPOINT,
-        "run_id": "lfm3-optim-toy-20261027",
+        "run_id": ("lfm3-optim-toy-20261027" if seed == SEED
+                    else f"lfm3-optim-toy-seed-{seed}"),
         "train_session_sha256": train_label, "dev_session_sha256": dev_label,
-        "seed": SEED, "steps": steps, "optimizer": optimizer,
+        "seed": seed, "steps": steps, "optimizer": optimizer,
         "learning_rate": learning_rate, "weight_decay": 0.01,
         "momentum": 0.95, "ns_steps": 5 if optimizer == "muon_hybrid" else 0,
         "train_loss_start": start_loss, "train_loss_end": train_end,
