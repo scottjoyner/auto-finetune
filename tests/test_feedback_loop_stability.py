@@ -61,6 +61,26 @@ class FeedbackStabilityTests(unittest.TestCase):
                 self.collector.record("bad","synthetic","input","output",score=score)
         self.assertEqual(self.collector.entries, [])
 
+    def test_corrupt_or_nonfinite_persisted_scores_cannot_reenter_feedback(self):
+        self.collector.record("valid", "synthetic", "fabricated",
+                              "normal fictional output", score=0.8)
+        path = self.root / "feedback.jsonl"
+        with path.open("a") as out:
+            out.write("{bad-json}\n")
+            out.write(json.dumps({
+                "entry_id":"legacy-bad","session_id":"bad","model_version":"model",
+                "input_text":"fiction", "output_text":"fiction","score":float("nan")
+            })+"\n")
+            out.write(json.dumps({
+                "entry_id":"legacy-valid","session_id":"later","model_version":"model",
+                "input_text":"fiction", "output_text":"fiction","score":0.2
+            })+"\n")
+        replayed = FeedbackCollector(self.cfg)
+        self.assertEqual([e.session_id for e in replayed.entries],
+                         ["valid", "later"])
+        self.assertEqual(replayed.analyze().total_entries, 2)
+        self.assertTrue(math.isfinite(replayed.summary()["avg_score"]))
+
     def test_repair_pairs_are_explicit_and_persist_in_scratch(self):
         self.collector.record("a","synthetic","fiction","incorrect",
                               score=0.2,expected_text="correct")
