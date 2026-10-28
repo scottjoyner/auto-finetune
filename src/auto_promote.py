@@ -134,9 +134,15 @@ class AutoPromoter:
         count_a = ab.metrics_a.get("score_count", 0)
         count_b = ab.metrics_b.get("score_count", 0)
         total = count_a + count_b
-
-        if total < self.config.min_feedback_samples:
-            result["details"] = f"Insufficient feedback: {total}/{self.config.min_feedback_samples}"
+        if (type(count_a) is not int or type(count_b) is not int
+                or count_a < 0 or count_b < 0):
+            result["details"] = "Invalid A/B feedback counts; no mutation"
+            return result
+        if min(count_a, count_b) < self.config.min_feedback_samples:
+            result["details"] = (
+                f"Insufficient per-arm feedback: A={count_a}, B={count_b}, "
+                f"minimum={self.config.min_feedback_samples} each"
+            )
             return result
 
         # Check if test duration exceeded
@@ -145,7 +151,16 @@ class AutoPromoter:
             result["details"] = f"Test still running: {elapsed_hours:.1f}h / {self.config.ab_test_duration_hours}h"
             return result
 
-        # Complete the test
+        # Completing an A/B test automatically promotes a model. Research
+        # results alone never authorize this side effect in default mode.
+        if self.config.require_manual_approval:
+            result["action"] = "review_required"
+            result["details"] = (
+                f"A/B test {test_id} requires human approval; "
+                "no registry mutation or model activation performed"
+            )
+            return result
+        # Explicit legacy opt-in only.
         winner = self.registry.complete_ab_test(test_id, "score")
         if winner:
             self.state["active_ab_test"] = None
