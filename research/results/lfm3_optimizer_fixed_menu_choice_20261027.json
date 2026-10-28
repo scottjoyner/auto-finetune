@@ -1,0 +1,46 @@
+{
+  "admitted_new_trial_proposal": {
+    "cycle_index": 1,
+    "execution_scope": "new-synthetic-experiment-only",
+    "learning_rate": 0.001,
+    "momentum": 0.95,
+    "ns_steps": 0,
+    "observer": "lfm3-untrusted-advisor",
+    "parent_observation_sha256": "da5b317ecb483a82dd52a634cc592492d79fc9075ba79e3084c2bebf94f07880",
+    "reason_code": "controlled_optimizer_comparison",
+    "schema": "sg-lfm3-optimizer-proposal.v1",
+    "steps": 24,
+    "target_optimizer": "adamw",
+    "weight_decay": 0.01
+  },
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "choice_logit_scores": {
+    "A": 13.4375,
+    "B": 8.75,
+    "C": 9.5,
+    "D": 9.375,
+    "E": 5.40625,
+    "F": 5.5625
+  },
+  "chosen_option": "A",
+  "freeform_model_json_executed": false,
+  "heldout_consulted": false,
+  "model_checkpoint_modified": false,
+  "optimizer_executed": false,
+  "options": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F"
+  ],
+  "parent_observation_sha256": "da5b317ecb483a82dd52a634cc592492d79fc9075ba79e3084c2bebf94f07880",
+  "production_ready": false,
+  "schema": "sg-lfm3-optimizer-constrained-choice.v1",
+  "source": "fabricated-toy-optimizer-metrics",
+  "experiment_date": "2026-10-27",
+  "node": "xwing",
+  "source_data": "fabricated-toy-only",
+  "independent_replication": false
+}
