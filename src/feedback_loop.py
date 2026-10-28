@@ -63,10 +63,20 @@ class FeedbackCollector:
                 with open(self.feedback_path) as f:
                     for line in f:
                         line = line.strip()
-                        if line:
+                        if not line:
+                            continue
+                        try:
                             data = json.loads(line)
+                            score = data.get("score")
+                            if (type(score) not in (int, float)
+                                    or not math.isfinite(score)
+                                    or not 0 <= score <= 1):
+                                continue
                             self.entries.append(FeedbackEntry(**data))
-            except Exception:
+                        except (TypeError, ValueError, KeyError):
+                            # A bad legacy row must not poison all later feedback.
+                            continue
+            except OSError:
                 pass
 
     def _save_entry(self, entry: FeedbackEntry) -> None:
