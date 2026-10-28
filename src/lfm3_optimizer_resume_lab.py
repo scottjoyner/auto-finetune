@@ -7,6 +7,7 @@ real LFM3 finetuning or permission to promote a resumed experiment.
 """
 from __future__ import annotations
 import hashlib
+import hmac
 import io
 import json
 
@@ -107,9 +108,14 @@ def capture_in_memory(model, opts, *, optimizer: str, next_step: int):
     return raw
 
 
-def restore_in_memory(raw: bytes, *, optimizer: str):
+def restore_in_memory(raw: bytes, *, optimizer: str, expected_sha256: str):
     if type(raw) is not bytes or not 0 < len(raw) <= 256_000:
         raise OptimizerResearchRefused("optimizer checkpoint size invalid")
+    # The caller must hold the expected digest independently of this payload.
+    # This is equality verification only, not source-custody authentication.
+    if (type(expected_sha256) is not str or len(expected_sha256) != 64
+            or not hmac.compare_digest(hashlib.sha256(raw).hexdigest(), expected_sha256)):
+        raise OptimizerResearchRefused("optimizer checkpoint digest mismatch before load")
     import torch
     # Untrusted external checkpoints are never admitted: this function
     # is used only with the freshly produced in-process buffer.
@@ -135,13 +141,20 @@ def restore_in_memory(raw: bytes, *, optimizer: str):
             or type(saved["optimizer_states"]) is not list
             or len(saved["optimizer_states"]) != len(opt)):
         raise OptimizerResearchRefused("model tensor or optimizer count mismatch")
+    expected_weights = model.state_dict()
+    for name, weight in saved["weights"].items():
+        reference = expected_weights[name]
+        if (type(weight) is not torch.Tensor
+                or weight.dtype != reference.dtype
+                or tuple(weight.shape) != tuple(reference.shape)
+                or not bool(torch.isfinite(weight).all())):
+            raise OptimizerResearchRefused("resume model tensor dtype/shape/finite mismatch")
     model.load_state_dict(saved["weights"], strict=True)
     for current, state in zip(opt, saved["optimizer_states"]):
         if (type(state) is not dict
                 or type(state.get("param_groups")) is not list
                 or len(state["param_groups"]) != len(current.param_groups)
-                or any(group["lr"] != LEARNING_RATE
-                       for group in state["param_groups"])):
+                or state["param_groups"] != current.state_dict()["param_groups"]):
             raise OptimizerResearchRefused("optimizer state/group mismatch")
         current.load_state_dict(state)
     if type(saved["rng_state"]) is not torch.Tensor or saved["rng_state"].dtype != torch.uint8:
@@ -172,7 +185,9 @@ def run(mode: str) -> dict:
     steps(fresh, fresh_opt, x, y, 0, SPLIT_STEP)
     raw = capture_in_memory(fresh, fresh_opt, optimizer=mode, next_step=SPLIT_STEP)
     scratch_sha = hashlib.sha256(raw).hexdigest()
-    recovered, recovered_opt, cursor = restore_in_memory(raw, optimizer=mode)
+    recovered, recovered_opt, cursor = restore_in_memory(
+        raw, optimizer=mode, expected_sha256=scratch_sha
+    )
     steps(recovered, recovered_opt, x, y, cursor, STEPS)
     resumed = parameter_digest(recovered)
     same_optimizer_state = True
