@@ -6,6 +6,7 @@ Stores version metadata in a JSON registry file.
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 from dataclasses import asdict, dataclass, field
@@ -104,8 +105,10 @@ class ModelRegistry:
             versions = [v for v in versions if v.status == status]
         return sorted(versions, key=lambda v: v.created_at, reverse=True)
 
-    def promote(self, version_id: str) -> bool:
-        """Promote a candidate to active (retires previous active)."""
+    def promote(self, version_id: str, *, operator_confirmed: bool = False) -> bool:
+        """Activate only after the caller explicitly confirms model promotion."""
+        if operator_confirmed is not True:
+            return False
         mv = self._versions.get(version_id)
         if not mv:
             return False
@@ -141,7 +144,8 @@ class ModelRegistry:
 
     def start_ab_test(self, version_a: str, version_b: str) -> str | None:
         """Start an A/B test between two versions."""
-        if version_a not in self._versions or version_b not in self._versions:
+        if (version_a not in self._versions or version_b not in self._versions
+                or version_a == version_b):
             return None
         test_id = f"ab-{int(time.time())}"
         ab = ABTest(
@@ -153,12 +157,20 @@ class ModelRegistry:
         self._ab_tests[test_id] = ab
         self._versions[version_a].ab_test_group = test_id
         self._versions[version_b].ab_test_group = test_id
-        self._versions[version_a].status = "testing"
-        self._versions[version_b].status = "testing"
+        # Preserve the current active model while the candidate is evaluated.
+        # An A/B test does NOT interrupt the serving baseline.
+        if self._versions[version_a].status != "active":
+            self._versions[version_a].status = "testing"
+        if self._versions[version_b].status != "active":
+            self._versions[version_b].status = "testing"
         self._save()
         return test_id
 
     def record_ab_metric(self, test_id: str, version: str, metric: str, value: float) -> bool:
+        if (type(metric) is not str or not metric or metric.endswith("_count")
+                or type(value) not in (float, int) or not math.isfinite(value)
+                or (metric == "score" and not 0 <= value <= 1)):
+            return False
         ab = self._ab_tests.get(test_id)
         if not ab or ab.status != "running":
             return False
@@ -173,10 +185,22 @@ class ModelRegistry:
         self._save()
         return True
 
-    def complete_ab_test(self, test_id: str, metric: str = "score") -> str | None:
-        """Complete an A/B test and determine winner by metric."""
+    def complete_ab_test(self, test_id: str, metric: str = "score",
+                         *, operator_confirmed: bool = False) -> str | None:
+        """Completing an A/B test also activates its winner; default deny."""
+        if operator_confirmed is not True or metric != "score":
+            return None
         ab = self._ab_tests.get(test_id)
         if not ab or ab.status != "running":
+            return None
+        if (type(ab.metrics_a.get("score_count")) is not int
+                or type(ab.metrics_b.get("score_count")) is not int
+                or min(ab.metrics_a["score_count"], ab.metrics_b["score_count"]) < 1
+                or any(type(ab.metrics_a.get(key)) not in (int, float)
+                       or type(ab.metrics_b.get(key)) not in (int, float)
+                       or not math.isfinite(ab.metrics_a[key])
+                       or not math.isfinite(ab.metrics_b[key])
+                       for key in ("score",))):
             return None
         ab.end_time = time.time()
         ab.status = "completed"
@@ -191,7 +215,7 @@ class ModelRegistry:
         ab.winner = winner
 
         # Promote winner
-        self.promote(winner)
+        self.promote(winner, operator_confirmed=True)
         # Retire loser
         loser = ab.version_b if winner == ab.version_a else ab.version_a
         if loser in self._versions:
@@ -238,6 +262,7 @@ def main(argv=None) -> int:
 
     prom = sub.add_parser("promote", help="Promote a version to active")
     prom.add_argument("--version", required=True)
+    prom.add_argument("--confirm-activation", action="store_true")
 
     ab = sub.add_parser("ab-test", help="Start A/B test")
     ab.add_argument("--a", required=True)
@@ -252,6 +277,7 @@ def main(argv=None) -> int:
     abc = sub.add_parser("ab-complete", help="Complete A/B test")
     abc.add_argument("--test", required=True)
     abc.add_argument("--metric", default="score")
+    abc.add_argument("--confirm-activation", action="store_true")
 
     args = parser.parse_args(argv)
 
@@ -271,7 +297,7 @@ def main(argv=None) -> int:
     elif args.action == "summary":
         print(json.dumps(registry.summary(), indent=2))
     elif args.action == "promote":
-        if registry.promote(args.version):
+        if registry.promote(args.version, operator_confirmed=args.confirm_activation):
             print(f"[registry] Promoted: {args.version}")
         else:
             print(f"[registry] Not found: {args.version}")
@@ -287,7 +313,8 @@ def main(argv=None) -> int:
         else:
             print("[registry] Failed to record metric")
     elif args.action == "ab-complete":
-        winner = registry.complete_ab_test(args.test, args.metric)
+        winner = registry.complete_ab_test(args.test, args.metric,
+                                           operator_confirmed=args.confirm_activation)
         if winner:
             print(f"[registry] Winner: {winner}")
         else:
