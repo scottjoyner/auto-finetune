@@ -68,7 +68,11 @@ def _read_regular(path: Path, max_bytes: int) -> bytes:
         if not stat.S_ISREG(real.st_mode) or real.st_nlink!=1 or real.st_ino!=st.st_ino or real.st_dev!=st.st_dev:
             raise ResearchRefused("checkpoint input identity changed")
         data=os.read(fd,max_bytes+1)
-        if len(data)!=st.st_size:
+        after=os.fstat(fd)
+        if (len(data)!=st.st_size or after.st_size!=real.st_size
+                or after.st_mtime_ns!=real.st_mtime_ns
+                or after.st_ctime_ns!=real.st_ctime_ns
+                or after.st_ino!=real.st_ino or after.st_dev!=real.st_dev):
             raise ResearchRefused("checkpoint changed during bounded read")
         return data
     finally:
