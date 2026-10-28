@@ -32,6 +32,9 @@ def summarize_grid(report: object) -> tuple[dict, list[dict], str]:
         or report.get("production_ready") is not False
         or report.get("baseline_index") != 1
         or report.get("fixed_training_steps") != 24
+        or report.get("optimizer_runtime") != "native_torch_cpu"
+        or report.get("matching_start_weights") is not True
+        or report.get("matching_train_and_dev_data") is not True
     ):
         raise OptimizerResearchRefused("not a fixed six-arm synthetic optimization grid")
     trials = report.get("trials")
@@ -42,7 +45,7 @@ def summarize_grid(report: object) -> tuple[dict, list[dict], str]:
         if (trial["optimizer"] != opt or trial["learning_rate"] != lr
                 or trial["steps"] != 24 or trial["nonfinite_updates"] != 0):
             raise OptimizerResearchRefused("optimizer grid changed from fixed protocol")
-        if i and (trial["seed"] != trials[1]["seed"]
+        if i != 1 and (trial["seed"] != trials[1]["seed"]
                   or trial["train_session_sha256"] != trials[1]["train_session_sha256"]
                   or trial["dev_session_sha256"] != trials[1]["dev_session_sha256"]):
             raise OptimizerResearchRefused("toy grid train/dev session mismatch")
@@ -91,7 +94,8 @@ def run(snapshot: Path, receipt: Path) -> dict:
     if model.__class__.__name__ != "Lfm3ForCausalLM":
         raise ResearchRefused("model class unexpected")
     code_tokens = {code: tok.encode(code, add_special_tokens=False) for code in CHOICES}
-    if any(len(xs) != 1 for xs in code_tokens.values()):
+    if (any(len(xs) != 1 for xs in code_tokens.values())
+            or len({xs[0] for xs in code_tokens.values()}) != len(code_tokens)):
         raise ResearchRefused("optimizer choices not single-token")
     batch = tok.apply_chat_template(
         grid_messages(parent, observations), tokenize=True,
