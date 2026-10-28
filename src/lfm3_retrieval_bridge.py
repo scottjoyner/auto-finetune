@@ -92,8 +92,11 @@ def validate_untrusted_packet(data: object) -> dict:
             or type(item["event_hash"]) is not str
             or not EVENT.fullmatch(item["event_hash"])
             or item["event_hash"] in seen
+            or type(item["source_type"]) is not str
             or item["source_type"] not in SOURCES
+            or type(item["trace_kind"]) is not str
             or item["trace_kind"] not in KINDS
+            or type(item["status"]) is not str
             or item["status"] not in STATES
             or type(item["projection_sha256"]) is not str
             or not SHA.fullmatch(item["projection_sha256"])
