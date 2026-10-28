@@ -34,6 +34,32 @@ class LayerLoRAGraphTests(unittest.TestCase):
             with self.subTest(steps=steps), self.assertRaises(ResearchRefused):
                 run(None, steps=steps)
 
+    def test_independent_adapter_seeds_have_fixed_review_budget(self):
+        import torch
+        from torch import nn
+        from src.lfm3_last_layer_lora_lab import install_adapter, run
+        layer = nn.Linear(32, 32, bias=False)
+        layer.requires_grad_(False)
+        before = layer.weight._version
+        first = []
+        for seed in (20261028, 20261029, 20261030):
+            A, B, hook = install_adapter(layer, seed=seed)
+            try:
+                first.append(A.weight.detach().clone())
+                self.assertEqual(B.weight.detach().abs().sum().item(), 0)
+            finally:
+                hook.remove()
+        self.assertFalse(torch.equal(first[0], first[1]))
+        self.assertFalse(torch.equal(first[1], first[2]))
+        self.assertEqual(layer.weight._version, before)
+        for invalid in (None, True, -1, 20261031, "20261028"):
+            with self.subTest(seed=invalid), self.assertRaises(ResearchRefused):
+                install_adapter(layer, seed=invalid)
+        with self.assertRaises(ResearchRefused):
+            run(None, steps=1, multi_seed=True)
+        with self.assertRaises(ResearchRefused):
+            run(None, steps=3, multi_seed=1)
+
     def test_unreviewed_or_trainable_layer_refused(self):
         from torch import nn
         from src.lfm3_last_layer_lora_lab import install_adapter
