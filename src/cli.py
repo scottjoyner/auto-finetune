@@ -411,7 +411,7 @@ def _dispatch(argv: list[str], cfg=None) -> int:
             threshold = float(_parse_str_flag(argv, "--threshold") or "0.85")
             return run(cfg, label=label, threshold=threshold)
         if cmd == "profile":
-            from src.profile import main as run
+            from src.dataset_profile import main as run
             out = _parse_str_flag(argv, "--out")
             return run(cfg, label=label, out_dir=out)
         if cmd == "pretokenize":
