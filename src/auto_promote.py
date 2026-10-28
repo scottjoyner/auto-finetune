@@ -34,6 +34,7 @@ class PromotionConfig:
     max_regression: float = 0.1  # Max allowed regression from active model
     auto_rollback: bool = True
     ab_test_duration_hours: float = 24.0
+    require_manual_approval: bool = True
 
 
 class AutoPromoter:
