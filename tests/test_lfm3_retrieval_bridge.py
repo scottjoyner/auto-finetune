@@ -84,6 +84,18 @@ class RetrievalBridgeTests(unittest.TestCase):
             with self.assertRaises(UntrustedRetrievalRefused):
                 validate_untrusted_packet(packet)
 
+    def test_actual_rust_journal_packet_fixtures_validate_byte_parity(self):
+        root = Path(__file__).resolve().parents[1] / "research" / "fixtures"
+        for status in ("ok", "error"):
+            packet = read_packet(
+                root / f"lfm3_native_session_{status}_packet_20261027.json"
+            )
+            self.assertEqual(packet["items"][0]["status"], status)
+            self.assertEqual(len(packet["items"]), 4)
+            self.assertFalse(packet["safe_to_use_as_gold"])
+            self.assertFalse(packet["may_generate_gate_plan"])
+            self.assertFalse(packet["provenance_authentication_verified"])
+
     def test_duplicate_json_and_size_caps_are_refused(self):
         with tempfile.TemporaryDirectory() as t:
             f = Path(t) / "packet.json"
