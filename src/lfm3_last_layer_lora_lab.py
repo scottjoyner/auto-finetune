@@ -209,10 +209,15 @@ def run(snapshot: Path, *, steps: int = 1, multi_seed: bool = False,
         "train_steps_per_arm": steps,
         **({"research_seeds": list(RESEARCH_SEEDS),
             "trial_count": len(records),
-            "per_seed_adamw_wins": [
-                records[2*i]["dev_loss_after"] < records[2*i+1]["dev_loss_after"]
-                for i in range(len(RESEARCH_SEEDS))
-            ],
+            **({ "per_seed_original_muon_wins": [
+                    records[2*i]["dev_loss_after"] < records[2*i+1]["dev_loss_after"]
+                    for i in range(len(RESEARCH_SEEDS))
+                ]} if compare_muon_scaling else {
+                    "per_seed_adamw_wins": [
+                        records[2*i]["dev_loss_after"] < records[2*i+1]["dev_loss_after"]
+                        for i in range(len(RESEARCH_SEEDS))
+                    ]
+                }),
             "eligible_for_manual_review_only": (not compare_muon_scaling and all(
                 records[2*i]["dev_loss_after"] < records[2*i+1]["dev_loss_after"]
                 for i in range(len(RESEARCH_SEEDS))
