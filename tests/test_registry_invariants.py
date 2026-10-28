@@ -1,4 +1,5 @@
 """Run all registry safety checks on isolated temporary files."""
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +17,27 @@ class RegistryInvariantTests(unittest.TestCase):
         d=tempfile.TemporaryDirectory(prefix="registry-collision-research-")
         self.addCleanup(d.cleanup)
         self.r=ModelRegistry(ScratchConfig(d.name))
+    def test_corrupted_or_aliased_registry_never_resets_history(self):
+        path=Path(self.r.registry_path)
+        first=self.r.register("baseline","/tmp/base","frozen")
+        before=path.read_text()
+        for bad in (
+            "{not-json",
+            "{}",
+            json.dumps({"versions":[
+                {"version_id":first,"label":"a","checkpoint_path":"/tmp/a",
+                 "base_model":"frozen","created_at":1},
+                {"version_id":first,"label":"b","checkpoint_path":"/tmp/b",
+                 "base_model":"frozen","created_at":2}],"ab_tests":[]}),
+        ):
+            with self.subTest(bad=bad[:18]):
+                path.write_text(bad)
+                with self.assertRaises((ValueError, TypeError)):
+                    ModelRegistry(self.r.cfg)
+                self.assertEqual(path.read_text(),bad)
+        path.write_text(before)
+        self.assertEqual(ModelRegistry(self.r.cfg).get(first).label,"baseline")
+
     def test_same_second_and_label_never_overwrite(self):
         with patch("src.model_registry.time.time",return_value=100.0):
             a=self.r.register("synthetic","/tmp/synthetic-1","base")
