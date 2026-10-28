@@ -1,0 +1,52 @@
+{
+  "schema": "sg-lfm3-retrieval-metadata.v1",
+  "model_use": "non_authoritative_context_only",
+  "session_hash": "9c545c4deecc4c4c92a27eea765d752cb0bf3154883109a10392828ff9593c30",
+  "before_seq": 1000,
+  "journal_revision": 2,
+  "source_generation": "legacy-unfenced",
+  "source_trust": "unverified-source-metadata",
+  "relation_semantics": "session_sequence_not_causal",
+  "items": [
+    {
+      "event_hash": "Trace_633aa96b81dfb4db3c47b5fbf2ab9b94",
+      "source_seq": 13,
+      "source_type": "opencode",
+      "trace_kind": "llm",
+      "status": "ok",
+      "projection_sha256": "000000000000000000000000000000000000000000000000000000000000000d"
+    },
+    {
+      "event_hash": "Trace_2d6176e65898ba6e984bc6e492a027fc",
+      "source_seq": 9,
+      "source_type": "opencode",
+      "trace_kind": "llm",
+      "status": "ok",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000009"
+    },
+    {
+      "event_hash": "Trace_7087a6b3b811ffe1813e13dae7074c44",
+      "source_seq": 5,
+      "source_type": "opencode",
+      "trace_kind": "llm",
+      "status": "ok",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000005"
+    },
+    {
+      "event_hash": "Trace_9877712bdd98518102bfdf560ba63f1a",
+      "source_seq": 1,
+      "source_type": "opencode",
+      "trace_kind": "llm",
+      "status": "ok",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000001"
+    }
+  ],
+  "packet_sha256": "743ff1943e78c50f59d832201fe4eef60f715f7200281b307330dd7a1ab90869",
+  "provenance_authentication_verified": false,
+  "source_completeness_verified": false,
+  "semantic_retrieval_verified": false,
+  "safe_to_use_as_gold": false,
+  "may_generate_gate_plan": false,
+  "may_train_controller": false,
+  "production_ready": false
+}
