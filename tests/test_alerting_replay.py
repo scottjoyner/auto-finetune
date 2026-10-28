@@ -38,6 +38,32 @@ class AlertReplayTests(unittest.TestCase):
                 self.assertEqual(final.summary()["unacknowledged"], 0)
                 self.assertEqual(final.summary()["by_level"]["warning"], 2)
 
+    def test_notifications_are_mocked_and_log_persists(self):
+        import json
+        with tempfile.TemporaryDirectory(prefix="alerting-mocked-notify-") as scratch:
+            cfg = FakeConfig(Path(scratch))
+            cfg.get = lambda *args, **kwargs: "https://example.invalid/fictional"
+            with patch("src.alerting.urllib.request.urlopen") as send, \
+                    patch("subprocess.run") as desktop:
+                manager = AlertManager(cfg)
+                alert_id = manager.fire(
+                    "critical", "synthetic", "fictional alert",
+                    {"origin": "unit-test"})
+                send.assert_called_once()
+                request = send.call_args.args[0]
+                payload = json.loads(request.data)
+                self.assertEqual(payload["alert_id"], alert_id)
+                self.assertEqual(payload["metadata"]["origin"], "unit-test")
+                self.assertEqual(send.call_args.kwargs["timeout"], 5)
+                desktop.assert_called_once()
+                self.assertIn("fictional alert",
+                              (Path(scratch) / "alerts.log").read_text())
+            with patch("src.alerting.urllib.request.urlopen", side_effect=OSError("fake failure")), \
+                    patch("subprocess.run", side_effect=OSError("fake desktop error")):
+                manager.fire("warning", "synthetic", "fictional failure")
+            self.assertEqual(len(AlertManager(cfg).alerts), 2)
+            self.assertEqual(len(manager.recent(level="critical")), 1)
+
     def test_missing_ack_does_not_modify_log(self):
         with tempfile.TemporaryDirectory(prefix="alerting-missing-") as scratch:
             cfg = FakeConfig(Path(scratch))
