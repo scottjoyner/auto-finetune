@@ -6,6 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from lfm3_ab_protocol import (EvaluationRefused, evaluate, validate_manifest,
+                              REVISION, CONFIG_SHA256,
                               validate_results, _load, sha_text)
 
 
@@ -17,9 +18,9 @@ def fixture():
     manifest = {
         "schema": "sg-lfm3-ab.v1",
         "model_id": "LiquidAI/LFM3-1.7B",
-        "revision": "a" * 40,
+        "revision": REVISION,
         "checkpoint_sha256": "b" * 64,
-        "config_sha256": "c" * 64,
+        "config_sha256": CONFIG_SHA256,
         "tokenizer_sha256": "d" * 64,
         "sampling": {"seed": 17, "temperature": 0, "max_new_tokens": 64},
         "conditions": ["baseline", "retrieval", "gates", "retrieval_gates"],
@@ -107,6 +108,16 @@ class ABProtocolTest(unittest.TestCase):
         rows[0]["wall_ms"] = float("nan")
         with self.assertRaises(EvaluationRefused):
             evaluate(manifest, rows)
+
+    def test_model_revision_and_config_require_exact_pins(self):
+        manifest, _ = fixture()
+        manifest["revision"] = "a" * 40
+        with self.assertRaises(EvaluationRefused):
+            validate_manifest(manifest)
+        manifest, _ = fixture()
+        manifest["config_sha256"] = "a" * 64
+        with self.assertRaises(EvaluationRefused):
+            validate_manifest(manifest)
 
     def test_unknown_fields_and_duplicate_json_refused(self):
         manifest, rows = fixture()
