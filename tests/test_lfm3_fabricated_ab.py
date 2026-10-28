@@ -57,6 +57,17 @@ class FabricatedABTests(unittest.TestCase):
         with self.assertRaises(ResearchRefused):
             read_lab_cases(self.make_path(p))
 
+    def test_untrusted_sensorgraft_features_cannot_be_used_as_gate_plan(self):
+        from src.lfm3_head_gate_hook import GateHookRefused, validate
+        shadow = {
+            "schema": "sg-lfm3-shadow-features.v1",
+            "dimension": 384, "embedding": [0.0] * 384,
+            "row_count": 1, "source_trust": "unverified-source-metadata",
+            "may_generate_gate_plan": False, "may_train_controller": False,
+        }
+        with self.assertRaises(GateHookRefused):
+            validate(shadow)
+
     def test_bad_decoding_budget_refused(self):
         attest = {"checkpoint_sha256": "a"*64, "tokenizer_sha256": "b"*64}
         with self.assertRaises(ResearchRefused):
