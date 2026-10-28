@@ -186,12 +186,22 @@ def evaluate(manifest: dict, records: list) -> dict:
                        rows[(c["id"], "baseline")]["correct"] for c in cases)
             losses = sum(not rows[(c["id"], mode)]["correct"] and
                          rows[(c["id"], "baseline")]["correct"] for c in cases)
+            # Gate quality must be paired against retrieval, not inferred
+            # from two aggregate percentages of exact answer accuracy.
+            ref_wins = ref_losses = None
+            if "retrieval" in manifest["conditions"]:
+                ref_wins = sum(rows[(c["id"], mode)]["correct"] and not
+                               rows[(c["id"], "retrieval")]["correct"] for c in cases)
+                ref_losses = sum(not rows[(c["id"], mode)]["correct"] and
+                                 rows[(c["id"], "retrieval")]["correct"] for c in cases)
             metrics.append({
                 "split": split, "condition": mode, "n": len(cases),
                 "exact_correct": sum(m["correct"] for m in measurements),
                 "exact_accuracy": sum(m["correct"] for m in measurements) / len(cases),
                 "paired_wins_vs_baseline": wins,
                 "paired_losses_vs_baseline": losses,
+                "paired_wins_vs_retrieval": ref_wins,
+                "paired_losses_vs_retrieval": ref_losses,
                 "p50_wall_ms": statistics.median(latencies),
                 "p95_wall_ms": p95,
                 "total_prefill_tokens": sum(m["prefill_tokens"] for m in measurements),
