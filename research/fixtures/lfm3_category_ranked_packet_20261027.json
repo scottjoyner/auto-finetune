@@ -1,0 +1,32 @@
+{
+  "schema": "sg-lfm3-category-search.v1",
+  "source_packet_sha256": "00bd623cf51a271b6e86141a9de31809834629f03818f6a0b245a9f14faf7888",
+  "session_hash": "9c545c4deecc4c4c92a27eea765d752cb0bf3154883109a10392828ff9593c30",
+  "journal_revision": 2,
+  "query_kind": "tool",
+  "query_status": "error",
+  "candidate_window": 16,
+  "top_k": 1,
+  "visited_index_nodes": 4,
+  "search_method": "angular_index_exact_cosine_legacy_categorical_5d",
+  "hits": [
+    {
+      "event_hash": "Trace_e7c4e3a80cd897135698559a1fe4d71d",
+      "source_seq": 14,
+      "source_type": "opencode",
+      "trace_kind": "tool",
+      "status": "error",
+      "projection_sha256": "000000000000000000000000000000000000000000000000000000000000000e"
+    }
+  ],
+  "packet_sha256": "526409ba9ad3d8fe6f78272d52d139bf45a95ceea24702e24be17e3796c6932c",
+  "category_vector_search_executed": true,
+  "semantic_retrieval_verified": false,
+  "provenance_authentication_verified": false,
+  "source_generation_fenced": false,
+  "source_completeness_verified": false,
+  "safe_to_use_as_gold": false,
+  "may_generate_gate_plan": false,
+  "may_train_controller": false,
+  "production_ready": false
+}
