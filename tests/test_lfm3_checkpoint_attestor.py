@@ -19,6 +19,7 @@ class CheckpointAttestationTest(unittest.TestCase):
         (self.root / "blobs").mkdir()
         self.items = {"model.safetensors": b"synthetic-weights",
                       "config.json": b"synthetic-config",
+                      "modeling_lfm3.py": b"synthetic-code",
                       "tokenizer.json": b"synthetic-tokenizer"}
         expected = {}
         for name, data in self.items.items():
