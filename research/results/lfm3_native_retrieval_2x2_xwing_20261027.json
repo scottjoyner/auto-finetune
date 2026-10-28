@@ -1,0 +1,98 @@
+{
+  "experiment_date": "2026-10-27",
+  "model_revision": "40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd",
+  "production_ready": false,
+  "record_count": 4,
+  "schema": "sg-lfm3-native-retrieval-2x2.v1",
+  "semantic_vector_search_executed": false,
+  "source_authentication_verified": false,
+  "source_trace_data_used": false,
+  "synthetic_only": true,
+  "task_records": [
+    {
+      "baseline": {
+        "answer_sha256": "b23a6a8439c0dde5515893e7c90c1e3233b8616e634470f20dc4928bcf3609bc",
+        "decode_tokens": 2,
+        "exact_correct": false,
+        "prefill_tokens": 77,
+        "wall_ms": 538.226
+      },
+      "fixture_status": "ok",
+      "packet_sha256": "743ff1943e78c50f59d832201fe4eef60f715f7200281b307330dd7a1ab90869",
+      "task": "extract",
+      "with_context": {
+        "answer_sha256": "2689367b205c16ce32ed4200942b8b8b1e262dfc70d9bc9fbc77c49699a4f1df",
+        "decode_tokens": 2,
+        "exact_correct": true,
+        "prefill_tokens": 194,
+        "wall_ms": 854.776
+      }
+    },
+    {
+      "baseline": {
+        "answer_sha256": "b23a6a8439c0dde5515893e7c90c1e3233b8616e634470f20dc4928bcf3609bc",
+        "decode_tokens": 2,
+        "exact_correct": true,
+        "prefill_tokens": 79,
+        "wall_ms": 594.28
+      },
+      "fixture_status": "ok",
+      "packet_sha256": "743ff1943e78c50f59d832201fe4eef60f715f7200281b307330dd7a1ab90869",
+      "task": "authority",
+      "with_context": {
+        "answer_sha256": "b23a6a8439c0dde5515893e7c90c1e3233b8616e634470f20dc4928bcf3609bc",
+        "decode_tokens": 2,
+        "exact_correct": true,
+        "prefill_tokens": 196,
+        "wall_ms": 828.865
+      }
+    },
+    {
+      "baseline": {
+        "answer_sha256": "b23a6a8439c0dde5515893e7c90c1e3233b8616e634470f20dc4928bcf3609bc",
+        "decode_tokens": 2,
+        "exact_correct": false,
+        "prefill_tokens": 77,
+        "wall_ms": 513.33
+      },
+      "fixture_status": "error",
+      "packet_sha256": "959b5a3c89a7ad27ab4ac1458443f866d5f56aed311773077d09a2cf4ae6d9c6",
+      "task": "extract",
+      "with_context": {
+        "answer_sha256": "b23a6a8439c0dde5515893e7c90c1e3233b8616e634470f20dc4928bcf3609bc",
+        "decode_tokens": 2,
+        "exact_correct": false,
+        "prefill_tokens": 190,
+        "wall_ms": 878.178
+      }
+    },
+    {
+      "baseline": {
+        "answer_sha256": "b23a6a8439c0dde5515893e7c90c1e3233b8616e634470f20dc4928bcf3609bc",
+        "decode_tokens": 2,
+        "exact_correct": true,
+        "prefill_tokens": 79,
+        "wall_ms": 470.937
+      },
+      "fixture_status": "error",
+      "packet_sha256": "959b5a3c89a7ad27ab4ac1458443f866d5f56aed311773077d09a2cf4ae6d9c6",
+      "task": "authority",
+      "with_context": {
+        "answer_sha256": "b23a6a8439c0dde5515893e7c90c1e3233b8616e634470f20dc4928bcf3609bc",
+        "decode_tokens": 2,
+        "exact_correct": true,
+        "prefill_tokens": 192,
+        "wall_ms": 849.357
+      }
+    }
+  ],
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "pinned_model": "LiquidAI/LFM3-1.7B",
+  "runner_commit": "1d7a9b3e522330d9ef87c30e682b35c03e9195f1",
+  "packet_fixtures": [
+    "research/fixtures/lfm3_native_session_ok_packet_20261027.json",
+    "research/fixtures/lfm3_native_session_error_packet_20261027.json"
+  ],
+  "independent_source_custody_not_demonstrated": true,
+  "experiment_is_small_smoke": true
+}
