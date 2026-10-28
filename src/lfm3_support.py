@@ -116,6 +116,8 @@ def patch_transformers_for_lfm3() -> None:
 
 def is_lfm3_model(model_name: str) -> bool:
     """Check if the model name refers to an LFM3 model."""
+    if not model_name:
+        return False
     return "lfm3" in model_name.lower()
 
 

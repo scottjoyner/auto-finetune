@@ -1003,14 +1003,12 @@ def main(argv: list[str]) -> int:
     """Dispatch a command under canonical cross-worktree resource leases."""
     cmd = argv[1] if len(argv) > 1 else "help"
     dry = "--dry-run" in argv
-    if cmd in {"train", "dpo"} and not dry and os.environ.get("AF_SKIP_UNMANAGED_CHECK") != "1":
+    if cmd in {"train", "dpo"} and not dry:
         from src.training_admission import read_live
         decision = read_live()
         if not decision.allowed:
             print(f"[train-admission] HOLD: {decision.reason}", flush=True)
             return 78
-    elif cmd in {"train", "dpo"} and not dry:
-        print("[train-admission] HOLD: skipped (AF_SKIP_UNMANAGED_CHECK=1)", flush=True)
     cfg = load()
     label = _parse_label(argv)
     from src.locking import (
