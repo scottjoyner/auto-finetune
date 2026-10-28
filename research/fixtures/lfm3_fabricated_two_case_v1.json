@@ -1,0 +1,24 @@
+{
+  "schema": "sg-lfm3-fabricated-ab.v1",
+  "source": "fabricated-synthetic-lab-only",
+  "cases": [
+    {
+      "id": "synthetic-r7",
+      "session_hash": "9fa3ed072eb6a29423efa127b1d899c46241de751f06c41cffcc88130726ccf0",
+      "split": "dev",
+      "kind": "graph_lookup",
+      "prompt": "In the fictional fleet ledger, what is the replacement code of node R7? Reply with the code only.",
+      "reference": "In the fictional fleet ledger, node R7 has replacement code ZQ-41.",
+      "expected": "ZQ-41"
+    },
+    {
+      "id": "synthetic-e3",
+      "session_hash": "f32700db2d56239787cf6116d3b2f11b0ffdcc663c39624f7ae2ebed97fb3c33",
+      "split": "heldout",
+      "kind": "graph_lookup",
+      "prompt": "In the mock construction ticket catalog, what sector is ticket E3 assigned to? Reply with the sector only.",
+      "reference": "In the mock construction ticket catalog, ticket E3 is assigned to the glass sector.",
+      "expected": "glass"
+    }
+  ]
+}
