@@ -53,7 +53,7 @@ def assess_cross_process(reports: object, development: object) -> dict:
                 or pkt["independent_power_loss_verification"] is not False
                 or pkt["experiment_date"] != "2026-10-28"
                 or pkt["node"] != "xwing"
-                or pkt["source_commit"] != "20c5d02651a8868cfca1533ebc664ff90bc9c17e"):
+                or pkt["source_commit"] != "1b1450d4929ebf97f58d20e7bf765027019ca265"):
             raise ResearchRefused("forged durable restart provenance/authority")
         stages=[]
         for name,steps in (("baseline",3),("save",1),("resume",3)):
