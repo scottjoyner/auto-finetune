@@ -30,11 +30,18 @@ class OptimizerResumeTests(unittest.TestCase):
             build, capture_in_memory, restore_in_memory,
         )
         model, opts = build("adamw")
+        import hashlib
         raw = capture_in_memory(model, opts, optimizer="adamw", next_step=5)
+        digest = hashlib.sha256(raw).hexdigest()
         with self.assertRaises(OptimizerResearchRefused):
-            restore_in_memory(raw, optimizer="muon_hybrid")
+            restore_in_memory(raw, optimizer="muon_hybrid", expected_sha256=digest)
         with self.assertRaises(OptimizerResearchRefused):
-            restore_in_memory(raw+b"X"*257000, optimizer="adamw")
+            restore_in_memory(raw+b"X"*257000, optimizer="adamw", expected_sha256=digest)
+        with self.assertRaises(OptimizerResearchRefused):
+            restore_in_memory(raw[:-1]+bytes([raw[-1] ^ 1]),
+                              optimizer="adamw", expected_sha256=digest)
+        with self.assertRaises(OptimizerResearchRefused):
+            restore_in_memory(raw, optimizer="adamw", expected_sha256="0"*64)
         with self.assertRaises(OptimizerResearchRefused):
             capture_in_memory(model,opts,optimizer="adamw",next_step=4)
 
