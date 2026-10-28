@@ -57,18 +57,40 @@ class ModelRegistry:
         self._load()
 
     def _load(self) -> None:
-        if os.path.exists(self.registry_path):
-            try:
-                with open(self.registry_path) as f:
-                    data = json.load(f)
-                for v in data.get("versions", []):
-                    mv = ModelVersion(**v)
-                    self._versions[mv.version_id] = mv
-                for t in data.get("ab_tests", []):
-                    ab = ABTest(**t)
-                    self._ab_tests[ab.test_id] = ab
-            except Exception:
-                pass
+        # Existing malformed state must not silently become an empty registry:
+        # that could erase active model identity and A/B review history on save.
+        if not os.path.exists(self.registry_path):
+            return
+        with open(self.registry_path) as stream:
+            data = json.load(stream)
+        if (type(data) is not dict
+                or type(data.get("versions")) is not list
+                or type(data.get("ab_tests")) is not list):
+            raise ValueError("malformed model registry: expected version and A/B arrays")
+        versions = {}
+        tests = {}
+        for record in data["versions"]:
+            if type(record) is not dict:
+                raise ValueError("malformed registry model version")
+            version = ModelVersion(**record)
+            if type(version.version_id) is not str or not version.version_id:
+                raise ValueError("malformed model version identity")
+            if version.version_id in versions:
+                raise ValueError("duplicate persisted model version identity")
+            versions[version.version_id] = version
+        for record in data["ab_tests"]:
+            if type(record) is not dict:
+                raise ValueError("malformed persisted A/B comparison")
+            ab = ABTest(**record)
+            if type(ab.test_id) is not str or not ab.test_id:
+                raise ValueError("malformed A/B test identity")
+            if ab.test_id in tests:
+                raise ValueError("duplicate persisted A/B test identity")
+            if (ab.version_a not in versions or ab.version_b not in versions
+                    or ab.version_a == ab.version_b):
+                raise ValueError("persisted A/B test references invalid models")
+            tests[ab.test_id] = ab
+        self._versions, self._ab_tests = versions, tests
 
     def _save(self) -> None:
         data = {
