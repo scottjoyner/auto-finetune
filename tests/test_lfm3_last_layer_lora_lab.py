@@ -28,6 +28,12 @@ class LayerLoRAGraphTests(unittest.TestCase):
         finally:
             handle.remove()
 
+    def test_full_layer_training_budget_is_fixed(self):
+        from src.lfm3_last_layer_lora_lab import run
+        for steps in (0, 2, 4, 10, 1.0, "3"):
+            with self.subTest(steps=steps), self.assertRaises(ResearchRefused):
+                run(None, steps=steps)
+
     def test_unreviewed_or_trainable_layer_refused(self):
         from torch import nn
         from src.lfm3_last_layer_lora_lab import install_adapter
