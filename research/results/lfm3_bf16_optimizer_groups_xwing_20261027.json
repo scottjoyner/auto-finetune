@@ -1,0 +1,47 @@
+{
+  "actual_optimizer_allocated": false,
+  "adamw_or_unreviewed_parameters": 480996096,
+  "adapter_trainable_inventory_verified": false,
+  "candidate_muon_parameters": 1247805440,
+  "candidate_muon_tensor_count": 116,
+  "category_parameters": {
+    "adamw_conv_and_conv_projection": 218290176,
+    "adamw_embedding_output": 262146048,
+    "adamw_head_gate_projection": 360448,
+    "adamw_norm_and_bias": 199424,
+    "research_muon_attention_candidate": 115343360,
+    "research_muon_ffn_candidate": 1132462080
+  },
+  "category_tensors": {
+    "adamw_conv_and_conv_projection": 39,
+    "adamw_embedding_output": 2,
+    "adamw_head_gate_projection": 11,
+    "adamw_norm_and_bias": 118,
+    "research_muon_attention_candidate": 44,
+    "research_muon_ffn_candidate": 72
+  },
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "model_class": "Lfm3ForCausalLM",
+  "model_parameters_modified": false,
+  "muon_eligibility_reviewed_for_training": false,
+  "named_tensor_shape_sha256": "6b6b33dc9b8c4bb47f4fabc8f20c6b8012d25a863545220121df8afac5a8e3e5",
+  "production_ready": false,
+  "safe_to_change_running_optimizer": false,
+  "sample_candidate_names": [
+    "model.layers.0.feed_forward.w1.weight",
+    "model.layers.0.feed_forward.w2.weight",
+    "model.layers.0.feed_forward.w3.weight",
+    "model.layers.1.feed_forward.w1.weight",
+    "model.layers.1.feed_forward.w2.weight",
+    "model.layers.1.feed_forward.w3.weight",
+    "model.layers.10.feed_forward.w1.weight",
+    "model.layers.10.feed_forward.w2.weight"
+  ],
+  "schema": "sg-lfm3-full-optimizer-partition-inventory.v1",
+  "total_parameters": 1728801536,
+  "total_tensors": 286,
+  "experiment_date": "2026-10-27",
+  "node": "xwing",
+  "official_revision": "40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd",
+  "actual_optimization_executed": false
+}
