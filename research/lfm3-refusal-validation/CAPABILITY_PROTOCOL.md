@@ -99,3 +99,22 @@ original LFM3 checkpoint compared batched, right-padded answer-option
 log-likelihoods with independent unpadded scoring. The largest observed
 absolute score difference was below 5e-7 log-probability units.
 This is an implementation smoke check, not a standardized benchmark.
+
+
+## Completed paired three-arm capability comparison (2026-10-29)
+
+All 3,516 custom likelihood scores passed the independent journal audit.
+Length-normalized accuracy: A 315/1,172 (26.88%), B 301/1,172
+(25.68%), C 493/1,172 (42.06%). Matched B-A change: -1.19 percentage
+points, with 14 gained and 28 lost items and a seeded paired-bootstrap
+95% interval of [-2.30, -0.09] percentage points. As a sensitivity
+check, unnormalized likelihood yielded 277, 263 and 459 correct
+respectively. These are custom raw-completion results, not official
+ARC scores or evidence of generally preserved capabilities.
+
+The full-case pairing and bootstrap are implemented in
+src/arc_likelihood_paired_diagnostics.py; the sanitized aggregate
+is stored under evidence/20261029_full_arc_paired_capability_diagnostics.json.
+No further checkpoints are part of this experiment. Two-human-reviewer
+XSTest outcomes and standardized independent capability confirmation
+remain pending.
