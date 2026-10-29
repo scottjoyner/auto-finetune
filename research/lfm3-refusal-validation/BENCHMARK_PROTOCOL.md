@@ -175,3 +175,23 @@ than discarding inconvenient cases. It never automatically labels raw
 model responses and cannot be run successfully on the 54-output
 integration pilot. Human grading must be complete before statistics are
 published; human review remains NOT STARTED for the full benchmark.
+
+## Publication-readiness audit (read only, never approves publication)
+
+The single comprehensive command checks the three frozen local checkpoint
+hashes against the full-run manifest, exact benchmark source, complete and
+ordered 1,350-generation journal, complete two-reviewer consensus and full
+ARC-Challenge capability evidence:
+
+    python -m src.publication_gate
+
+This audit fails closed on a model-hash mismatch or unterminated JSONL
+tail, and does not read or publish any private prompt text or answers.
+The ARC 12-question pilot is not sufficient; the capability evidence
+requires 1,172 full ARC test questions per arm and a standard scoring
+method. A supplied report must have matching checkpoint and dataset
+provenance and remains subject to independent verification.
+
+No computation, including a passing audit, automatically approves
+model-weight release, production deployment, publication or a safety
+claim. The final decision requires separate responsible release review.
