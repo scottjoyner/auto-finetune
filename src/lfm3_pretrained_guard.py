@@ -6,6 +6,8 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 
+from src.lfm3_tensor_manifest import LFM3TensorManifestError, audit_tensor_manifest
+
 
 class LFM3CheckpointError(RuntimeError):
     """The requested pretrained checkpoint is absent or not loadable."""
@@ -118,4 +120,8 @@ def verify_official_lfm3_snapshot(location: str) -> str:
             raise LFM3CheckpointError("lfm3_pinned_file_unreadable:" + name) from exc
         if h.hexdigest() != expected:
             raise LFM3CheckpointError("lfm3_revision_mismatch:" + name)
+    try:
+        audit_tensor_manifest(root / "model.safetensors")
+    except LFM3TensorManifestError as exc:
+        raise LFM3CheckpointError("lfm3_tensor_manifest_invalid:" + str(exc)) from exc
     return str(root)
