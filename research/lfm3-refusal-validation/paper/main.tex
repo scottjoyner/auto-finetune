@@ -233,6 +233,22 @@ only in private storage. Any results from a limited seeded subset
 remain labeled as capability integration smoke, not retained
 reasoning capability claims.
 
+\subsection{Full-answer conditional-choice capability protocol}
+To supplement the one-token letter-completion integration test,
+we implement a pinned, resumable ARC-Challenge evaluator that
+scores the entire candidate answer text with conditional
+log-likelihood under a fixed raw-completion question prefix.
+Both raw sum log-likelihood and mean-per-token scores are
+recorded for the same item across A, B, and C. All three
+arms use identical answer text, choice order, and tokenizer
+prefix conventions; no external tools are executed.
+The 1,172-question test split and checkpoint hashes are frozen,
+and every answer is journaled privately. This custom
+likelihood-based analysis is \emph{not} presented as an
+official ARC leaderboard score or as a safety measure;
+confirmation under a standardized independent harness,
+order permutations, and instruction-following tests is required.
+
 \subsection{Capability integration smoke (not official ARC scoring)}
 A seeded 12-question ARC-Challenge subset was evaluated with raw
 multiple-choice letter-completion scores. The original and M1-edited
