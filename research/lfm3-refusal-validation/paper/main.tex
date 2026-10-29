@@ -171,7 +171,7 @@ one observation per category has no meaningful statistical power.
 Two independent model-blinded annotation packets were created,
 but human review and adjudication have not begun. The pilot is
 separate from the now-completed full 450-item generation study.
-Independent, full-scale capability measurements remain outstanding.
+Standardized independent capability replication remains outstanding.
 
 \subsection{Complete XSTest generation results: lexical proxy only}
 All 450 prompts in the pinned XSTest corpus were generated once
@@ -248,6 +248,32 @@ likelihood-based analysis is \emph{not} presented as an
 official ARC leaderboard score or as a safety measure;
 confirmation under a standardized independent harness,
 order permutations, and instruction-following tests is required.
+
+\subsection{Full paired ARC-Challenge likelihood results}
+The complete pinned ARC-Challenge test evaluation comprises
+1,172 questions per checkpoint, totaling 3,516 model-question
+scores. For length-normalized conditional answer-text likelihood,
+A selected 315/1,172 correct (26.88\%), B selected 301/1,172
+(25.68\%), and C selected 493/1,172 (42.06\%).
+B gained 14 correct items and lost 28 versus A on matched cases,
+for a paired B-minus-A difference of $-1.19$ percentage points
+(2,000-resample 95\% paired bootstrap interval
+$[-2.30,-0.09]$ percentage points). The models chose identical
+answers on 1,088/1,172 cases.
+
+For the alternative unnormalized sum of option-token log
+probabilities, correct counts were A 277/1,172, B 263/1,172,
+C 459/1,172; the B-minus-A difference was also $-1.19$
+percentage points, with 17 items gained and 31 lost.
+Independent model-hash and journal-integrity checks passed.
+
+These results arise from a custom raw-completion scoring
+protocol, not the official ARC benchmark harness. Only one
+prompt wording and option order were evaluated. Post-trained
+models and the pretrained base may react differently to this
+format. A measured difference in these scores is not by itself
+evidence of general capability loss or of safety preservation.
+Human ratings of the refusal benchmark remain outstanding.
 
 \subsection{Capability integration smoke (not official ARC scoring)}
 A seeded 12-question ARC-Challenge subset was evaluated with raw
