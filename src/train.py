@@ -187,17 +187,26 @@ def _train_peft(cfg: Config, data: list[dict],
         load_4bit = env_lb.strip().lower() not in {"0", "false", "off", "no"}
     load_8bit = t.get("load_in_8bit", False)
     grad_ckpt = t.get("gradient_checkpointing", False)
+    lfm3_dir = None
+    if is_lfm3_model(model_name):
+        from src.lfm3_pretrained_guard import verify_official_lfm3_snapshot
+        lfm3_dir = verify_official_lfm3_snapshot(LFM3_MODEL_LOCAL_PATH)
+        if load_4bit or load_8bit:
+            raise TrainError("LFM3 direct pretrained loader cannot claim 4/8-bit quantization")
 
     # Load tokenizer; LFM3 uses TokenizersBackend which needs special handling
     try:
         tokenizer = AutoTokenizer.from_pretrained(
-            model_name, trust_remote_code=True
+            lfm3_dir or model_name, trust_remote_code=True,
+            local_files_only=bool(lfm3_dir),
         )
     except (ValueError, OSError):
         # Fall back to PreTrainedTokenizerFast with tokenizer.json
         from transformers import PreTrainedTokenizerFast
-        tok_path = model_name
+        tok_path = lfm3_dir or model_name
         if not os.path.exists(os.path.join(tok_path, "tokenizer.json")):
+            if lfm3_dir:
+                raise TrainError("LFM3 local tokenizer.json missing")
             from huggingface_hub import hf_hub_download
             tok_path = hf_hub_download(model_name, "tokenizer.json")
         tok_dir = os.path.dirname(tok_path) if os.path.isfile(tok_path) else tok_path
@@ -228,20 +237,17 @@ def _train_peft(cfg: Config, data: list[dict],
         )
 
     # Load model with LFM3 support (transformers patches applied in train.main())
-    if is_lfm3_model(model_name):
-        # Direct load of LFM3 model from local files
-        import importlib.util
-        import transformers.configuration_utils  # Ensure PreTrainedConfig is available
-        model_dir = LFM3_MODEL_LOCAL_PATH
-        sys.path.insert(0, model_dir)
+    if lfm3_dir:
+        # Auto classes load the pinned local remote-code modules in a proper
+        # package namespace, and report actual checkpoint loading anomalies.
+        from transformers import AutoConfig
+        from src.lfm3_pretrained_guard import load_pretrained_lfm3
 
-        from configuration_lfm3 import Lfm3Config
-        config = Lfm3Config()
-
-        from modeling_lfm3 import Lfm3ForCausalLM
-        model = Lfm3ForCausalLM(config)
-        model = model.to(dtype=torch.bfloat16 if _detect_rocm() else torch.float16)
-        model.config._name_or_path = model_dir  # Point to local path for tokenizer loading
+        model = load_pretrained_lfm3(
+            lfm3_dir, AutoConfig, AutoModelForCausalLM,
+            torch.bfloat16 if _detect_rocm() else torch.float16,
+        )
+        model.config._name_or_path = lfm3_dir
     elif load_4bit or load_8bit:
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
