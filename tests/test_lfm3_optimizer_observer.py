@@ -27,11 +27,14 @@ def test_observer_can_only_generate_non_executable_research_grid(report):
     assert out["weight_promotion_permitted"] is False
     assert out["optimizer_switch_permitted"] is False
     assert out["fresh_independent_holdout_required"] is True
+    assert out["report_sha_is_signature"] is False
+    assert len(out["report_sha256"]) == 64
 
 
 def test_valid_model_feedback_remains_advisory_only(report):
     suggestion = {"optimizer": "adamw", "learning_rate": 9e-5,
-                  "base_sha256": BASE, "reason": "Trial lower LR in isolated run"}
+                  "base_sha256": BASE, "report_sha256": observe(report)["report_sha256"],
+                  "reason": "Trial lower LR in isolated run"}
     out = observe(report, suggestion)
     assert out["model_suggestion_review"]["status"] == "bounded_research_suggestion_only"
     assert out["model_suggestion_review"]["trial_authorized"] is False
@@ -43,12 +46,19 @@ def test_valid_model_feedback_remains_advisory_only(report):
     {"learning_rate": True},
     {"base_sha256": "wrong"},
     {"optimizer": "not-an-optimizer"},
+    {"optimizer": []},
+    {"optimizer": {}},
+    {"optimizer": 0},
+    {"report_sha256": "stale" },
+    {"reason": "do not\\nrun"},
+    {"learning_rate": []},
     {"reason": ""},
     {"action": "deploy"},
 ])
 def test_untrusted_model_proposals_fail_closed(report, change):
     suggestion = {"optimizer": "adamw", "learning_rate": 1e-4,
-                  "base_sha256": BASE, "reason": "Examine training trace"}
+                  "base_sha256": BASE, "report_sha256": observe(report)["report_sha256"],
+                  "reason": "Examine training trace"}
     suggestion.update(change)
     out = observe(report, suggestion)
     assert out["model_suggestion_review"]["status"] == "rejected"
@@ -90,3 +100,22 @@ def test_symlink_not_accepted(tmp_path):
     symlink.symlink_to(original)
     with pytest.raises(ValueError, match="unsafe_input"):
         _read_json(symlink)
+
+def test_exact_telemetry_digest_changes_with_valid_measurement(report):
+    updated = copy.deepcopy(report)
+    updated["arms"][0]["events"][0]["grad_norm"] *= 1.01
+    assert observe(updated)["status"] == "research_observation_only"
+    assert observe(updated)["report_sha256"] != observe(report)["report_sha256"]
+
+
+def test_replayed_model_suggestion_rejected_after_telemetry_changes(report):
+    original_digest = observe(report)["report_sha256"]
+    updated = copy.deepcopy(report)
+    updated["arms"][0]["events"][0]["grad_norm"] *= 1.01
+    proposal = {"optimizer": "adamw", "learning_rate": 1e-4,
+                "base_sha256": BASE, "report_sha256": original_digest,
+                "reason": "Old observation"}
+    out = observe(updated, proposal)
+    assert out["model_suggestion_review"]["status"] == "rejected"
+    assert out["model_suggestion_review"]["reason"] == "target_mismatch"
+    assert out["weight_promotion_permitted"] is False
