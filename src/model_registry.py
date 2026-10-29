@@ -121,6 +121,10 @@ class ModelRegistry:
         mv = self._versions.get(version_id)
         if not mv:
             return False
+        # Retiring the incumbent or an active A/B arm without a reviewed
+        # replacement is a denial of service, not a safe model release.
+        if mv.status in {"active", "testing"}:
+            return False
         mv.status = "retired"
         self._save()
         return True
@@ -140,8 +144,21 @@ class ModelRegistry:
         return True
 
     def start_ab_test(self, version_a: str, version_b: str) -> str | None:
-        """Start an A/B test between two versions."""
-        if version_a not in self._versions or version_b not in self._versions:
+        """Start an A/B test without dislodging the incumbent."""
+        if (version_a == version_b
+                or version_a not in self._versions
+                or version_b not in self._versions):
+            return None
+        left, right = self._versions[version_a], self._versions[version_b]
+        if (left.status not in {"active", "candidate"}
+                or right.status not in {"active", "candidate"}
+                or (left.status == "active" and right.status == "active")):
+            return None
+        # Concurrent/overlapping A/B arms can corrupt score attribution
+        # and change current routing. Require disjoint live experiments.
+        if any(t.status == "running" and
+               ({version_a, version_b} & {t.version_a, t.version_b})
+               for t in self._ab_tests.values()):
             return None
         test_id = f"ab-{uuid.uuid4().hex}"
         ab = ABTest(
