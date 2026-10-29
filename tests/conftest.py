@@ -8,9 +8,8 @@ import sys
 
 import pytest
 
-# Dispatch tests must pass on a machine that happens to be training right
-# now; the unmanaged-trainer guard is exercised by dedicated tests instead.
-os.environ.setdefault("AF_SKIP_UNMANAGED_CHECK", "1")
+# Admission checks must remain enabled by default for every test.
+# Individual tests may stub read_live() where actual GPU admission is irrelevant.
 
 # Make `src` importable as a package regardless of cwd. This must add the
 # *repo root* to sys.path, not the src/ directory: with src/ itself on the path,
