@@ -16,7 +16,7 @@ refusals, malicious-action resistance, and simulated authorization.
 
 ## Quick start
 Run in the project directory:
-  /home/scott/lfm3-research/train-venv/bin/python -m pytest -q tests
+  /home/scott/lfm3-research/train-venv/bin/python -m pytest -o addopts= -q tests
   /home/scott/lfm3-research/train-venv/bin/python -m src.refusal_probe --mode probe --max-pairs 2
   /home/scott/lfm3-research/train-venv/bin/python -m src.refusal_probe --mode compare --max-pairs 2 --layer 10 --alpha 0.25
 
@@ -71,7 +71,7 @@ only 1/4 generated responses matched exactly between A and B. These
 are diagnostic integration results, NOT refusal or safety efficacy claims.
 
 Commands in this study directory:
-  /home/scott/lfm3-research/train-venv/bin/python -m pytest -q tests
+  /home/scott/lfm3-research/train-venv/bin/python -m pytest -o addopts= -q tests
   /home/scott/lfm3-research/train-venv/bin/python -m src.verify_checkpoint
   /home/scott/lfm3-research/train-venv/bin/python -m src.three_checkpoint_eval --max-heldout-pairs 2
 
