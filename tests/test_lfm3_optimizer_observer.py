@@ -50,7 +50,7 @@ def test_valid_model_feedback_remains_advisory_only(report):
     {"optimizer": {}},
     {"optimizer": 0},
     {"report_sha256": "stale" },
-    {"reason": "do not\\nrun"},
+    {"reason": "do not\nrun"},
     {"learning_rate": []},
     {"reason": ""},
     {"action": "deploy"},
