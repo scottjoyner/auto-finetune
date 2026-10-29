@@ -49,3 +49,39 @@ attested; a later signed custody layer must verify them before promotion.
 References: https://github.com/KellerJordan/Muon ;
 https://github.com/meta-pytorch/torchtune (maintenance ended in 2025);
 https://github.com/pytorch/ao (quantization roadmap now consolidated).
+## AdamW/Muon trainable-parameter planning
+
+`src/lfm3_optimizer_param_groups.py` provides a separate, strictly offline
+parameter-group proposal from numeric shape metadata and trainability flags.
+Each input record contains **only** `name`, `shape`, and `trainable`.
+Malformed, duplicate, oversized or extra-field records are rejected.
+
+```sh
+python3 -m src.lfm3_optimizer_param_groups parameters.json
+python3 -m src.lfm3_optimizer_param_groups parameters.json \
+  --mode full_finetune_research --allow-muon-proposal
+```
+
+The default `lora_only` policy keeps **all** trainable parameters with AdamW.
+Even with opt-in research mode, the planner excludes LoRA A/B factors,
+embedding/output layers, 1D biases/norms, depthwise convolution kernels,
+small `gate_proj` matrices, unknown layer names and any frozen parameter.
+Only 2D hidden matrices with a recognized layer name and index 0–23 can
+become Muon experiment **candidates**, never automatically modified weights.
+
+**Read-only actual checkpoint audit (x1-370, October 28, 2026):**
+
+- Loaded the independently pinned 1.728B BF16 checkpoint in a CPU-only
+  process with the verified loader and Transformers 5.17 isolated overlay.
+- Full-model parameter inventory: 286 named parameters; 142 eligible
+  Muon *research candidates* and 144 AdamW assignments with opt-in.
+- Synthetic LoRA rank-8, `target_modules="all-linear"` PEFT wrap, no
+  optimizer or training: 592 named parameters, of which 306 LoRA factors
+  are trainable; 306 AdamW assignments and **zero** Muon assignments.
+- The offline policy and observer combined pass 27 focused tests.
+- No private trace data, optimizer state, training step, deployment, or
+  production configuration was touched.
+
+These are classification counts, not convergence or quality results.
+The next gate is an independent, reproducible Muon/AdamW A/B experiment
+with matched data, controlled seeds and verified heldout evaluation.
