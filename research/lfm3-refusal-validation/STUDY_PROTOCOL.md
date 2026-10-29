@@ -38,7 +38,7 @@ Exactly three model checkpoints are primary comparison arms:
 
 On x1-370, under the research study directory:
 
-- python -m pytest -q tests
+- python -m pytest -o addopts= -q tests
 - python -m src.build_abliterated_checkpoint --allow-smoke --layer 10 --alpha 1
 - python -m src.three_checkpoint_eval --max-heldout-pairs 2 --max-new-tokens 20
 
