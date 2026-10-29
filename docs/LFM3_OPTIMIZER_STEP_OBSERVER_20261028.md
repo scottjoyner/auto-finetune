@@ -85,3 +85,7 @@ become Muon experiment **candidates**, never automatically modified weights.
 These are classification counts, not convergence or quality results.
 The next gate is an independent, reproducible Muon/AdamW A/B experiment
 with matched data, controlled seeds and verified heldout evaluation.
+
+## Executed synthetic optimizer A/B evidence
+
+See [the October 29 synthetic optimizer sweep](LFM3_SYNTHETIC_OPTIMIZER_SWEEP_20261029.md) for real CPU optimizer-step traces on a tiny synthetic surrogate, the corrected fixed-bias learning-rate design, and the fail-closed reviewer. None of this establishes pretrained LFM3 improvement.
