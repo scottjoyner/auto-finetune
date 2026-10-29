@@ -41,3 +41,16 @@ The harness uses exclusive file creation; it cannot overwrite existing reports. 
 ## Outstanding real-model requirements
 
 Before enabling autonomous LFM3 hyperparameter adaptation: attach an opt-in telemetry hook to the pinned official LFM3 trainer, validate optimizer group compatibility, run multi-seed real LoRA experiments on genuinely new held-out data, compare stability and quality with checkpoint-level rollback, and resolve the CI admission/coverage failures. None of those release gates is cleared by this synthetic experiment.
+
+## Hosted test runtime compatibility
+
+The optimizer-step experiment requires a PyTorch build exposing
+`torch.optim.Muon` (verified locally with PyTorch 2.9.1+rocm6.4, CPU mode).
+When a hosted test runner lacks Muon, tests that *actually execute Muon*
+are explicitly marked **skipped**, not passed or silently replaced by
+AdamW. Independent non-Muon configuration tests still run, including an
+assertion that the harness refuses to run without Muon. Verified by
+simulating a PyTorch runtime without `torch.optim.Muon`: 13 tests passed
+and 18 legitimately skipped. On x1-370: 58 focused tests pass with Muon.
+This change does not bypass, disable, or lower the separate CI admission
+and coverage requirements.
