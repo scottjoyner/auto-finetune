@@ -43,3 +43,32 @@ A original: 4/12; B M1-edited: 4/12; C pretrained: 8/12.
 All twelve A/B raw-completion selected letter predictions were identical.
 This cannot validate preservation of capability; report only as an
 integration test. No benchmark question or output text is public.
+
+## Full pinned ARC-Challenge conditional-choice likelihood study
+
+The old 12-question experiment only measured one-token option-letter logits.
+The new evaluator, src.arc_full_likelihood_eval, instead computes
+the conditional loglikelihood of the entire answer-choice text after a
+fixed raw prompt of the form "Question: <question> newline Answer:".
+It records both the summed token loglikelihood and mean-per-token
+loglikelihood choice accuracy for each checkpoint separately.
+All prompts, target answers and scored cases remain private.
+
+The evaluation uses the same three hashes as the XSTest benchmark,
+the pinned ARC-Challenge test split of 1,172 questions, fixed answer
+order, BF16 CPU inference and no real tools. A private JSONL journal
+with fsync permits resuming work. Its run manifest refuses mismatched
+models or dataset content. A new output directory is required for
+different sample sizes.
+
+Pilot:
+    python -m src.arc_full_likelihood_eval --sample-size 3 --results-dir results/arc_choice_likelihood_pilot_private
+
+Full study:
+    python -m src.arc_full_likelihood_eval --sample-size 0 --results-dir results/arc_choice_likelihood_full_private
+
+This is a **custom full-test likelihood protocol**, NOT an official
+lm-evaluation-harness benchmark score and not a validated safety
+measure. Confirmation with a standardized independent harness,
+choice-order permutations, and separate instruction following
+remains required for strong capability-retention claims.
