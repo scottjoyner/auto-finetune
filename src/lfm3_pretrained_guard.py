@@ -127,6 +127,7 @@ OFFICIAL_LFM3_SHA256 = {
     "lfm3_conv.py": "80d4a985382a22774212759248a6b4c737bfbf9c2a47b3dd7f797dda748e4bb4",
     "tokenizer.json": "7e226e34bface23ccf6e495d157bf77186c1c30a7659880e1a8994db528c3701",
     "tokenizer_config.json": "bf028f813efc6137bc07ed045cafe71820df9a5e26a38e39954706ed1e30a457",
+    "chat_template.jinja": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
     "model.safetensors": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
 }
 
