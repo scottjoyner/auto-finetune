@@ -6,8 +6,11 @@ Stores version metadata in a JSON registry file.
 from __future__ import annotations
 
 import json
+import math
 import os
+import re
 import time
+import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -80,7 +83,7 @@ class ModelRegistry:
                  metrics: dict | None = None, parent: str | None = None,
                  notes: str = "") -> str:
         """Register a new model version. Returns version_id."""
-        version_id = f"{label}-{int(time.time())}"
+        version_id = f"{label}-{int(time.time())}-{uuid.uuid4().hex[:12]}"
         mv = ModelVersion(
             version_id=version_id,
             label=label,
@@ -148,7 +151,7 @@ class ModelRegistry:
         """Start an A/B test between two versions."""
         if version_a not in self._versions or version_b not in self._versions:
             return None
-        test_id = f"ab-{int(time.time())}"
+        test_id = f"ab-{uuid.uuid4().hex}"
         ab = ABTest(
             test_id=test_id,
             version_a=version_a,
@@ -164,6 +167,17 @@ class ModelRegistry:
         return test_id
 
     def record_ab_metric(self, test_id: str, version: str, metric: str, value: float) -> bool:
+        # Prevent malformed metrics or names ending in _count from poisoning
+        # A/B observation totals or inventing fabricated count fields.
+        if (not isinstance(metric, str)
+                or re.fullmatch(r"[a-z][a-z0-9_]{0,63}", metric) is None
+                or metric.endswith("_count")
+                or type(value) not in (int, float)
+                or not math.isfinite(value)
+                or value < 0 or value > 1e12):
+            return False
+        if metric == "score" and value > 1:
+            return False
         ab = self._ab_tests.get(test_id)
         if not ab or ab.status != "running":
             return False
