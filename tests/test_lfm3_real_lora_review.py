@@ -97,3 +97,22 @@ def test_reviewer_never_claims_measured_quality_improvement(real_report):
         }
         for p in result["per_seed"]
     )
+
+
+def test_independent_seed1_repeat_exactly_reproduces_adapter_trajectory(real_report):
+    repeat_path = EVIDENCE.parent / "seed1-repeat-20step-20261029.json"
+    again = json.loads(repeat_path.read_text(encoding="utf-8"))
+    assert review(again)["status"] == "review_required"
+    for current in again["arms"]:
+        original = next(
+            a
+            for a in real_report["arms"]
+            if a["seed"] == current["seed"] and a["optimizer"] == current["optimizer"]
+        )
+        assert original["run_id"] != current["run_id"]
+        assert original["initial_adapter_sha256"] == current["initial_adapter_sha256"]
+        assert original["final_adapter_sha256"] == current["final_adapter_sha256"]
+        assert original["heldout_loss_after"] == current["heldout_loss_after"]
+        assert [e["train_loss"] for e in original["events"]] == [
+            e["train_loss"] for e in current["events"]
+        ]
