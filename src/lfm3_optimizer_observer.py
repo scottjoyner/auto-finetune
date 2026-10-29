@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import statistics
@@ -39,17 +40,19 @@ def _summarize(arm):
             "end_train_loss": events[-1]["train_loss"], "numerical_anomaly": anomaly}
 
 
-def _model_suggestion(suggestion, lrs):
+def _model_suggestion(suggestion, lrs, report_sha256):
     if suggestion is None:
         return {"status": "not_submitted"}
     if not isinstance(suggestion, dict) or set(suggestion) != {
-        "optimizer", "learning_rate", "base_sha256", "reason"
+        "optimizer", "learning_rate", "base_sha256", "report_sha256", "reason"
     }:
         return {"status": "rejected", "reason": "invalid_schema"}
     name, lr, reason = suggestion["optimizer"], suggestion["learning_rate"], suggestion["reason"]
-    if type(name) is not str or name not in lrs or suggestion["base_sha256"] != BASE:
+    if (type(name) is not str or name not in lrs or suggestion["base_sha256"] != BASE
+            or suggestion["report_sha256"] != report_sha256):
         return {"status": "rejected", "reason": "target_mismatch"}
-    if not _finite(lr) or not isinstance(reason, str) or not 1 <= len(reason) <= 240:
+    if (not _finite(lr) or type(reason) is not str or not 1 <= len(reason) <= 240
+            or any(ord(char) < 32 or ord(char) == 127 for char in reason)):
         return {"status": "rejected", "reason": "invalid_value"}
     low, high = LIMITS[name]
     if not low <= lr <= high or not 0.8 * lrs[name] <= lr <= 1.2 * lrs[name]:
@@ -68,6 +71,12 @@ def observe(report, suggestion=None):
         return blocked("numerical_telemetry_anomaly")
     if len(report["seeds"]) < 3 or report["steps"] < 20:
         return blocked("insufficient_replicates_or_steps")
+    # A content digest binds an advisory proposal to exactly this telemetry; it
+    # is not a signature or proof of authenticity. Signed receipts are required
+    # before any future trial admission.
+    report_sha256 = hashlib.sha256(json.dumps(
+        report, sort_keys=True, separators=(",", ":"), allow_nan=False,
+    ).encode("utf-8")).hexdigest()
     lrs = {}
     for name in ("adamw", "muon"):
         values = {arm["learning_rate"] for arm in report["arms"]
@@ -85,9 +94,10 @@ def observe(report, suggestion=None):
                              "research_only": True, "muon_lora_unvalidated": name == "muon"})
     return {"schema": SCHEMA, "status": "research_observation_only",
             "model": report["model"], "base_sha256": BASE,
+            "report_sha256": report_sha256, "report_sha_is_signature": False,
             "sample_type": "synthetic_random_tokens", "observations": observations,
             "proposed_next_experiment_grid": grid,
-            "model_suggestion_review": _model_suggestion(suggestion, lrs),
+            "model_suggestion_review": _model_suggestion(suggestion, lrs, report_sha256),
             "fresh_independent_holdout_required": True,
             "real_task_quality_improvement_established": False,
             "optimizer_switch_permitted": False,
