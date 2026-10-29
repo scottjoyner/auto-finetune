@@ -98,7 +98,8 @@ def review(receipt):
         except (ValueError,TypeError):
             return blocked("invalid_prompt_attention_input")
         if (len(context)!=4 or
-                hashlib.sha256(json.dumps(normalized,separators=(",",":")).encode()).hexdigest()!=row["context_sha256"]):
+                hashlib.sha256(json.dumps(tuple(context),separators=(",",":")).encode()).hexdigest()!=row["context_sha256"]
+                or abs(sum(float(v*v) for v in context)-1)>1e-5):
             return blocked("unverified_preprobe_model_context")
         if row.get("neural_head_parameter_count")!=HEAD_PARAM_COUNT:
             return blocked("wrong_neural_head_parameter_count")
