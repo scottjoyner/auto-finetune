@@ -275,6 +275,31 @@ format. A measured difference in these scores is not by itself
 evidence of general capability loss or of safety preservation.
 Human ratings of the refusal benchmark remain outstanding.
 
+\subsection{ARC answer-length and scoring-rule sensitivity}
+To assess the influence of a plausible scoring confound without
+adding checkpoints or generating new answers, we audited both
+predeclared likelihood scores on the same 1,172 ARC questions.
+There were 4 questions with three choices, 1,165 with four,
+and 3 with five; selecting uniformly among choices would
+yield approximately 25.02\% accuracy in expectation.
+
+Raw-sum and length-normalized likelihood selected different
+answers on 499/1,172 questions for A, 503/1,172 for B,
+and 423/1,172 for C. Among 501 cases with a \emph{unique}
+shortest option by token count, the raw-sum method selected
+that option 274 times for A, 272 for B, and 230 for C;
+normalization selected it 60, 60, and 54 times respectively.
+This does not establish which scoring rule is optimal, but
+it documents substantial format sensitivity and the potential
+effect of candidate length on raw-sum scores.
+
+Because the post-trained and M1-edited arms score near this
+choice-count baseline under the custom completion format, we
+avoid interpreting their small paired difference as evidence
+of general reasoning degradation. Independent standard
+benchmarking, prompt and order robustness checks, and
+human-reviewed safety outcomes are still required.
+
 \subsection{Capability integration smoke (not official ARC scoring)}
 A seeded 12-question ARC-Challenge subset was evaluated with raw
 multiple-choice letter-completion scores. The original and M1-edited
