@@ -59,3 +59,14 @@ def test_unpaired_seed_or_adapter_identity_denied():
     bad=copy.deepcopy(m)
     bad["initial_lora_b_sha256"]="f"*64
     assert matched_pair(a,bad,d)["status"]=="blocked"
+
+
+def test_forged_dust_forward_count_or_name_cannot_pass_three_way_review():
+    a,m,d=inputs(1)
+    changed=copy.deepcopy(d)
+    changed["records"][0]["actual_antithetic_forwards"]=99
+    assert matched_pair(a,m,changed)["status"]=="blocked"
+    changed=copy.deepcopy(d)
+    changed["selected_adapter_names"]=[x.replace("v_proj","q_proj")
+                                       for x in changed["selected_adapter_names"]]
+    assert matched_pair(a,m,changed)["status"]=="blocked"
