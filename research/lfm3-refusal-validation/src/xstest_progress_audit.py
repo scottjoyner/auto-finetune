@@ -106,6 +106,7 @@ def audit(folder):
     summary["journal_complete_lines_sha256"] = digest
     summary["ignored_unterminated_tail"] = pending_partial_line
     summary["benchmark_sha256"] = SOURCE_SHA256
+    summary["checkpoint_sha256"] = manifest["checkpoint_sha256"]
     return summary
 
 
