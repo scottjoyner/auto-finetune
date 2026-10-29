@@ -26,6 +26,7 @@ from src.lfm3_dust_activation_head import (
 )
 from src.lfm3_dust_direction_attention import DIM, DirectionAttentionHead
 from src.lfm3_dust_online_calibration import CalibratedActivationHead
+from src.lfm3_dust_trainable_attention import ForwardOnlyNeuralAttentionHead, HEAD_PARAM_COUNT
 from src.lfm3_dust_predictive_probe import _basis, _direction, _loss, _unit
 from src.lfm3_lora_text_task_probe import dataset, _digest
 from src.lfm3_real_lora_probe import BASE_SHA256, MODEL_PATH, _load, _preflight, _sha
@@ -34,27 +35,30 @@ SCHEMA = "sensorgraft.lfm3.dust-prequential-all-candidates.v1"
 EPISODES = 8
 NEW_COHORT_EPISODES = 12
 NEW_COHORT_SEEDS = (4, 5, 6)
+NEURAL_COHORT_SEEDS = (7, 8, 9)
 CANDIDATES = 4
 SIGMA = .05
 POLICIES = ("zero", "historical_mean", "direction", "activation", "calibrated")
+NEURAL_POLICIES = POLICIES + ("neural",)
 
 
 def validate(*, seed, episodes, candidates, sigma):
     if (type(seed) is not int or type(episodes) is not int
             or not ((seed in (1, 2, 3) and episodes == EPISODES)
-                    or (seed in NEW_COHORT_SEEDS and episodes == NEW_COHORT_EPISODES))
+                    or (seed in NEW_COHORT_SEEDS + NEURAL_COHORT_SEEDS
+                        and episodes == NEW_COHORT_EPISODES))
             or type(candidates) is not int or candidates != CANDIDATES
             or type(sigma) not in (int, float) or sigma != SIGMA):
         raise ValueError("unpreregistered_prequential_experiment")
 
 
-def _metrics(episodes, *, expected_episodes=EPISODES):
+def _metrics(episodes, *, expected_episodes=EPISODES, policies=POLICIES):
     """No information from the current episode may enter its forecasts."""
     evaluation = [r for r in episodes if r["episode"] > 0]
     if len(evaluation) != expected_episodes - 1:
         raise ValueError("incomplete_prequential_period")
     result = {}
-    for policy in POLICIES:
+    for policy in policies:
         sq, absolute, selected, oracle, observed = [], [], [], [], []
         for row in evaluation:
             values = row["candidates"]
@@ -109,12 +113,15 @@ def run(*, seed=1, episodes=EPISODES, candidates=CANDIDATES,
     direction = DirectionAttentionHead()
     activation = ActivationDirectionHead()
     calibrated = CalibratedActivationHead()
+    neural = (ForwardOnlyNeuralAttentionHead(seed=seed)
+              if seed in NEURAL_COHORT_SEEDS else None)
     parts = dataset(seed)
     manifests = {name: _digest(rows) for name, rows in parts.items()}
     prior_gains = []
     episode_rows = []
     started = time.perf_counter()
     for ep in range(episodes):
+        neural_training = neural.tune_from_previous(episode=ep) if neural else None
         item = parts["train"][ep]
         # The additional context forward is prompt-only, and precedes all
         # current-episode outcome measurements.
@@ -129,6 +136,7 @@ def run(*, seed=1, episodes=EPISODES, candidates=CANDIDATES,
                 d = direction.predict(signed, episode=ep)
                 a = activation.predict(signed, context, episode=ep)
                 c = calibrated.predict(signed, context, episode=ep)
+                n = neural.predict(signed, context, episode=ep) if neural else None
                 prior_mean = statistics.mean(prior_gains) if prior_gains else 0.
                 entries.append({
                     "candidate": idx, "sign": sign,
@@ -138,11 +146,14 @@ def run(*, seed=1, episodes=EPISODES, candidates=CANDIDATES,
                         "direction": d["predicted_gain"],
                         "activation": a["predicted_gain"],
                         "calibrated": c["predicted_gain"],
+                        **({"neural": n["predicted_gain"]} if n else {}),
                     },
                     "direction_evidence": d["evidence"],
                     "activation_evidence": a["evidence"],
                     "calibrated_evidence": c["evidence"],
                     "head_weights_preprobe": list(c["head_weights"]),
+                    **({"neural_historical_keys": n["historical_keys"]}
+                       if n else {}),
                 })
         # Frozen forecasts for ALL 2*CANDIDATES directions: no selective
         # winner's curse and no same-episode outcome-to-prediction leakage.
@@ -175,6 +186,10 @@ def run(*, seed=1, episodes=EPISODES, candidates=CANDIDATES,
                                entry["measured_gain"], episode=ep,
                                split="train", measured=True)
             prior_gains.append(entry["measured_gain"])
+        if neural:
+            neural.observe_episode([(entry["direction_coefficients"], context,
+                                     entry["measured_gain"]) for entry in entries],
+                                   episode=ep, split="train", measured=True)
         if any(p.grad is not None for p in model.parameters()):
             raise RuntimeError("unexpected_training_gradient")
         payload = {
@@ -191,6 +206,11 @@ def run(*, seed=1, episodes=EPISODES, candidates=CANDIDATES,
             "perturbed_forward_count": 2 * candidates,
             "prompt_only_forward_count": 1,
             "training_backward_count": 0,
+            **({"preprobe_neural_context": list(context),
+               "neural_training": neural_training,
+               "neural_head_after_episode_sha256": neural.parameter_sha256,
+               "neural_head_parameter_count": HEAD_PARAM_COUNT}
+               if neural else {}),
         }
         episode_rows.append(payload)
         print(json.dumps({
@@ -202,7 +222,8 @@ def run(*, seed=1, episodes=EPISODES, candidates=CANDIDATES,
             or any(not torch.equal(p.detach(), original)
                    for p, original in zip(params, saved, strict=True))):
         raise RuntimeError("frozen_adapter_modified_after_observation")
-    metrics = _metrics(episode_rows, expected_episodes=episodes)
+    metrics = _metrics(episode_rows, expected_episodes=episodes,
+                       policies=NEURAL_POLICIES if neural else POLICIES)
     return {
         "schema": SCHEMA, "status": "real_lfm3_prequential_prediction_only",
         "model": "LiquidAI/LFM3-1.7B", "base_sha256": BASE_SHA256,
@@ -229,6 +250,18 @@ def run(*, seed=1, episodes=EPISODES, candidates=CANDIDATES,
         "calibration_useful_for_generalization_proven": False,
         "elapsed_s": max(time.perf_counter() - started, 1e-9),
         "weight_promotion_permitted": False, "trial_authorized": False,
+        **({"neural_head": "trainable_two_head_scaled_dot_product_cross_attention",
+            "neural_head_parameters": HEAD_PARAM_COUNT,
+            "neural_head_training": "two_forward_only_antithetic_head_trials_per_episode",
+            "neural_head_final_sha256": neural.parameter_sha256,
+            "neural_head_total_only_forward_evaluations": neural.trial_head_forwards,
+            "neural_head_model_backpropagation": False,
+            "neural_head_optimizer_object": False,
+            "head_parameter_training_observed": neural.parameter_sha256 !=
+                __import__("hashlib").sha256(json.dumps(neural.initial,
+                    separators=(",",":"),allow_nan=False).encode()).hexdigest(),
+            "neural_head_transformed_predictions_are_not_production_authorized": True}
+           if neural else {}),
     }
 
 
@@ -236,7 +269,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--research-only", action="store_true", required=True)
     p.add_argument("--allow-forward-only-all-candidate-audit", action="store_true", required=True)
-    p.add_argument("--seed", type=int, choices=(1,2,3,4,5,6), required=True)
+    p.add_argument("--seed", type=int, choices=(1,2,3,4,5,6,7,8,9), required=True)
     p.add_argument("--episodes", type=int, default=EPISODES)
     p.add_argument("--candidates", type=int, default=CANDIDATES)
     p.add_argument("--sigma", type=float, default=SIGMA)
