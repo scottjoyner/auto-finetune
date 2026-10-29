@@ -6,8 +6,10 @@ Stores version metadata in a JSON registry file.
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
+import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -55,18 +57,40 @@ class ModelRegistry:
         self._load()
 
     def _load(self) -> None:
-        if os.path.exists(self.registry_path):
-            try:
-                with open(self.registry_path) as f:
-                    data = json.load(f)
-                for v in data.get("versions", []):
-                    mv = ModelVersion(**v)
-                    self._versions[mv.version_id] = mv
-                for t in data.get("ab_tests", []):
-                    ab = ABTest(**t)
-                    self._ab_tests[ab.test_id] = ab
-            except Exception:
-                pass
+        # Existing malformed state must not silently become an empty registry:
+        # that could erase active model identity and A/B review history on save.
+        if not os.path.exists(self.registry_path):
+            return
+        with open(self.registry_path) as stream:
+            data = json.load(stream)
+        if (type(data) is not dict
+                or type(data.get("versions")) is not list
+                or type(data.get("ab_tests")) is not list):
+            raise ValueError("malformed model registry: expected version and A/B arrays")
+        versions = {}
+        tests = {}
+        for record in data["versions"]:
+            if type(record) is not dict:
+                raise ValueError("malformed registry model version")
+            version = ModelVersion(**record)
+            if type(version.version_id) is not str or not version.version_id:
+                raise ValueError("malformed model version identity")
+            if version.version_id in versions:
+                raise ValueError("duplicate persisted model version identity")
+            versions[version.version_id] = version
+        for record in data["ab_tests"]:
+            if type(record) is not dict:
+                raise ValueError("malformed persisted A/B comparison")
+            ab = ABTest(**record)
+            if type(ab.test_id) is not str or not ab.test_id:
+                raise ValueError("malformed A/B test identity")
+            if ab.test_id in tests:
+                raise ValueError("duplicate persisted A/B test identity")
+            if (ab.version_a not in versions or ab.version_b not in versions
+                    or ab.version_a == ab.version_b):
+                raise ValueError("persisted A/B test references invalid models")
+            tests[ab.test_id] = ab
+        self._versions, self._ab_tests = versions, tests
 
     def _save(self) -> None:
         data = {
@@ -80,7 +104,11 @@ class ModelRegistry:
                  metrics: dict | None = None, parent: str | None = None,
                  notes: str = "") -> str:
         """Register a new model version. Returns version_id."""
-        version_id = f"{label}-{int(time.time())}"
+        # Second-resolution IDs silently overwrite earlier registrations.
+        # An opaque UUID never derives authority from untrusted model labels.
+        version_id = f"model-{uuid.uuid4().hex}"
+        if version_id in self._versions:
+            raise ValueError("duplicate model registration ID")
         mv = ModelVersion(
             version_id=version_id,
             label=label,
@@ -104,8 +132,10 @@ class ModelRegistry:
             versions = [v for v in versions if v.status == status]
         return sorted(versions, key=lambda v: v.created_at, reverse=True)
 
-    def promote(self, version_id: str) -> bool:
-        """Promote a candidate to active (retires previous active)."""
+    def promote(self, version_id: str, *, operator_confirmed: bool = False) -> bool:
+        """Activate only after the caller explicitly confirms model promotion."""
+        if operator_confirmed is not True:
+            return False
         mv = self._versions.get(version_id)
         if not mv:
             return False
@@ -141,9 +171,19 @@ class ModelRegistry:
 
     def start_ab_test(self, version_a: str, version_b: str) -> str | None:
         """Start an A/B test between two versions."""
-        if version_a not in self._versions or version_b not in self._versions:
+        if (version_a not in self._versions or version_b not in self._versions
+                or version_a == version_b):
             return None
-        test_id = f"ab-{int(time.time())}"
+        # A model cannot participate in two simultaneously running A/B tests.
+        # Distinct test IDs are required even for tests started in one second.
+        if any(t.status == "running" and
+               (version_a in (t.version_a, t.version_b)
+                or version_b in (t.version_a, t.version_b))
+               for t in self._ab_tests.values()):
+            return None
+        test_id = f"ab-{uuid.uuid4().hex}"
+        if test_id in self._ab_tests:
+            return None
         ab = ABTest(
             test_id=test_id,
             version_a=version_a,
@@ -153,50 +193,80 @@ class ModelRegistry:
         self._ab_tests[test_id] = ab
         self._versions[version_a].ab_test_group = test_id
         self._versions[version_b].ab_test_group = test_id
-        self._versions[version_a].status = "testing"
-        self._versions[version_b].status = "testing"
+        # Preserve the current active model while the candidate is evaluated.
+        # An A/B test does NOT interrupt the serving baseline.
+        if self._versions[version_a].status != "active":
+            self._versions[version_a].status = "testing"
+        if self._versions[version_b].status != "active":
+            self._versions[version_b].status = "testing"
         self._save()
         return test_id
 
     def record_ab_metric(self, test_id: str, version: str, metric: str, value: float) -> bool:
+        if (type(metric) is not str or not metric or metric.endswith("_count")
+                or type(value) not in (float, int) or not math.isfinite(value)
+                or (metric == "score" and not 0 <= value <= 1)):
+            return False
         ab = self._ab_tests.get(test_id)
         if not ab or ab.status != "running":
             return False
         if version == ab.version_a:
-            ab.metrics_a[metric] = ab.metrics_a.get(metric, 0) + value
-            ab.metrics_a[f"{metric}_count"] = ab.metrics_a.get(f"{metric}_count", 0) + 1
+            metrics = ab.metrics_a
         elif version == ab.version_b:
-            ab.metrics_b[metric] = ab.metrics_b.get(metric, 0) + value
-            ab.metrics_b[f"{metric}_count"] = ab.metrics_b.get(f"{metric}_count", 0) + 1
+            metrics = ab.metrics_b
         else:
             return False
+        old_total = metrics.get(metric, 0)
+        old_count = metrics.get(f"{metric}_count", 0)
+        if (type(old_total) not in (int, float) or not math.isfinite(old_total)
+                or type(old_count) is not int or not 0 <= old_count < 2**53):
+            return False
+        new_total = old_total + value
+        if not math.isfinite(new_total) or (metric == "score"
+                and not 0 <= new_total <= old_count + 1):
+            return False
+        metrics[metric] = new_total
+        metrics[f"{metric}_count"] = old_count + 1
         self._save()
         return True
 
-    def complete_ab_test(self, test_id: str, metric: str = "score") -> str | None:
-        """Complete an A/B test and determine winner by metric."""
+    def complete_ab_test(self, test_id: str, metric: str = "score",
+                         *, operator_confirmed: bool = False) -> str | None:
+        """Completing an A/B test also activates its winner; default deny."""
+        if operator_confirmed is not True or metric != "score":
+            return None
         ab = self._ab_tests.get(test_id)
         if not ab or ab.status != "running":
             return None
+        count_a = ab.metrics_a.get("score_count")
+        count_b = ab.metrics_b.get("score_count")
+        sum_a = ab.metrics_a.get("score")
+        sum_b = ab.metrics_b.get("score")
+        if (type(count_a) is not int or type(count_b) is not int
+                or min(count_a, count_b) < 1
+                or type(sum_a) not in (int, float)
+                or type(sum_b) not in (int, float)
+                or not math.isfinite(sum_a) or not math.isfinite(sum_b)
+                or not 0 <= sum_a <= count_a
+                or not 0 <= sum_b <= count_b):
+            return None
+        if ab.version_a not in self._versions or ab.version_b not in self._versions:
+            return None
+        avg_a, avg_b = sum_a / count_a, sum_b / count_b
+        if not math.isfinite(avg_a) or not math.isfinite(avg_b):
+            return None
+        winner = ab.version_a if avg_a >= avg_b else ab.version_b
+        loser = ab.version_b if winner == ab.version_a else ab.version_a
+        # Commit one coherent in-memory state and save it once. No intermediate
+        # activate-and-rollback side effect, and no mutation on invalid metrics.
         ab.end_time = time.time()
         ab.status = "completed"
-
-        # Compute average metric
-        count_a = ab.metrics_a.get(f"{metric}_count", 1)
-        count_b = ab.metrics_b.get(f"{metric}_count", 1)
-        avg_a = ab.metrics_a.get(metric, 0) / max(1, count_a)
-        avg_b = ab.metrics_b.get(metric, 0) / max(1, count_b)
-
-        winner = ab.version_a if avg_a >= avg_b else ab.version_b
         ab.winner = winner
-
-        # Promote winner
-        self.promote(winner)
-        # Retire loser
-        loser = ab.version_b if winner == ab.version_a else ab.version_a
-        if loser in self._versions:
-            self._versions[loser].status = "retired"
-
+        for model in self._versions.values():
+            if model.status == "active" and model.version_id != winner:
+                model.status = "retired"
+        self._versions[winner].status = "active"
+        self._versions[loser].status = "retired"
         self._save()
         return winner
 
@@ -238,6 +308,7 @@ def main(argv=None) -> int:
 
     prom = sub.add_parser("promote", help="Promote a version to active")
     prom.add_argument("--version", required=True)
+    prom.add_argument("--confirm-activation", action="store_true")
 
     ab = sub.add_parser("ab-test", help="Start A/B test")
     ab.add_argument("--a", required=True)
@@ -252,6 +323,7 @@ def main(argv=None) -> int:
     abc = sub.add_parser("ab-complete", help="Complete A/B test")
     abc.add_argument("--test", required=True)
     abc.add_argument("--metric", default="score")
+    abc.add_argument("--confirm-activation", action="store_true")
 
     args = parser.parse_args(argv)
 
@@ -271,7 +343,7 @@ def main(argv=None) -> int:
     elif args.action == "summary":
         print(json.dumps(registry.summary(), indent=2))
     elif args.action == "promote":
-        if registry.promote(args.version):
+        if registry.promote(args.version, operator_confirmed=args.confirm_activation):
             print(f"[registry] Promoted: {args.version}")
         else:
             print(f"[registry] Not found: {args.version}")
@@ -287,7 +359,8 @@ def main(argv=None) -> int:
         else:
             print("[registry] Failed to record metric")
     elif args.action == "ab-complete":
-        winner = registry.complete_ab_test(args.test, args.metric)
+        winner = registry.complete_ab_test(args.test, args.metric,
+                                           operator_confirmed=args.confirm_activation)
         if winner:
             print(f"[registry] Winner: {winner}")
         else:

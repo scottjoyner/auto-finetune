@@ -1,0 +1,85 @@
+{
+  "admitted_new_research_trial_only": null,
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "external_best_option": "F",
+  "measured_options": [
+    {
+      "dev_loss": 11.674005508422852,
+      "label": "A",
+      "learning_rate": 0.001,
+      "optimizer": "adamw"
+    },
+    {
+      "dev_loss": 10.901610374450684,
+      "label": "B",
+      "learning_rate": 0.002,
+      "optimizer": "adamw"
+    },
+    {
+      "dev_loss": 11.801153182983398,
+      "label": "C",
+      "learning_rate": 0.001,
+      "optimizer": "muon_experimental"
+    },
+    {
+      "dev_loss": 11.485044479370117,
+      "label": "D",
+      "learning_rate": 0.002,
+      "optimizer": "muon_experimental"
+    },
+    {
+      "dev_loss": 11.609944343566895,
+      "label": "E",
+      "learning_rate": 0.001,
+      "optimizer": "muon_experimental_match_rms_adamw"
+    },
+    {
+      "dev_loss": 10.66989517211914,
+      "label": "F",
+      "learning_rate": 0.002,
+      "optimizer": "muon_experimental_match_rms_adamw"
+    }
+  ],
+  "model_observations": [
+    {
+      "choice_logits": {
+        "A": 20.375,
+        "B": 22.875,
+        "C": 18.625,
+        "D": 17.125,
+        "E": 18,
+        "F": 16
+      },
+      "external_best": "F",
+      "model_choice": "B",
+      "model_matches_external": false,
+      "prompt_variant": 0
+    },
+    {
+      "choice_logits": {
+        "A": 17.375,
+        "B": 18.875,
+        "C": 17,
+        "D": 15.0625,
+        "E": 15.6875,
+        "F": 19.125
+      },
+      "external_best": "F",
+      "model_choice": "F",
+      "model_matches_external": true,
+      "prompt_variant": 1
+    }
+  ],
+  "no_advisor_optimization_executed": true,
+  "no_heldout_scoring": true,
+  "no_model_weights_changed": true,
+  "no_source_authentication": true,
+  "production_ready": false,
+  "schema": "sg-lfm3-calibrated-muon-advisor.v1",
+  "source": "synthetic-frozen-head-lora-muon-scaling",
+  "two_format_agreement_with_objective": false,
+  "experiment_date": "2026-10-28",
+  "node": "xwing",
+  "network_disabled_bwrap": true,
+  "independent_repetitions": 0
+}

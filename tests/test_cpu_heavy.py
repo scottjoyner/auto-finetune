@@ -107,7 +107,7 @@ class TestProfile:
     """Tests for dataset profiling."""
 
     def test_session_length_stats(self):
-        from src.profile import _session_length_stats
+        from src.dataset_profile import _session_length_stats
 
         sessions = [SAMPLE_SESSION, SAMPLE_SESSION_2, SAMPLE_SESSION_3]
         stats = _session_length_stats(sessions)
@@ -117,14 +117,14 @@ class TestProfile:
         assert stats["n_sessions"] == 3
 
     def test_language_detect(self):
-        from src.profile import _language_detect
+        from src.dataset_profile import _language_detect
 
         assert _language_detect("def foo(): pass") == "python"
         assert _language_detect("function bar() {}") == "javascript"
         assert _language_detect("fn main() {}") == "rust"
 
     def test_file_type_stats(self):
-        from src.profile import _file_type_stats
+        from src.dataset_profile import _file_type_stats
 
         sessions = [SAMPLE_SESSION, SAMPLE_SESSION_2]
         stats = _file_type_stats(sessions)
@@ -133,7 +133,7 @@ class TestProfile:
         assert "languages" in stats
 
     def test_topic_clusters(self):
-        from src.profile import _topic_clusters
+        from src.dataset_profile import _topic_clusters
 
         sessions = [SAMPLE_SESSION, SAMPLE_SESSION_2, SAMPLE_SESSION_3]
         clusters = _topic_clusters(sessions, max_clusters=5)
@@ -142,7 +142,7 @@ class TestProfile:
         assert "cluster_sizes" in clusters
 
     def test_profile_sessions(self):
-        from src.profile import profile_sessions
+        from src.dataset_profile import profile_sessions
 
         sessions = [SAMPLE_SESSION, SAMPLE_SESSION_2, SAMPLE_SESSION_3]
         profile = profile_sessions(sessions)

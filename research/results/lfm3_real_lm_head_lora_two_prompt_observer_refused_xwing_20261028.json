@@ -1,0 +1,71 @@
+{
+  "advisor_consistent_and_correct": false,
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "external_best": "B",
+  "heldout_consulted": false,
+  "may_promote_to_fleet": false,
+  "model_or_adapter_weights_written": false,
+  "next_synthetic_trial_suggestion_only": null,
+  "observations": [
+    {
+      "external_best": "B",
+      "logit_scores": {
+        "A": 10.625,
+        "B": 16.5,
+        "C": 18,
+        "D": 12.25
+      },
+      "matches_external": false,
+      "model_choice": "C",
+      "prompt_variant": 0
+    },
+    {
+      "external_best": "B",
+      "logit_scores": {
+        "A": 15.875,
+        "B": 19.5,
+        "C": 19.875,
+        "D": 14.25
+      },
+      "matches_external": false,
+      "model_choice": "C",
+      "prompt_variant": 1
+    }
+  ],
+  "observed_dev_options": [
+    {
+      "dev_loss": 11.674005508422852,
+      "label": "A",
+      "lr": 0.001,
+      "optimizer": "adamw"
+    },
+    {
+      "dev_loss": 10.901610374450684,
+      "label": "B",
+      "lr": 0.002,
+      "optimizer": "adamw"
+    },
+    {
+      "dev_loss": 11.801153182983398,
+      "label": "C",
+      "lr": 0.001,
+      "optimizer": "muon_experimental"
+    },
+    {
+      "dev_loss": 11.485044479370117,
+      "label": "D",
+      "lr": 0.002,
+      "optimizer": "muon_experimental"
+    }
+  ],
+  "optimizer_step_executed_by_advisor": false,
+  "production_ready": false,
+  "prompts_tested": 2,
+  "schema": "sg-lfm3-real-head-lora-optimizer-observer.v1",
+  "source": "synthetic-head-only-lora-dev",
+  "source_custody_authenticated": false,
+  "experiment_date": "2026-10-28",
+  "node": "xwing",
+  "network_disabled_bwrap": true,
+  "independent_repetitions": 0
+}

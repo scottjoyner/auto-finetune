@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import uuid
 import urllib.request
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -39,15 +40,19 @@ class AlertManager:
 
     def _load(self) -> None:
         if os.path.exists(self.alerts_path):
+            # The log is append-only. Acknowledgments append a newer event
+            # with the same ID; the most recent record is the current state.
+            latest: dict[str, Alert] = {}
             try:
                 with open(self.alerts_path) as f:
                     for line in f:
                         line = line.strip()
                         if line:
-                            data = json.loads(line)
-                            self.alerts.append(Alert(**data))
+                            alert = Alert(**json.loads(line))
+                            latest[alert.alert_id] = alert
             except Exception:
                 pass
+            self.alerts = list(latest.values())
 
     def _save_alert(self, alert: Alert) -> None:
         os.makedirs(os.path.dirname(self.alerts_path), exist_ok=True)
@@ -57,7 +62,7 @@ class AlertManager:
     def fire(self, level: str, source: str, message: str,
              metadata: dict | None = None) -> str:
         """Fire a new alert."""
-        alert_id = f"alert-{int(time.time() * 1000)}"
+        alert_id = f"alert-{time.time_ns()}-{uuid.uuid4().hex[:12]}"
         alert = Alert(
             alert_id=alert_id,
             level=level,

@@ -1,0 +1,28 @@
+{
+  "admitted_next_synthetic_trial_only": null,
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "choice_logit_scores": {
+    "A": 14.625,
+    "B": 10.1875,
+    "C": 8.9375,
+    "D": 8.9375,
+    "E": 6.6875,
+    "F": 8.5
+  },
+  "deterministic_dev_loss_best_option": "C",
+  "heldout_evaluated": false,
+  "model_choice": "A",
+  "model_choice_matches_measured_dev_best": false,
+  "model_generated_command_executed": false,
+  "optimizer_state_changed": false,
+  "parent_observation_sha256": "0df857790480ba4962b47c61b34e2c477c4358c227dd41736b2868505a9f0e2c",
+  "production_ready": false,
+  "real_lfm3_weights_trained": false,
+  "schema": "sg-lfm3-optimizer-second-observation.v1",
+  "source": "fabricated-toy-grid-only",
+  "experiment_date": "2026-10-27",
+  "node": "xwing",
+  "actual_training_source": "fabricated-6-arm-toy",
+  "checkpoints_trained": false,
+  "operator_signed_off": false
+}

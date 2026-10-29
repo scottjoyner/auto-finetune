@@ -1,0 +1,78 @@
+{
+  "cases": [
+    {
+      "expected": "ZQ-41",
+      "id": "synthetic-r7",
+      "kind": "graph_lookup",
+      "prompt": "In the fictional fleet ledger, what is the replacement code of node R7? Reply with the code only.",
+      "reference": "In the fictional fleet ledger, node R7 has replacement code ZQ-41.",
+      "session_hash": "9fa3ed072eb6a29423efa127b1d899c46241de751f06c41cffcc88130726ccf0",
+      "split": "dev"
+    },
+    {
+      "expected": "glass",
+      "id": "synthetic-e3",
+      "kind": "graph_lookup",
+      "prompt": "In the mock construction ticket catalog, what sector is ticket E3 assigned to? Reply with the sector only.",
+      "reference": "In the mock construction ticket catalog, ticket E3 is assigned to the glass sector.",
+      "session_hash": "f32700db2d56239787cf6116d3b2f11b0ffdcc663c39624f7ae2ebed97fb3c33",
+      "split": "heldout"
+    },
+    {
+      "expected": "72",
+      "id": "synthetic-k5",
+      "kind": "graph_lookup",
+      "prompt": "In the fictional calibration table, what integer threshold belongs to sensor K5? Reply with only the integer.",
+      "reference": "In the fictional calibration table, sensor K5 threshold is 72.",
+      "session_hash": "3e031d112f2d00f82c7f703d6ff586ea8495bf3d43b943df52e4fe830c444a8e",
+      "split": "dev"
+    },
+    {
+      "expected": "B7",
+      "id": "synthetic-l4",
+      "kind": "graph_lookup",
+      "prompt": "In the imaginary rack manifest, which bay code contains node L4? Reply with only the bay code.",
+      "reference": "In the imaginary rack manifest, node L4 is housed in bay B7.",
+      "session_hash": "e34d7d2564b11e866c0a0efe5f121275a5124488520116c49f86b167435b1785",
+      "split": "heldout"
+    },
+    {
+      "expected": "amber",
+      "id": "synthetic-v9",
+      "kind": "graph_lookup",
+      "prompt": "In the fabricated alert index, what severity is signal V9? Reply with only one word.",
+      "reference": "In the fabricated alert index, signal V9 has severity amber.",
+      "session_hash": "e93f015d73b9c1984695d288ac705766bc805b4fb6e9c8065afd0178ecb7ac7f",
+      "split": "dev"
+    },
+    {
+      "expected": "painting",
+      "id": "synthetic-p2",
+      "kind": "graph_lookup",
+      "prompt": "In the fictional contractor ledger, what trade sector is order P2 assigned to? Reply with the sector only.",
+      "reference": "In the fictional contractor ledger, order P2 belongs to the painting sector.",
+      "session_hash": "230267831b172df4678651192969542255edfe03cd63a9adb0e5e4136dd942cf",
+      "split": "heldout"
+    },
+    {
+      "expected": "teal",
+      "id": "synthetic-m6",
+      "kind": "graph_lookup",
+      "prompt": "In the invented cable register, what color is cable M6? Reply with the color only.",
+      "reference": "In the invented cable register, cable M6 is teal.",
+      "session_hash": "3b111baa00106bdd49e680701bb15fdd5f581fb433b9fba2c6bfc2138a029da0",
+      "split": "dev"
+    },
+    {
+      "expected": "AX-9",
+      "id": "synthetic-t4",
+      "kind": "graph_lookup",
+      "prompt": "In the mock incident routing ledger, what owner tag does ticket T4 have? Reply with the tag only.",
+      "reference": "In the mock incident routing ledger, ticket T4 owner tag is AX-9.",
+      "session_hash": "d3e23c435b4d66dc8d031af756d496c9bef09355a073a4b4bf1ab1caed1dc769",
+      "split": "heldout"
+    }
+  ],
+  "schema": "sg-lfm3-fabricated-ab.v1",
+  "source": "fabricated-synthetic-lab-only"
+}

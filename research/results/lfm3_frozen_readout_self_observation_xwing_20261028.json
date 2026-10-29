@@ -1,0 +1,42 @@
+{
+  "candidate_new_synthetic_run_only": {
+    "execute": false,
+    "learning_rate": 0.002,
+    "manual_review_required": true,
+    "optimizer": "adamw",
+    "steps": 6
+  },
+  "dev_results": [
+    {
+      "choice": "A",
+      "dev_loss": 5.105942726135254,
+      "lr": 0.001,
+      "optimizer": "adamw"
+    },
+    {
+      "choice": "B",
+      "dev_loss": 0.8833263516426086,
+      "lr": 0.002,
+      "optimizer": "adamw"
+    }
+  ],
+  "externally_best_dev_choice": "B",
+  "heldout_consulted": false,
+  "model_agrees_with_measured_dev": true,
+  "model_choice": "B",
+  "no_advisor_optimizer_execution": true,
+  "pretrained_lfm3_weights_modified": false,
+  "production_ready": false,
+  "reference_checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "schema": "sg-lfm3-readout-self-observation.v1",
+  "scores": {
+    "A": 16.625,
+    "B": 18.375
+  },
+  "source": "fabricated-frozen-feature-only",
+  "experiment_date": "2026-10-28",
+  "node": "xwing",
+  "offline_sandbox": true,
+  "replications_completed": 0,
+  "may_train_on_real_traces": false
+}

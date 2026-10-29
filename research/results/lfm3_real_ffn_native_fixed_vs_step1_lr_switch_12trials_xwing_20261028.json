@@ -1,0 +1,548 @@
+{
+  "allowed_schedules": [
+    {
+      "learning_rates": [
+        0.004,
+        0.004,
+        0.004
+      ],
+      "optimizer": "adamw"
+    },
+    {
+      "learning_rates": [
+        0.002,
+        0.004,
+        0.004
+      ],
+      "optimizer": "adamw"
+    },
+    {
+      "learning_rates": [
+        0.004,
+        0.004,
+        0.004
+      ],
+      "optimizer": "muon_match_rms_adamw"
+    },
+    {
+      "learning_rates": [
+        0.002,
+        0.004,
+        0.004
+      ],
+      "optimizer": "muon_match_rms_adamw"
+    }
+  ],
+  "automatic_optimizer_switching_authorized": false,
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "dev_sha256": "0f680e180e58c3c7aaed7cba2d4be691356770cfef06a12ff25c735d03395731",
+  "frozen_backbone_parameters": 1728801536,
+  "frozen_dev_loss": 11.945556640625,
+  "heldout_evaluated": false,
+  "learning_rate_schedule_precommitted": true,
+  "model_revision": "40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd",
+  "model_weights_saved": false,
+  "new_training_authorized": false,
+  "optimizer_advice_used": false,
+  "production_ready": false,
+  "rank": 4,
+  "real_model_training_trials": 12,
+  "schema": "sg-lfm3-real-final-ffn-native-lr-schedule-v1",
+  "seeds": [
+    20261028,
+    20261029,
+    20261030
+  ],
+  "target": "model.layers.23.feed_forward.w2",
+  "train_sha256": "4971ae232108ed62234040df9b9dd05b89d10a7a9c77f8f43252cc4912ad3df5",
+  "trainable_parameters": 38912,
+  "trials": [
+    {
+      "adapter_saved": false,
+      "backbone_modified": false,
+      "final_dev_loss": 8.701119422912598,
+      "initial_dev_loss": 11.945556640625,
+      "observations": [
+        {
+          "dev_loss_after": 11.945552825927734,
+          "gradient_norm_before_clipping": 0.10856038331985474,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 1,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 10.832698822021484,
+          "gradient_norm_before_clipping": 2.6338846683502197,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 2,
+          "training_objective_before_step": 9.83604621887207
+        },
+        {
+          "dev_loss_after": 8.701119422912598,
+          "gradient_norm_before_clipping": 5.5128350257873535,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 3,
+          "training_objective_before_step": 8.594182014465332
+        }
+      ],
+      "optimizer": "adamw",
+      "precommitted_learning_rates": [
+        0.004,
+        0.004,
+        0.004
+      ],
+      "seed": 20261028,
+      "trainable_parameters": 38912
+    },
+    {
+      "adapter_saved": false,
+      "backbone_modified": false,
+      "final_dev_loss": 9.218924522399902,
+      "initial_dev_loss": 11.945556640625,
+      "observations": [
+        {
+          "dev_loss_after": 11.94552230834961,
+          "gradient_norm_before_clipping": 0.10856038331985474,
+          "learning_rate": 0.002,
+          "optimizer_changed_by_model": false,
+          "step": 1,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.117700576782227,
+          "gradient_norm_before_clipping": 1.3202745914459229,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 2,
+          "training_objective_before_step": 9.83606243133545
+        },
+        {
+          "dev_loss_after": 9.218924522399902,
+          "gradient_norm_before_clipping": 4.5798444747924805,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 3,
+          "training_objective_before_step": 8.87399673461914
+        }
+      ],
+      "optimizer": "adamw",
+      "precommitted_learning_rates": [
+        0.002,
+        0.004,
+        0.004
+      ],
+      "seed": 20261028,
+      "trainable_parameters": 38912
+    },
+    {
+      "adapter_saved": false,
+      "backbone_modified": false,
+      "final_dev_loss": 11.891962051391602,
+      "initial_dev_loss": 11.945556640625,
+      "observations": [
+        {
+          "dev_loss_after": 11.945556640625,
+          "gradient_norm_before_clipping": 0.10856038331985474,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 1,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.934663772583008,
+          "gradient_norm_before_clipping": 0.26346340775489807,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 2,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.891962051391602,
+          "gradient_norm_before_clipping": 0.7656585574150085,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 3,
+          "training_objective_before_step": 9.836051940917969
+        }
+      ],
+      "optimizer": "muon_match_rms_adamw",
+      "precommitted_learning_rates": [
+        0.004,
+        0.004,
+        0.004
+      ],
+      "seed": 20261028,
+      "trainable_parameters": 38912
+    },
+    {
+      "adapter_saved": false,
+      "backbone_modified": false,
+      "final_dev_loss": 11.891973495483398,
+      "initial_dev_loss": 11.945556640625,
+      "observations": [
+        {
+          "dev_loss_after": 11.945556640625,
+          "gradient_norm_before_clipping": 0.10856038331985474,
+          "learning_rate": 0.002,
+          "optimizer_changed_by_model": false,
+          "step": 1,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.945520401000977,
+          "gradient_norm_before_clipping": 0.16184018552303314,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 2,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.891973495483398,
+          "gradient_norm_before_clipping": 0.6952923536300659,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 3,
+          "training_objective_before_step": 9.836053848266602
+        }
+      ],
+      "optimizer": "muon_match_rms_adamw",
+      "precommitted_learning_rates": [
+        0.002,
+        0.004,
+        0.004
+      ],
+      "seed": 20261028,
+      "trainable_parameters": 38912
+    },
+    {
+      "adapter_saved": false,
+      "backbone_modified": false,
+      "final_dev_loss": 9.079184532165527,
+      "initial_dev_loss": 11.945556640625,
+      "observations": [
+        {
+          "dev_loss_after": 11.94552230834961,
+          "gradient_norm_before_clipping": 0.07329821586608887,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 1,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.030623435974121,
+          "gradient_norm_before_clipping": 2.3581435680389404,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 2,
+          "training_objective_before_step": 9.836061477661133
+        },
+        {
+          "dev_loss_after": 9.079184532165527,
+          "gradient_norm_before_clipping": 5.0631842613220215,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 3,
+          "training_objective_before_step": 8.760181427001953
+        }
+      ],
+      "optimizer": "adamw",
+      "precommitted_learning_rates": [
+        0.004,
+        0.004,
+        0.004
+      ],
+      "seed": 20261029,
+      "trainable_parameters": 38912
+    },
+    {
+      "adapter_saved": false,
+      "backbone_modified": false,
+      "final_dev_loss": 9.521598815917969,
+      "initial_dev_loss": 11.945556640625,
+      "observations": [
+        {
+          "dev_loss_after": 11.945554733276367,
+          "gradient_norm_before_clipping": 0.07329821586608887,
+          "learning_rate": 0.002,
+          "optimizer_changed_by_model": false,
+          "step": 1,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.227241516113281,
+          "gradient_norm_before_clipping": 1.18075430393219,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 2,
+          "training_objective_before_step": 9.836065292358398
+        },
+        {
+          "dev_loss_after": 9.521598815917969,
+          "gradient_norm_before_clipping": 4.228841304779053,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 3,
+          "training_objective_before_step": 9.0035400390625
+        }
+      ],
+      "optimizer": "adamw",
+      "precommitted_learning_rates": [
+        0.002,
+        0.004,
+        0.004
+      ],
+      "seed": 20261029,
+      "trainable_parameters": 38912
+    },
+    {
+      "adapter_saved": false,
+      "backbone_modified": false,
+      "final_dev_loss": 11.876373291015625,
+      "initial_dev_loss": 11.945556640625,
+      "observations": [
+        {
+          "dev_loss_after": 11.945556640625,
+          "gradient_norm_before_clipping": 0.07329821586608887,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 1,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.9346923828125,
+          "gradient_norm_before_clipping": 0.2633838355541229,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 2,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.876373291015625,
+          "gradient_norm_before_clipping": 0.7542405128479004,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 3,
+          "training_objective_before_step": 9.836050033569336
+        }
+      ],
+      "optimizer": "muon_match_rms_adamw",
+      "precommitted_learning_rates": [
+        0.004,
+        0.004,
+        0.004
+      ],
+      "seed": 20261029,
+      "trainable_parameters": 38912
+    },
+    {
+      "adapter_saved": false,
+      "backbone_modified": false,
+      "final_dev_loss": 11.891962051391602,
+      "initial_dev_loss": 11.945556640625,
+      "observations": [
+        {
+          "dev_loss_after": 11.945556640625,
+          "gradient_norm_before_clipping": 0.07329821586608887,
+          "learning_rate": 0.002,
+          "optimizer_changed_by_model": false,
+          "step": 1,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.945520401000977,
+          "gradient_norm_before_clipping": 0.14619219303131104,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 2,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.891962051391602,
+          "gradient_norm_before_clipping": 0.6742940545082092,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 3,
+          "training_objective_before_step": 9.836051940917969
+        }
+      ],
+      "optimizer": "muon_match_rms_adamw",
+      "precommitted_learning_rates": [
+        0.002,
+        0.004,
+        0.004
+      ],
+      "seed": 20261029,
+      "trainable_parameters": 38912
+    },
+    {
+      "adapter_saved": false,
+      "backbone_modified": false,
+      "final_dev_loss": 9.009269714355469,
+      "initial_dev_loss": 11.945556640625,
+      "observations": [
+        {
+          "dev_loss_after": 11.945521354675293,
+          "gradient_norm_before_clipping": 0.09884188324213028,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 1,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 10.9732084274292,
+          "gradient_norm_before_clipping": 2.409202814102173,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 2,
+          "training_objective_before_step": 9.8360595703125
+        },
+        {
+          "dev_loss_after": 9.009269714355469,
+          "gradient_norm_before_clipping": 5.146053314208984,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 3,
+          "training_objective_before_step": 8.71865463256836
+        }
+      ],
+      "optimizer": "adamw",
+      "precommitted_learning_rates": [
+        0.004,
+        0.004,
+        0.004
+      ],
+      "seed": 20261030,
+      "trainable_parameters": 38912
+    },
+    {
+      "adapter_saved": false,
+      "backbone_modified": false,
+      "final_dev_loss": 9.458869934082031,
+      "initial_dev_loss": 11.945556640625,
+      "observations": [
+        {
+          "dev_loss_after": 11.945554733276367,
+          "gradient_norm_before_clipping": 0.09884188324213028,
+          "learning_rate": 0.002,
+          "optimizer_changed_by_model": false,
+          "step": 1,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.195882797241211,
+          "gradient_norm_before_clipping": 1.2076220512390137,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 2,
+          "training_objective_before_step": 9.836067199707031
+        },
+        {
+          "dev_loss_after": 9.458869934082031,
+          "gradient_norm_before_clipping": 4.288851737976074,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 3,
+          "training_objective_before_step": 8.993431091308594
+        }
+      ],
+      "optimizer": "adamw",
+      "precommitted_learning_rates": [
+        0.002,
+        0.004,
+        0.004
+      ],
+      "seed": 20261030,
+      "trainable_parameters": 38912
+    },
+    {
+      "adapter_saved": false,
+      "backbone_modified": false,
+      "final_dev_loss": 11.876313209533691,
+      "initial_dev_loss": 11.945556640625,
+      "observations": [
+        {
+          "dev_loss_after": 11.945556640625,
+          "gradient_norm_before_clipping": 0.09884188324213028,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 1,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.934694290161133,
+          "gradient_norm_before_clipping": 0.2680973708629608,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 2,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.876313209533691,
+          "gradient_norm_before_clipping": 0.7648375034332275,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 3,
+          "training_objective_before_step": 9.836051940917969
+        }
+      ],
+      "optimizer": "muon_match_rms_adamw",
+      "precommitted_learning_rates": [
+        0.004,
+        0.004,
+        0.004
+      ],
+      "seed": 20261030,
+      "trainable_parameters": 38912
+    },
+    {
+      "adapter_saved": false,
+      "backbone_modified": false,
+      "final_dev_loss": 11.891960144042969,
+      "initial_dev_loss": 11.945556640625,
+      "observations": [
+        {
+          "dev_loss_after": 11.945556640625,
+          "gradient_norm_before_clipping": 0.09884188324213028,
+          "learning_rate": 0.002,
+          "optimizer_changed_by_model": false,
+          "step": 1,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.945520401000977,
+          "gradient_norm_before_clipping": 0.15904834866523743,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 2,
+          "training_objective_before_step": 9.836003303527832
+        },
+        {
+          "dev_loss_after": 11.891960144042969,
+          "gradient_norm_before_clipping": 0.692121684551239,
+          "learning_rate": 0.004,
+          "optimizer_changed_by_model": false,
+          "step": 3,
+          "training_objective_before_step": 9.83604907989502
+        }
+      ],
+      "optimizer": "muon_match_rms_adamw",
+      "precommitted_learning_rates": [
+        0.002,
+        0.004,
+        0.004
+      ],
+      "seed": 20261030,
+      "trainable_parameters": 38912
+    }
+  ],
+  "experiment_date": "2026-10-28",
+  "node": "xwing",
+  "source_commit": "a84d54d668624c373ba7b746120bf9451008396a",
+  "offline_bwrap_enforced": true,
+  "authentic_producer_witness": false,
+  "independent_task_holdout_evaluated": false,
+  "model_recommendation_executed": false
+}

@@ -1,0 +1,65 @@
+{
+  "automatic_optimizer_change": false,
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "independent_heldout_evaluated": false,
+  "model_votes": [
+    {
+      "external_best": "A",
+      "logit_scores": {
+        "A": 14.1875,
+        "B": 11.5
+      },
+      "matches_external": true,
+      "model_choice": "A",
+      "prompt_variant": 0
+    },
+    {
+      "external_best": "A",
+      "logit_scores": {
+        "A": 16.375,
+        "B": 18
+      },
+      "matches_external": false,
+      "model_choice": "B",
+      "prompt_variant": 1
+    }
+  ],
+  "producer_authenticated": false,
+  "production_ready": false,
+  "real_lfm3_weights_modified": false,
+  "schema": "sg-lfm3-ffn-multiseed-advisor-judgment.v1",
+  "source": "synthetic-real-ffn-gradients-not-generalization",
+  "synthetic_review_candidate_only": null,
+  "three_seed_external_gate": {
+    "adamw_lower_dev_each_seed": [
+      true,
+      true,
+      true
+    ],
+    "arm_count": 6,
+    "auto_execute": false,
+    "can_modify_optimizers": false,
+    "can_update_model": false,
+    "fixed_objective_best": "A",
+    "independent_heldout_passed": false,
+    "may_promote_fleet": false,
+    "may_propose_next_synthetic_review_only": true,
+    "minimum_two_percent_gain_all_seeds": true,
+    "optimizer_development_median_adamw": 11.2101469039917,
+    "optimizer_development_median_muon_rms": 11.945520401000977,
+    "paired_relative_dev_gain_by_seed": [
+      0.07014761389025806,
+      0.0601229336027296,
+      0.061560607853271644
+    ],
+    "production_ready": false,
+    "schema": "sg-lfm3-ffn-multiseed-assessment.v1",
+    "seed_count": 3,
+    "training_schema": "sg-lfm3-real-last-layer-lora-3seed-3step.v1"
+  },
+  "two_prompt_consistent_and_correct": false,
+  "experiment_date": "2026-10-28",
+  "node": "xwing",
+  "offline_bwrap_enforced": true,
+  "independent_source_custody": false
+}

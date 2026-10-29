@@ -1,0 +1,98 @@
+{
+  "adapter_checkpoint_saved": false,
+  "additional_tuning_after_holdout": false,
+  "base_weights_modified": false,
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "dev_sha256": "0f680e180e58c3c7aaed7cba2d4be691356770cfef06a12ff25c735d03395731",
+  "dev_size": 2,
+  "frozen_model_dev_loss": 11.945556640625,
+  "frozen_model_holdout_loss": 9.008224487304688,
+  "holdout_sha256": "519ca17d52962a4f4d5a924dc8afaaeaeada77a390557f030985525a054bf158",
+  "holdout_size": 4,
+  "independent_task_family": false,
+  "may_promote": false,
+  "model_revision": "40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd",
+  "optimizer_selected_using_heldout": false,
+  "original_model_parameters_frozen": 1728801536,
+  "production_ready": false,
+  "schema": "sg-lfm3-real-ffn-dev-selected-lexical-holdout.v1",
+  "selected_adamw_beats_muon_on_holdout_per_seed": [
+    true,
+    true,
+    true
+  ],
+  "selection": {
+    "frozen_dev_receipt_sha256": "b2f4e7eeca1d5750506600c0de47626e48e47579bbaddd57a91fc5362caf7067",
+    "heldout_influenced_selection": false,
+    "learning_rate": 0.002,
+    "may_execute_outside_scratch": false,
+    "model_vote_influenced_selection": false,
+    "optimizer": "adamw",
+    "seeds": [
+      20261028,
+      20261029,
+      20261030
+    ],
+    "three_training_steps": 3
+  },
+  "source": "same-family-fictional-codebook-lexical-holdout-only",
+  "source_authenticated": false,
+  "train_sha256": "4971ae232108ed62234040df9b9dd05b89d10a7a9c77f8f43252cc4912ad3df5",
+  "train_size": 2,
+  "trials": [
+    {
+      "adapter_checkpoint_written": false,
+      "dev_loss_reproduced": 11.10757064819336,
+      "one_shot_lexical_holdout_loss": 8.291593551635742,
+      "optimizer": "adamw",
+      "precommitted_dev_loss": 11.10757064819336,
+      "seed": 20261028
+    },
+    {
+      "adapter_checkpoint_written": false,
+      "dev_loss_reproduced": 11.945520401000977,
+      "one_shot_lexical_holdout_loss": 9.00819206237793,
+      "optimizer": "muon_match_rms_adamw",
+      "precommitted_dev_loss": 11.945520401000977,
+      "seed": 20261028
+    },
+    {
+      "adapter_checkpoint_written": false,
+      "dev_loss_reproduced": 11.227320671081543,
+      "one_shot_lexical_holdout_loss": 8.37203598022461,
+      "optimizer": "adamw",
+      "precommitted_dev_loss": 11.227320671081543,
+      "seed": 20261029
+    },
+    {
+      "adapter_checkpoint_written": false,
+      "dev_loss_reproduced": 11.945520401000977,
+      "one_shot_lexical_holdout_loss": 9.008212089538574,
+      "optimizer": "muon_match_rms_adamw",
+      "precommitted_dev_loss": 11.945520401000977,
+      "seed": 20261029
+    },
+    {
+      "adapter_checkpoint_written": false,
+      "dev_loss_reproduced": 11.2101469039917,
+      "one_shot_lexical_holdout_loss": 8.380731582641602,
+      "optimizer": "adamw",
+      "precommitted_dev_loss": 11.2101469039917,
+      "seed": 20261030
+    },
+    {
+      "adapter_checkpoint_written": false,
+      "dev_loss_reproduced": 11.945520401000977,
+      "one_shot_lexical_holdout_loss": 9.008211135864258,
+      "optimizer": "muon_match_rms_adamw",
+      "precommitted_dev_loss": 11.945520401000977,
+      "seed": 20261030
+    }
+  ],
+  "experiment_date": "2026-10-28",
+  "node": "xwing",
+  "offline_bwrap_enforced": true,
+  "independent_source_attestation": false,
+  "heldout_family_independently_curated": false,
+  "model_training_authorized": false
+}

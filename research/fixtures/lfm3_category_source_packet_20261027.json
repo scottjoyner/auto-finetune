@@ -1,0 +1,148 @@
+{
+  "schema": "sg-lfm3-retrieval-metadata.v1",
+  "model_use": "non_authoritative_context_only",
+  "session_hash": "9c545c4deecc4c4c92a27eea765d752cb0bf3154883109a10392828ff9593c30",
+  "before_seq": 17,
+  "journal_revision": 2,
+  "source_generation": "legacy-unfenced",
+  "source_trust": "unverified-source-metadata",
+  "relation_semantics": "session_sequence_not_causal",
+  "items": [
+    {
+      "event_hash": "Trace_d2ff39a17be73abea73e5f152e857838",
+      "source_seq": 16,
+      "source_type": "opencode",
+      "trace_kind": "tool",
+      "status": "ok",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000010"
+    },
+    {
+      "event_hash": "Trace_3465d8a6cc262f4a0cc3dfaa0863782d",
+      "source_seq": 15,
+      "source_type": "opencode",
+      "trace_kind": "llm",
+      "status": "ok",
+      "projection_sha256": "000000000000000000000000000000000000000000000000000000000000000f"
+    },
+    {
+      "event_hash": "Trace_e7c4e3a80cd897135698559a1fe4d71d",
+      "source_seq": 14,
+      "source_type": "opencode",
+      "trace_kind": "tool",
+      "status": "error",
+      "projection_sha256": "000000000000000000000000000000000000000000000000000000000000000e"
+    },
+    {
+      "event_hash": "Trace_633aa96b81dfb4db3c47b5fbf2ab9b94",
+      "source_seq": 13,
+      "source_type": "opencode",
+      "trace_kind": "llm",
+      "status": "ok",
+      "projection_sha256": "000000000000000000000000000000000000000000000000000000000000000d"
+    },
+    {
+      "event_hash": "Trace_db09b963178f9345dc20be885a2467cd",
+      "source_seq": 12,
+      "source_type": "opencode",
+      "trace_kind": "tool",
+      "status": "ok",
+      "projection_sha256": "000000000000000000000000000000000000000000000000000000000000000c"
+    },
+    {
+      "event_hash": "Trace_f4c99efed65d1f842caf4ef6e84afaac",
+      "source_seq": 11,
+      "source_type": "opencode",
+      "trace_kind": "llm",
+      "status": "ok",
+      "projection_sha256": "000000000000000000000000000000000000000000000000000000000000000b"
+    },
+    {
+      "event_hash": "Trace_b282aff86605713d747c99d7ec9ea578",
+      "source_seq": 10,
+      "source_type": "opencode",
+      "trace_kind": "tool",
+      "status": "ok",
+      "projection_sha256": "000000000000000000000000000000000000000000000000000000000000000a"
+    },
+    {
+      "event_hash": "Trace_2d6176e65898ba6e984bc6e492a027fc",
+      "source_seq": 9,
+      "source_type": "opencode",
+      "trace_kind": "llm",
+      "status": "ok",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000009"
+    },
+    {
+      "event_hash": "Trace_0af87d4860d567a11b0f8bc022c041fe",
+      "source_seq": 8,
+      "source_type": "opencode",
+      "trace_kind": "tool",
+      "status": "ok",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000008"
+    },
+    {
+      "event_hash": "Trace_3b2480bd8aa381ae3b0f83fc89fc6e27",
+      "source_seq": 7,
+      "source_type": "opencode",
+      "trace_kind": "llm",
+      "status": "error",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000007"
+    },
+    {
+      "event_hash": "Trace_751f8b6183fd3467b9102cc8573ea5c5",
+      "source_seq": 6,
+      "source_type": "opencode",
+      "trace_kind": "tool",
+      "status": "ok",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000006"
+    },
+    {
+      "event_hash": "Trace_7087a6b3b811ffe1813e13dae7074c44",
+      "source_seq": 5,
+      "source_type": "opencode",
+      "trace_kind": "llm",
+      "status": "ok",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000005"
+    },
+    {
+      "event_hash": "Trace_7a40f90e7fa6876630ed148b4100835c",
+      "source_seq": 4,
+      "source_type": "opencode",
+      "trace_kind": "tool",
+      "status": "ok",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000004"
+    },
+    {
+      "event_hash": "Trace_5537a22b2e1b308990c8041f7073f1a3",
+      "source_seq": 3,
+      "source_type": "opencode",
+      "trace_kind": "llm",
+      "status": "ok",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000003"
+    },
+    {
+      "event_hash": "Trace_1a7f428652f3e7d06fa0fcc4e336ef6f",
+      "source_seq": 2,
+      "source_type": "opencode",
+      "trace_kind": "tool",
+      "status": "ok",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000002"
+    },
+    {
+      "event_hash": "Trace_9877712bdd98518102bfdf560ba63f1a",
+      "source_seq": 1,
+      "source_type": "opencode",
+      "trace_kind": "llm",
+      "status": "ok",
+      "projection_sha256": "0000000000000000000000000000000000000000000000000000000000000001"
+    }
+  ],
+  "packet_sha256": "00bd623cf51a271b6e86141a9de31809834629f03818f6a0b245a9f14faf7888",
+  "provenance_authentication_verified": false,
+  "source_completeness_verified": false,
+  "semantic_retrieval_verified": false,
+  "safe_to_use_as_gold": false,
+  "may_generate_gate_plan": false,
+  "may_train_controller": false,
+  "production_ready": false
+}

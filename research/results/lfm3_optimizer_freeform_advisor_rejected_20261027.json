@@ -1,0 +1,18 @@
+{
+  "advice_admitted_as_data": false,
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "may_promote_to_fleet": false,
+  "optimizer_update_executed": false,
+  "parent_observation_sha256": "da5b317ecb483a82dd52a634cc592492d79fc9075ba79e3084c2bebf94f07880",
+  "production_ready": false,
+  "proposed_new_trial_only": null,
+  "raw_advice_sha256": "22cd8cc1f6b4fd54cc4f6d08bfcc1cd5eeaab774e0489af2aca0fd8201d9b4c5",
+  "rejection_reason": "untrusted_advice_rejected",
+  "schema": "sg-lfm3-optimizer-observer-result.v1",
+  "source": "fabricated-toy-proxy-not-lfm3-training",
+  "weights_modified": false,
+  "experiment_date": "2026-10-27",
+  "node": "xwing",
+  "source_data": "fabricated-toy-only",
+  "independent_replication": false
+}

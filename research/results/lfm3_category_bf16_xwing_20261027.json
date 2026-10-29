@@ -1,0 +1,51 @@
+{
+  "category_5d_index_executed_by_rust": true,
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "conditions": {
+    "categorical_index": {
+      "decode_tokens": 2,
+      "exact_correct": false,
+      "expected_sha256": "ca00fccfb408989eddc401062c4d1219a6aceb6b9b55412357f1790862e8f178",
+      "prefill_tokens": 140,
+      "response_sha256": "b23a6a8439c0dde5515893e7c90c1e3233b8616e634470f20dc4928bcf3609bc",
+      "wall_ms": 543.106
+    },
+    "chronological_metadata": {
+      "decode_tokens": 16,
+      "exact_correct": false,
+      "expected_sha256": "b23a6a8439c0dde5515893e7c90c1e3233b8616e634470f20dc4928bcf3609bc",
+      "prefill_tokens": 266,
+      "response_sha256": "2d7dc48670f5eafaf0f2d440851d53bef30bc690c28cb3fd38034d8e9540439e",
+      "wall_ms": 2529.155
+    },
+    "no_context": {
+      "decode_tokens": 2,
+      "exact_correct": true,
+      "expected_sha256": "b23a6a8439c0dde5515893e7c90c1e3233b8616e634470f20dc4928bcf3609bc",
+      "prefill_tokens": 77,
+      "response_sha256": "b23a6a8439c0dde5515893e7c90c1e3233b8616e634470f20dc4928bcf3609bc",
+      "wall_ms": 503.26
+    }
+  },
+  "generalizable_accuracy_established": false,
+  "model_id": "LiquidAI/LFM3-1.7B",
+  "model_weights_modified": false,
+  "production_ready": false,
+  "ranked_packet_sha256": "526409ba9ad3d8fe6f78272d52d139bf45a95ceea24702e24be17e3796c6932c",
+  "revision": "40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd",
+  "schema": "sg-lfm3-category-answer-smoke.v1",
+  "semantic_vector_search_executed": false,
+  "source_generation_authenticated": false,
+  "source_packet_sha256": "00bd623cf51a271b6e86141a9de31809834629f03818f6a0b245a9f14faf7888",
+  "source_trace_data_used": false,
+  "task": "literal-ranked-category-extraction",
+  "thinking_enabled": false,
+  "trained_gate_intervention": false,
+  "experiment_date": "2026-10-27",
+  "execution_node": "xwing",
+  "runner_commit": "743aa95ec9624ac40dd4743c000a61f21e1d577b",
+  "source_fixture": "research/fixtures/lfm3_category_source_packet_20261027.json",
+  "ranked_fixture": "research/fixtures/lfm3_category_ranked_packet_20261027.json",
+  "independent_repetition_completed": false,
+  "model_helpfulness_claim": false
+}

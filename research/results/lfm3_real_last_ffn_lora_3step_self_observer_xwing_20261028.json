@@ -1,0 +1,62 @@
+{
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "dev_loss_gap": 0.8379497528076172,
+  "dev_options": [
+    {
+      "dev_loss": 11.10757064819336,
+      "label": "A",
+      "learning_rate": 0.002,
+      "optimizer": "adamw"
+    },
+    {
+      "dev_loss": 11.945520401000977,
+      "label": "B",
+      "learning_rate": 0.002,
+      "optimizer": "muon_match_rms_adamw"
+    }
+  ],
+  "externally_best": "A",
+  "heldout_used": false,
+  "may_promote": false,
+  "minimum_effect_size_gate_passed": true,
+  "model_observations": [
+    {
+      "external_best": "A",
+      "logit_scores": {
+        "A": 15.9375,
+        "B": 13.0625
+      },
+      "matches_external": true,
+      "model_choice": "A",
+      "prompt_variant": 0
+    },
+    {
+      "external_best": "A",
+      "logit_scores": {
+        "A": 19.5,
+        "B": 17.125
+      },
+      "matches_external": true,
+      "model_choice": "A",
+      "prompt_variant": 1
+    }
+  ],
+  "next_synthetic_trial_data_only": {
+    "execute": false,
+    "learning_rate": 0.002,
+    "optimizer": "adamw",
+    "requires_manual_review": true
+  },
+  "optimizer_updates_from_observer": false,
+  "pretrained_weights_modified": false,
+  "production_ready": false,
+  "schema": "sg-lfm3-ffn-lora-self-observer.v1",
+  "source": "fictional-3step-real-model-ffn-lora",
+  "source_authenticated": false,
+  "two_prompt_decisions_accepted_by_external_gate": true,
+  "experiment_date": "2026-10-28",
+  "research_node": "xwing",
+  "network_disabled_bwrap": true,
+  "independent_repetitions": 0,
+  "actual_optimizer_advice_executed": false
+}

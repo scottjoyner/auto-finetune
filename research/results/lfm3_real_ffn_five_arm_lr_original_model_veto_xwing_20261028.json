@@ -1,0 +1,123 @@
+{
+  "adapter_created": false,
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "dev_only_review_candidate": null,
+  "external_numeric_gate": {
+    "best_option_each_seed": [
+      2,
+      2,
+      2
+    ],
+    "best_option_index": 2,
+    "development_loss_by_seed": [
+      [
+        11.720093727111816,
+        11.10757064819336,
+        8.701119422912598,
+        11.945520401000977,
+        11.891962051391602
+      ],
+      [
+        11.751378059387207,
+        11.227320671081543,
+        9.079184532165527,
+        11.945520401000977,
+        11.876373291015625
+      ],
+      [
+        11.747182846069336,
+        11.2101469039917,
+        9.009269714355469,
+        11.945520401000977,
+        11.876313209533691
+      ]
+    ],
+    "development_only_research_review_eligible": true,
+    "heldout_evaluated": false,
+    "independent_task_family_covered": false,
+    "may_adjust_live_optimizer": false,
+    "may_execute_experiment": false,
+    "may_promote": false,
+    "may_save_weights": false,
+    "mean_development_loss_by_option": [
+      11.739551544189453,
+      11.181679407755533,
+      8.929857889811197,
+      11.945520401000977,
+      11.881549517313639
+    ],
+    "options": [
+      {
+        "learning_rate": 0.001,
+        "optimizer": "adamw"
+      },
+      {
+        "learning_rate": 0.002,
+        "optimizer": "adamw"
+      },
+      {
+        "learning_rate": 0.004,
+        "optimizer": "adamw"
+      },
+      {
+        "learning_rate": 0.002,
+        "optimizer": "muon_match_rms_adamw"
+      },
+      {
+        "learning_rate": 0.004,
+        "optimizer": "muon_match_rms_adamw"
+      }
+    ],
+    "production_ready": false,
+    "relative_improvement_over_adamw_002_by_seed": [
+      0.21664964387799504,
+      0.19133114674893156,
+      0.19632902302578606
+    ],
+    "schema": "sg-lfm3-real-ffn-lr-calibration-assessment.v1",
+    "seeds": [
+      20261028,
+      20261029,
+      20261030
+    ]
+  },
+  "heldout_evaluated": false,
+  "may_change_optimizer": false,
+  "may_train_model": false,
+  "original_model_updated": false,
+  "production_ready": false,
+  "schema": "sg-lfm3-real-ffn-lr-self-observer-v1",
+  "source_authenticated": false,
+  "two_layouts_consistent_with_evaluator": false,
+  "votes": [
+    {
+      "choice": "A",
+      "layout": 0,
+      "logits": {
+        "A": 15.0625,
+        "B": 11.6875,
+        "C": 14.6875,
+        "D": 10.875,
+        "E": 15
+      },
+      "matches_external_gate": false
+    },
+    {
+      "choice": "A",
+      "layout": 1,
+      "logits": {
+        "A": 16.5,
+        "B": 11.5625,
+        "C": 13,
+        "D": 10.6875,
+        "E": 15.3125
+      },
+      "matches_external_gate": false
+    }
+  ],
+  "experiment_date": "2026-10-28",
+  "node": "xwing",
+  "offline_bwrap_enforced": true,
+  "source_attested": false,
+  "optimizer_reconfigured": false
+}
