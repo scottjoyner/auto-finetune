@@ -1,0 +1,113 @@
+{
+  "actual_backwards": 3,
+  "base_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "comparable_to_full_qv_lora_optimization": false,
+  "data_manifest": {
+    "selection": "54c326a518f5e8bd00cbdbd8489b26cf23d9f4df90291bdc8f4c67fde527848a",
+    "train": "1911ff10e61dbd6fa9590dfdbed7e1289f7385d2fa7f56f9c94636d95a470afa",
+    "untouched_test": "805f619cc24342715597bca9be2d15066c94f569314fbd2f609d6fbfe1dafda0"
+  },
+  "elapsed_training_s": 6.358786006981973,
+  "equal_parameter_scope_with_dust": true,
+  "equal_total_forward_or_walltime_budget_with_dust": false,
+  "experimental_muon_on_lora_factors": false,
+  "final_lora_b_sha256": "e175eac04d8b5f50a1a4c5886d8377ee22a1d1a1fa3e0f9829ea8a4da2223e6f",
+  "final_test_evaluated": false,
+  "initial_lora_b_sha256": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47",
+  "learning_rate": 0.0001,
+  "model": "LiquidAI/LFM3-1.7B",
+  "no_checkpoints_written": true,
+  "optimizer": "adamw",
+  "parameter_scope": "last_two_attention_vproj_lora_B_only",
+  "records": [
+    {
+      "actual_forward_backwards": 1,
+      "clipped_grad_max_norm": 1.0,
+      "cumulative_lora_b_update_norm": 0.004525459269157659,
+      "elapsed_s": 0.3431301700184122,
+      "learning_rate": 0.0001,
+      "optimizer": "adamw",
+      "raw_grad_norm": 2.871126651763916,
+      "step": 0,
+      "train_loss": 10.962235450744629,
+      "update_norm": 0.004525459269157659
+    },
+    {
+      "actual_forward_backwards": 1,
+      "clipped_grad_max_norm": 1.0,
+      "cumulative_lora_b_update_norm": 0.007657771742376515,
+      "elapsed_s": 0.3543743859627284,
+      "learning_rate": 0.0001,
+      "optimizer": "adamw",
+      "raw_grad_norm": 2.956820249557495,
+      "step": 1,
+      "train_loss": 7.414425373077393,
+      "update_norm": 0.0035751108805997574
+    },
+    {
+      "actual_forward_backwards": 1,
+      "clipped_grad_max_norm": 1.0,
+      "cumulative_lora_b_update_norm": 0.010206415726699758,
+      "elapsed_s": 0.4500689209671691,
+      "learning_rate": 0.0001,
+      "optimizer": "adamw",
+      "raw_grad_norm": 0.13347367942333221,
+      "step": 2,
+      "train_loss": 0.07201115787029266,
+      "update_norm": 0.0027557800589721616
+    }
+  ],
+  "run_id": "606bc2beb756458b8ca13671c83a36b3",
+  "schema": "sensorgraft.lfm3.matched-lora-b-gradient-controls.v1",
+  "seed": 2,
+  "selected_adapter_names": [
+    "base_model.model.model.layers.20.self_attn.v_proj.lora_B.default.weight",
+    "base_model.model.model.layers.22.self_attn.v_proj.lora_B.default.weight"
+  ],
+  "selected_parameter_count": 2048,
+  "selection_after": {
+    "correct": 7,
+    "families": {
+      "greater": {
+        "correct": 1,
+        "total": 3
+      },
+      "parity": {
+        "correct": 3,
+        "total": 3
+      },
+      "sum": {
+        "correct": 3,
+        "total": 3
+      }
+    },
+    "mean_correct_minus_foil_logprob": 4.198350584962302,
+    "total": 9
+  },
+  "selection_before": {
+    "correct": 7,
+    "families": {
+      "greater": {
+        "correct": 1,
+        "total": 3
+      },
+      "parity": {
+        "correct": 3,
+        "total": 3
+      },
+      "sum": {
+        "correct": 3,
+        "total": 3
+      }
+    },
+    "mean_correct_minus_foil_logprob": 4.2350260648462505,
+    "total": 9
+  },
+  "selection_score_forwards": 36,
+  "source_independently_authenticated": false,
+  "status": "research_parameter_matched_gradient_control",
+  "steps": 3,
+  "training_forwards": 3,
+  "trial_authorized": false,
+  "weight_promotion_permitted": false
+}

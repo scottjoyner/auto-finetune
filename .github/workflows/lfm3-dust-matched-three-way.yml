@@ -1,0 +1,33 @@
+name: LFM3 equal-parameter AdamW Muon Dust research
+
+on:
+  push:
+    branches:
+      - "research/lfm3-dust-matched-three-way-*"
+  pull_request:
+    paths:
+      - "src/lfm3_dust_matched_gradient_*.py"
+      - "tests/test_lfm3_dust_matched_gradient_*.py"
+      - "research/evidence/lfm3-dust-matched-three-way-20261029/**"
+      - ".github/workflows/lfm3-dust-matched-three-way.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  paired-parameter-controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install minimal research-only contract dependencies
+        run: python -m pip install pytest==9.0.3 pyyaml==6.0.3
+      - name: Check receipts and source contracts without any model, GPU or network
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m compileall -q src/lfm3_dust_matched_gradient_probe.py src/lfm3_dust_matched_gradient_review.py
+          python -m pytest -o addopts= -q tests/test_lfm3_dust_matched_gradient_probe.py tests/test_lfm3_dust_matched_gradient_review.py
