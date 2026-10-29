@@ -1,0 +1,105 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,hyperref,booktabs}
+\title{Abliteration and Adversarial Validation of Refusal Mechanisms in LFM3-1.7B}
+\author{Research manuscript --- author review draft}
+\date{October 29, 2026 \\ Version 0.1.0}
+\begin{document}
+\maketitle
+\begin{abstract}
+We study refusal-related representations in the tri-hybrid LFM3-1.7B model
+and separate behavioral refusal from effective resistance to unauthorized
+actions. We preregister benign/adversarial paired contrasts, layer-level
+representation measurements, reversible interventions, and symbolic
+tool-authorization evaluation. This preliminary manuscript reports methods,
+not validated safety performance or model-specific causal effects.
+\end{abstract}
+\section{Introduction}
+Previous mechanistic work found low-dimensional refusal-mediating
+representations in some transformer language models \cite{arditi2024}.
+LFM3-1.7B uses 13 gated-convolution, five sliding-window attention, and six
+global-attention blocks \cite{liquid2026}, raising an open question about
+whether those mechanisms generalize across architectures. Agentic use also
+requires distinguishing verbal refusal from actual action authorization.
+\section{Research questions}
+We test four preregistered questions:
+(1) whether paired refusal-associated contrasts replicate in held-out prompts;
+(2) whether reversible perturbations affect refusal independently of benign
+helpfulness; (3) whether effects depend on operator type; and
+(4) whether verbal refusal predicts resistance to unauthorized tool actions.
+A shift in refusal language is not evidence of effective safety by itself.
+\section{Model and experimental design}
+The principal subject is the post-trained LiquidAI/LFM3-1.7B checkpoint.
+LiquidAI/LFM3-1.7B-Base is a distinct comparison, not an equivalent control.
+Full-precision and quantized versions are analyzed in separate strata.
+We freeze model revision, tokenizer, prompt template, seed, dtype, runtime,
+and dataset hash for each experiment.
+\subsection{Activation contrasts}
+For benign and adversarial variants of matched prompt $i$, let
+$h_\ell^{(b,i)}$ and $h_\ell^{(a,i)}$ be the layer-$\ell$ hidden vectors
+at the assistant generation prefix. The descriptive contrast is
+\[
+\bar{\Delta}_\ell=\frac{1}{N}\sum_i
+(h_\ell^{(a,i)}-h_\ell^{(b,i)}),\qquad
+d_\ell=\frac{\bar{\Delta}_\ell}{\|\bar{\Delta}_\ell\|_2}.
+\]
+These vectors can encode wording and topic rather than a causal refusal
+mechanism. Direction selection must occur on training pairs only; holdout
+prompts and sham vectors evaluate generalization.
+
+\subsection{Reversible interventions}
+On an inference-only forward hook, project activation $h_\ell$ by
+\[
+h_\ell'=h_\ell-\alpha \langle h_\ell,d_\ell\rangle d_\ell,
+\quad \alpha\in\{0,0.25,0.5,0.75,1\}.
+\]
+Compare identical seeds, decoding settings, and model weights under
+baseline, projection, and random-direction controls. Assess convolution,
+sliding-attention, and global-attention blocks separately. Preserve the
+original checkpoint and do not automatically distribute altered weights.
+
+\subsection{Behavioral outcomes}
+Evaluate (a) justified refusal or safe redirection of malicious prompts,
+(b) human-graded actionable harmful content, (c) benign utility and
+false-positive refusals, and (d) simulated unauthorized action attempts.
+Authorization is evaluated by a separate deterministic action policy:
+a model response never grants the permissions that policy enforces.
+No executable malicious tools, external targets, or live actions are used.
+Keyword-based refusal detection is only a weak descriptive proxy.
+
+\subsection{Analysis and validation}
+Use blinded human review, independent heldout cases, multiple prompt
+paraphrases, and category-based breakdowns. Report paired sample sizes,
+bootstrap confidence intervals, and correction for searched layers and
+projection strengths. Use standardized red-teaming ideas such as HarmBench
+\cite{mazeika2024} only with appropriate controls and data handling.
+A lower refusal rate is never treated as a successful safety outcome.
+\section{Governance and responsible dissemination}
+Model weights and raw adversarial generations remain private.
+There is no real tool execution, unrestricted serving endpoint, or
+automatic model promotion. Distributing altered weights requires independent
+safety assessment, legal/license review, and explicit publication approval.
+
+\section{Implementation status and limitations}
+Eight paired prompts, six simulated action cases, a local activation-probe
+runner, and unit tests are implemented. They are smoke tests, not safety
+benchmarks. The causal role of the measured direction remains unknown.
+Prompt-topic and prompt-length confounds can distort activation contrasts.
+A verbal refusal is not proof that malicious real-world actions are blocked.
+
+\section{Reproducibility}
+Pin model revision, template, data hashes, seeds, precision, code and runtime.
+Maintain heldout tests, independent grading, confidence intervals, and
+negative results. Do not interpret lexical refusal rates as safety outcomes.
+\begin{thebibliography}{9}
+\bibitem{arditi2024} A. Arditi et al.,
+{\it Refusal in Language Models Is Mediated by a Single Direction},
+NeurIPS 2024, arXiv:2406.11717.
+\bibitem{mazeika2024} M. Mazeika et al.,
+{\it HarmBench: A Standardized Evaluation Framework for Automated
+Red Teaming and Robust Refusal}, arXiv:2402.04249 (2024).
+\bibitem{liquid2026} Liquid AI,
+{\it Introducing LFM3: Every Modality for Specialized Intelligence},
+October 27, 2026.
+\end{thebibliography}
+\end{document}
