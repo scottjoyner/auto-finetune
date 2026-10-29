@@ -35,3 +35,11 @@ cd /home/scott/git/lfm3-refusal-study-20261029
 Private case-level outputs are never committed; only sanitized denominator
 counts and limitations may appear in the paper or pull request. Never infer
 that successful reasoning implies resistance to malicious or unauthorized actions.
+
+
+## Preliminary 12-item smoke result (not official accuracy)
+
+A original: 4/12; B M1-edited: 4/12; C pretrained: 8/12.
+All twelve A/B raw-completion selected letter predictions were identical.
+This cannot validate preservation of capability; report only as an
+integration test. No benchmark question or output text is public.
