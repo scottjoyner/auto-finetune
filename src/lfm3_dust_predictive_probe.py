@@ -24,6 +24,7 @@ from pathlib import Path
 
 from src.lfm3_dust_direction_attention import DIM, DirectionAttentionHead
 from src.lfm3_dust_activation_head import ActivationDirectionHead, prompt_only_activation_context
+from src.lfm3_dust_online_calibration import CalibratedActivationHead
 from src.lfm3_lora_text_task_probe import _completion_loss, _digest, _evaluate, dataset
 from src.lfm3_real_lora_probe import BASE_SHA256, MODEL_PATH, _load, _preflight, _sha
 
@@ -39,7 +40,7 @@ def validate(*, seed, steps, draws, policy):
     if (type(seed) is not int or seed not in (1, 2, 3)
             or type(steps) is not int or not 1 <= steps <= MAX_STEPS
             or type(draws) is not int or draws != DRAWS
-            or policy not in ("attended", "random", "activation_attended")):
+            or policy not in ("attended", "random", "activation_attended", "activation_calibrated")):
         raise ValueError("out_of_bounds_zeroth_order_training_plan")
 
 
@@ -126,7 +127,8 @@ def run(*, seed=1, steps=2, draws=DRAWS, policy="attended",
     splits = dataset(seed)
     manifests = {section: _digest(rows) for section, rows in splits.items()}
     before = _evaluate(torch, model, tokenizer, splits["selection"])
-    head = (ActivationDirectionHead() if policy == "activation_attended"
+    head = (CalibratedActivationHead() if policy == "activation_calibrated"
+            else ActivationDirectionHead() if policy == "activation_attended"
             else DirectionAttentionHead())
     basis = _basis(torch, params, seed=seed)
     generator = torch.Generator(device="cpu").manual_seed(851003 + seed)
@@ -137,19 +139,22 @@ def run(*, seed=1, steps=2, draws=DRAWS, policy="attended",
         # Context comes only from prompt tokens and is obtained BEFORE
         # the current candidate has any perturbation outcome.
         context = (prompt_only_activation_context(torch, model, tokenizer, item["prompt"])
-                   if policy == "activation_attended" else None)
+                   if policy in ("activation_attended", "activation_calibrated") else None)
         clean = _loss(torch, model, tokenizer, item)
         proposals = [_unit([float(x) for x in torch.randn(
             DIM, generator=generator, dtype=torch.float32)])
             for _ in range(CANDIDATES)]
         preprobe_order = (head.rank(proposals, context, episode=step)
                           if context is not None else head.rank(proposals, episode=step))
-        selected = (preprobe_order[:draws] if policy in ("attended", "activation_attended")
+        selected = (preprobe_order[:draws] if policy in ("attended", "activation_attended", "activation_calibrated")
                     else list(range(draws)))
         predictions = [(head.predict(features, context, episode=step)
                         if context is not None else head.predict(features, episode=step))
                        for features in proposals]
         score_pre = [entry["predicted_gain"] for entry in predictions]
+        gate_pre = (list(head.weights) if policy == "activation_calibrated"
+                    else None)
+        calibration_pre = (head.calibration_events if gate_pre is not None else None)
         best = (clean, None, 0.0)
         gains = []
         for candidate in selected:
@@ -210,6 +215,11 @@ def run(*, seed=1, steps=2, draws=DRAWS, policy="attended",
                                                for entry in predictions],
                "prompt_only_extra_forwards": 1}
                if context is not None else {}),
+            **({"calibration_weights_before_probes": gate_pre,
+               "calibration_events_before_probes": calibration_pre,
+               "calibration_events_after_probes": head.calibration_events,
+               "calibration_weights_after_probes": list(head.weights)}
+               if gate_pre is not None else {}),
         })
     after = _evaluate(torch, model, tokenizer, splits["selection"])
     if any(p.grad is not None for p in model.parameters()):
@@ -220,7 +230,9 @@ def run(*, seed=1, steps=2, draws=DRAWS, policy="attended",
         "schema": SCHEMA, "status": "research_forward_only_text_diagnostic",
         "model": "LiquidAI/LFM3-1.7B", "base_sha256": BASE_SHA256,
         "seed": seed, "steps": steps, "policy": policy,
-        "direction_head": ("causal_prompt_activation_two_head_training_probes_only"
+        "direction_head": ("causal_prompt_activation_two_head_train_online_calibrated"
+                           if policy == "activation_calibrated" else
+                           "causal_prompt_activation_two_head_training_probes_only"
                            if policy == "activation_attended" else
                            "causal_online_kernel_attention_training_probes_only"),
         "adapter_policy": "last_two_attention_vproj_lora_B_only",
@@ -235,7 +247,7 @@ def run(*, seed=1, steps=2, draws=DRAWS, policy="attended",
         "forward_only": True,
         "total_antithetic_forwards": sum(x["actual_antithetic_forwards"] for x in rows),
         **({"extra_prompt_only_forwards": steps, "raw_activations_persisted": False}
-           if policy == "activation_attended" else {}),
+           if policy in ("activation_attended", "activation_calibrated") else {}),
         "total_accepted_steps": sum(x["step_accepted"] for x in rows),
         "elapsed_s": time.perf_counter() - t0,
         "final_test_evaluated": False, "real_task_generalization_established": False,
@@ -253,7 +265,7 @@ def main():
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--steps", type=int, default=2)
     parser.add_argument("--draws", type=int, default=DRAWS)
-    parser.add_argument("--policy", choices=("attended", "random", "activation_attended"), default="attended")
+    parser.add_argument("--policy", choices=("attended", "random", "activation_attended", "activation_calibrated"), default="attended")
     parser.add_argument("--model-path", type=Path, default=Path(MODEL_PATH))
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
