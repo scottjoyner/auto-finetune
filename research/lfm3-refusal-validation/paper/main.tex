@@ -169,6 +169,47 @@ Two independent model-blinded annotation packets were created, but
 human review and adjudication have not begun. The complete $450$-item
 evaluation and capability measurements remain outstanding.
 
+\subsection{M1-style intervention fidelity on independent probes}
+An additional activation-fidelity smoke audit compared models A and B
+on four disjoint paired prompts (eight final-token observations). We
+measured each decoder block's root-mean-square component along the
+frozen calibration direction, then computed edited/original ratios.
+At layer 7 this ratio was $0.658$, at layer 10 it was $0.225$,
+at layer 14 it was $0.704$, at layer 18 it was $0.771$, and at
+layer 23 it was $0.806$. These descriptive ratios suggest
+nonuniform suppression and possible reintroduction of the projected
+component after the targeted layer in the LFM3 hybrid residual path.
+They do not demonstrate that the contrast direction encodes refusal,
+nor do they measure malicious-action resistance. The contrast used
+only two fitting pairs and requires substantially larger replication.
+
+\subsection{Independent capability-retention protocol}
+We supplement XSTest with a pinned ARC-Challenge test set of 1,172
+questions \cite{arc2018}, sharing the same frozen A/B/C checkpoints.
+For an initial comparison, each question is rendered as a raw
+multiple-choice completion with canonical option letters A--E.
+The probability proxy is the softmax of the next-token letter logits
+over available options; this choice removes the pretrained base's
+chat-template mismatch but does not constitute official ARC accuracy.
+Formal reporting requires conditional sequence likelihood, order
+permutations, full denominators, and separate instruction-following
+assessments. For each checkpoint, we preserve case-level predictions
+only in private storage. Any results from a limited seeded subset
+remain labeled as capability integration smoke, not retained
+reasoning capability claims.
+
+\subsection{Capability integration smoke (not official ARC scoring)}
+A seeded 12-question ARC-Challenge subset was evaluated with raw
+multiple-choice letter-completion scores. The original and M1-edited
+checkpoints each selected 4/12 correct options, and selected identical
+letters on all 12 examples. The pretrained checkpoint selected 8/12
+correct options using the same raw-completion prompt. This is not
+an official ARC benchmark result, a measure of instruction-following,
+or evidence of preserved capabilities: the sample is small, the answer
+scoring uses only first-letter logits, and the model variants differ
+in post-training. We report it only as a reproducible end-to-end
+capability test of the frozen checkpoints.
+
 \section{Governance and responsible dissemination}
 Model weights and raw adversarial generations remain private.
 There is no real tool execution, unrestricted serving endpoint, or
@@ -199,5 +240,8 @@ October 27, 2026.
 \bibitem{xstest2024} P. R\"ottger et al.,
 {\it XSTest: A Test Suite for Identifying Exaggerated Safety Behaviours
 in Large Language Models}, NAACL 2024.
+\bibitem{arc2018} P. Clark et al.,
+{\it Think you have Solved Question Answering? Try ARC, the AI2
+Reasoning Challenge}, 2018.
 \end{thebibliography}
 \end{document}
