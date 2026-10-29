@@ -9,6 +9,13 @@ from src import train
 from src import training_admission
 
 
+@pytest.fixture(autouse=True)
+def no_unmanaged_bypass_in_admission_regressions(monkeypatch):
+    # Shared dispatch fixtures set this for unrelated tests. These tests
+    # explicitly exercise HOLD decisions and must never inherit that bypass.
+    monkeypatch.delenv("AF_SKIP_UNMANAGED_CHECK", raising=False)
+
+
 def forbidden(*args, **kwargs):
     raise AssertionError("training attempted dataset/model work before admission")
 
