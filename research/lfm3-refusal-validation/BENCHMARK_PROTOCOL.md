@@ -231,3 +231,17 @@ prompt/response/ID fields must be unchanged in reassembly.
 There is no automated grading or publication authorization; full
 independent consensus and separate responsible release approval
 remain mandatory. See HUMAN_REVIEW_GUIDE.md.
+
+
+## Mechanical methodology-fidelity audit
+
+Full A/B weight comparison verified 48/48 targeted writer matrices
+exactly matched their rank-one projection and 238/238 other tensors
+were unchanged. A four-disjoint-pair heldout activation audit found
+22/23 measured layers had reduced directional projections, median
+ratio 0.801448. These are structural measurements, not evidence of
+successful removal of safety or refusal. B was fit on only two
+calibration pairs and does not replicate the full canonical candidate
+selection protocol. See METHODOLOGY_FIDELITY.md for limitations and
+evidence/20261029_abliteration_method_fidelity.json for sanitized counts.
+The primary study remains exactly three frozen checkpoints.
