@@ -11,8 +11,11 @@ We study refusal-related representations in the tri-hybrid LFM3-1.7B model
 and separate behavioral refusal from effective resistance to unauthorized
 actions. We preregister benign/adversarial paired contrasts, layer-level
 representation measurements, reversible interventions, and symbolic
-tool-authorization evaluation. This preliminary manuscript reports methods,
-not validated safety performance or model-specific causal effects.
+tool-authorization evaluation. We report a complete 450-prompt, three-checkpoint XSTest generation
+experiment (1,350 completions) with provenance checks and clearly
+qualified lexical refusal diagnostics. Human-graded refusal,
+malicious-action resistance, and complete capability retention remain
+under evaluation; no safety efficacy claim is made.
 \end{abstract}
 \section{Introduction}
 Previous mechanistic work found low-dimensional refusal-mediating
@@ -165,9 +168,41 @@ and $1/10$ safe and $7/8$ unsafe for C. These counts are explicitly
 \emph{not} human-graded behavior or safety estimates; generations were
 capped at $32$ tokens, model B was calibrated on only two examples, and
 one observation per category has no meaningful statistical power.
-Two independent model-blinded annotation packets were created, but
-human review and adjudication have not begun. The complete $450$-item
-evaluation and capability measurements remain outstanding.
+Two independent model-blinded annotation packets were created,
+but human review and adjudication have not begun. The pilot is
+separate from the now-completed full 450-item generation study.
+Independent, full-scale capability measurements remain outstanding.
+
+\subsection{Complete XSTest generation results: lexical proxy only}
+All 450 prompts in the pinned XSTest corpus were generated once
+for each of three frozen checkpoint arms with deterministic decoding
+and at most 128 new tokens, yielding 1,350 completed generations.
+The source and model SHA-256 digests are recorded in run provenance.
+All cases were matched across arms, and the journal passed the
+independent count, duplicate, order, category and integrity audit.
+
+For the 250 safe prompts, a weak lexical refusal proxy fired in
+39 for A (15.6\%), 31 for B (12.4\%), and 34 for C (13.6\%).
+For the 200 unsafe contrast prompts, it fired in 172 for A
+(86.0\%), 167 for B (83.5\%) and 163 for C (81.5\%).
+The matched A/B safe set contained nine yes-to-no and one
+no-to-yes proxy flips, or a B-minus-A difference of $-3.2$
+percentage points. The matched unsafe set contained ten
+yes-to-no and five no-to-yes flips, or $-2.5$ percentage points.
+Seeded paired-prompt bootstrap 95\% intervals for the
+\emph{lexical proxy only} were $[-6.0,-0.8]$ percentage points
+for safe prompts and $[-6.5,1.0]$ points for unsafe prompts.
+
+These are descriptive changes in \emph{wording}, not measures
+of actual harmful compliance, legitimate refusal, or helpfulness.
+A 128-token cap can truncate answers. Refusal keywords may
+coexist with operationally harmful instructions, and safe
+redirection need not include those keywords. Model C is not
+instruction-tuned. Moreover, the edited model's direction
+was fitted using only two calibration pairs. All 1,350
+private responses are now available for two independent
+model-blinded human reviewers, but annotation has not begun.
+No safety or capability-effectiveness conclusion follows.
 
 \subsection{M1-style intervention fidelity on independent probes}
 An additional activation-fidelity smoke audit compared models A and B
@@ -246,9 +281,11 @@ automatic model promotion. Distributing altered weights requires independent
 safety assessment, legal/license review, and explicit publication approval.
 
 \section{Implementation status and limitations}
-Eight paired prompts, six simulated action cases, a local activation-probe
-runner, and unit tests are implemented. They are smoke tests, not safety
-benchmarks. The causal role of the measured direction remains unknown.
+The complete pinned three-arm XSTest generation benchmark is audited,
+alongside eight paired calibration/holdout prompts, six synthetic
+authorization cases, activation-fidelity probes, and unit tests.
+Lexical results are descriptive, not independently reviewed safety
+metrics. The causal role of the measured direction remains unknown.
 Prompt-topic and prompt-length confounds can distort activation contrasts.
 A verbal refusal is not proof that malicious real-world actions are blocked.
 
