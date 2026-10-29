@@ -7,8 +7,8 @@ def test_no_duplicate_examples_across_splits():
     for seed in (1, 2, 3):
         sections = dataset(seed)
         assert [len(sections[x]) for x in ("train", "selection", "untouched_test")] == [24, 9, 9]
-        assert {k for rows in sections.values() for k in rows for _ in [0]} == {
-            "family", "prompt", "answer", "foil", "input_key"}
+        assert all(set(item) == {"family", "prompt", "answer", "foil", "input_key"}
+                   for rows in sections.values() for item in rows)
         all_keys = [x["input_key"] for rows in sections.values() for x in rows]
         assert len(set(all_keys)) == len(all_keys)
         assert len({_digest(v) for v in sections.values()}) == 3
