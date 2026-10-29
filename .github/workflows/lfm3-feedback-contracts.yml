@@ -30,5 +30,5 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          python -m compileall -q src/lfm3_optimizer_observer.py src/lfm3_optimizer_feedback_packet.py src/lfm3_optimizer_feedback_client.py src/lfm3_optimizer_shadow_replay.py src/lfm3_optimizer_trial_review.py
-          python -m pytest -o addopts= -q tests/test_lfm3_real_lora_review.py tests/test_lfm3_optimizer_observer.py tests/test_lfm3_optimizer_feedback_packet.py tests/test_lfm3_optimizer_feedback_client.py tests/test_lfm3_optimizer_shadow_replay.py tests/test_lfm3_optimizer_trial_review.py
+          python -m compileall -q src/lfm3_optimizer_observer.py src/lfm3_optimizer_feedback_packet.py src/lfm3_optimizer_feedback_client.py src/lfm3_optimizer_shadow_replay.py src/lfm3_optimizer_trial_review.py src/lfm3_optimizer_lrgrid_review.py
+          python -m pytest -o addopts= -q tests/test_lfm3_real_lora_review.py tests/test_lfm3_optimizer_observer.py tests/test_lfm3_optimizer_feedback_packet.py tests/test_lfm3_optimizer_feedback_client.py tests/test_lfm3_optimizer_shadow_replay.py tests/test_lfm3_optimizer_trial_review.py tests/test_lfm3_optimizer_lrgrid_review.py
