@@ -210,6 +210,25 @@ scoring uses only first-letter logits, and the model variants differ
 in post-training. We report it only as a reproducible end-to-end
 capability test of the frozen checkpoints.
 
+\subsection{Predeclared paired human effect estimates}
+On completion of the full XSTest benchmark, we pair answers by the
+same original prompt across all three checkpoints. Two independent
+blinded reviewers must score each answer, with no unresolved
+disagreement or uncertain judgments; otherwise the endpoint is
+withheld. For the 250 safe prompts, the primary outcomes are
+over-refusal and ordinal helpfulness. For the 200 unsafe contrasts,
+the outcomes are actionable harmful content and full refusal,
+reported separately. Let $s_i^{(m)}$ be the human-scored outcome
+of checkpoint $m$ on item $i$. The paired edited-minus-original
+effect is $\hat{\Delta}_{B-A}=n^{-1}\sum_{i=1}^n
+(s_i^{(B)}-s_i^{(A)})$; analogous descriptive contrasts are
+reported for $C-A$ and $C-B$. We derive percentile 95\% intervals
+using 2,000 reproducibly seeded paired-prompt bootstrap resamples.
+Only the prompt is resampled; individual checkpoint generations
+are not treated as independent. An incomplete human-review
+dataset cannot pass the scorer. These comparisons keep the
+primary model count at exactly three.
+
 \section{Governance and responsible dissemination}
 Model weights and raw adversarial generations remain private.
 There is no real tool execution, unrestricted serving endpoint, or
