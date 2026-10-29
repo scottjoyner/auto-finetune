@@ -55,3 +55,30 @@ For a real experiment: freeze source/model/tokenizer hashes; run isolated random
 **Proposed prospective experiment arms**, after compatible implementation/licensing review: A0 AdamW LoRA rank-2 control; A1 original factor-wise Muon LoRA as a diagnostic only; A2 mixed Muon (eligible 2D full hidden weights) + AdamW (other parameters) as a separately scoped *non-LoRA* experiment; A3 proper low-rank LoRA-Muon; A4 sMuon; A5 PoLoRA. Re-run at multiple ranks and matched compute/gradient-update budgets, with a locked final test and strict aggregate/individual safety and retention thresholds. Do not compare optimizer learning rates as equivalent across update rules without validating effective update scale and per-step cost.
 
 This is a research shortlist only: no third-party optimizer was installed, executed, licensed for redistribution, or integrated into the training harness here.
+
+## Actual pinned CPU-only three-level LFM3-1.7B optimizer experiment (October 29, 2026)
+
+This experiment supplements the previously committed equal-learning-rate research evidence. Two new CPU-only, offline real-pretrained-checkpoint BF16 LoRA rank-2 runs completed on x1-370 with the same three seeds, 20 train steps per optimizer/seed, train/heldout random-token generation and frozen backbone. Muon was applied to LoRA factor matrices only as an **experimental diagnostic**; it is not proper low-rank LoRA-Muon. The existing strict `src.lfm3_real_lora_review` returned `review_required` for both new datasets, and both reports are in `research/evidence/lfm3-real-lora-20261029/`. No adapters or modified weights were saved or promoted.
+
+| Optimizer | LR | Mean 3-seed synthetic held-out loss |
+| --- | ---: | ---: |
+| AdamW | 0.00008 | 13.12704770 |
+| AdamW | 0.00010 | 13.10812084 |
+| AdamW | 0.00012 | 13.08568931 |
+| Experimental factor-wise Muon | 0.00008 | 13.12217951 |
+| Experimental factor-wise Muon | 0.00010 | 13.11175664 |
+| Experimental factor-wise Muon | 0.00012 | 13.11473815 |
+
+Each of the 18 observed arms has 20 actual forward/backpropagation/optimizer update events, totalling **360 real steps across the three learning-rate configurations**. The two new reports add 240 steps over the original equal-LR baseline. Cross-report verification compares the model SHA/revision, initial adapter weights, training/holdout dataset SHA-256, initial held-out loss, seed identities, step counts, and distinct run IDs. This is recorded in `src/lfm3_optimizer_lrgrid_review.py` with regression tests.
+
+The raw first additional run source file SHA-256 (pre-JSON compaction) is `5ef1421edeb3ba773081bc4f3f2eeb20443780a56d82a61191cdc92e60089a87`. GitHub stores semantically equivalent **canonical compact JSON** under its own file blob hash. The original script's runner-generated execution IDs and adapter fingerprints are preserved intact.
+
+**Do not infer a winning optimizer or preferred learning rate** from this sweep. The targets are synthetic random-token teacher-forced losses and reused holdout sequences, not language utility, generalization or independent test performance. Different optimizer scaling and matched-update magnitude must be considered before any scientific comparison. The run employed only CPU threads and is not an R9700 throughput benchmark.
+
+Review locally (no GPU/model needed):
+```bash
+python -m src.lfm3_optimizer_lrgrid_review \
+ research/evidence/lfm3-real-lora-20261029/lfm3-real-lora-3seed-20step-equal-lr-20261029.json \
+ research/evidence/lfm3-real-lora-20261029/lfm3-real-lora-lrgrid-adamw8e-5-muon12e-5-20261029.json \
+ research/evidence/lfm3-real-lora-20261029/lfm3-real-lora-lrgrid-adamw12e-5-muon8e-5-20261029.json
+```
