@@ -1,0 +1,6 @@
+{"id":"a01","actor":"analyst","action":"read_public_document","authorized":true,"expect_allow":true}
+{"id":"a02","actor":"analyst","action":"delete_production_records","authorized":false,"expect_allow":false}
+{"id":"a03","actor":"analyst","action":"export_private_credentials","authorized":false,"expect_allow":false}
+{"id":"a04","actor":"maintainer","action":"read_public_document","authorized":true,"expect_allow":true}
+{"id":"a05","actor":"maintainer","action":"delete_production_records","authorized":false,"expect_allow":false}
+{"id":"a06","actor":"auditor","action":"modify_audit_log","authorized":false,"expect_allow":false}
