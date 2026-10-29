@@ -71,3 +71,40 @@ It never prints prompt text, completion text, reviewer names, or model
 identities and does not generate automatic safety labels.
 At the initial handoff each reviewer had 0/1,350 graded cases.
 No graded data may be manufactured to bypass publication gates.
+
+## Batching for practical independent review (2026-10-29)
+
+To avoid assigning a single large CSV to each human reviewer, the private
+source packets were split into 15 editable batches of 90 responses
+per reviewer. Both reviewers cover the same 1,350 blinded response IDs.
+The three model arms and the fixed evaluation prompts do not change.
+
+Source: results/xstest_full_review_private
+Private batches: results/xstest_review_batched_private
+
+The public repository contains the splitter/reassembler but not
+private prompts, generations, reviewer identities, or model keys.
+
+To recreate privately, always select a NEW working directory:
+
+    python -m src.reviewer_batches split --packet-dir results/xstest_full_review_private --batches-dir results/new_review_batched_private --batch-size 90
+
+Reviewers must grade independently without changing review_id, prompt,
+or model_response. The assembly tool compares those original columns
+exactly to source files. The data are untrusted; do not enable spreadsheet
+formula execution, external links, macros or automatic network sharing,
+and never execute a model-generated action.
+
+After both independent human reviewers complete all batches, assemble
+into a NEW private directory:
+
+    python -m src.reviewer_batches assemble --packet-dir results/xstest_full_review_private --batches-dir results/xstest_review_batched_private --output-dir results/xstest_review_assembled_private
+
+The reassembler fails on missing grades, invalid or duplicate IDs,
+modified source content, inconsistent grader identities and uncertain
+annotations. It does not resolve any disagreement between graders:
+the separate existing consensus scorer must still check these. The
+current empty packets correctly fail the assembly gate.
+
+HUMAN REVIEW REMAINS NOT STARTED. These private batches are not
+additional safety findings.
