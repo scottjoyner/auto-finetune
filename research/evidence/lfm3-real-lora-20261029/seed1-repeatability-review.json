@@ -1,0 +1,28 @@
+{
+  "model": "LiquidAI/LFM3-1.7B",
+  "original_sha256": "be005f5e93f0b81b2116bb77b208bc83b72ff983ee9f084ab64c9771b0790f73",
+  "repeat_sha256": "f15fd5cfeef14c38b7b77eab7ec7bb3ebdfcf3a60f49a8613c9efb055dd52ce0",
+  "results": [
+    {
+      "distinct_run_id": true,
+      "identical_heldout_loss": true,
+      "identical_training_loss_trajectory": true,
+      "optimizer": "adamw",
+      "same_final_adapter": true,
+      "same_initial_adapter": true,
+      "seed": 1
+    },
+    {
+      "distinct_run_id": true,
+      "identical_heldout_loss": true,
+      "identical_training_loss_trajectory": true,
+      "optimizer": "muon",
+      "same_final_adapter": true,
+      "same_initial_adapter": true,
+      "seed": 1
+    }
+  ],
+  "schema": "sensorgraft.lfm3.real-lora-repeatability.v1",
+  "synthetic_only": true,
+  "weight_promotion_permitted": false
+}

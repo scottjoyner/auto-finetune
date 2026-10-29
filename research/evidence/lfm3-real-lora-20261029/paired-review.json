@@ -1,0 +1,36 @@
+{
+  "mean_adamw_heldout_loss": 13.108120838801065,
+  "mean_muon_heldout_loss": 13.111756642659506,
+  "model": "LiquidAI/LFM3-1.7B",
+  "per_seed": [
+    {
+      "adamw_heldout": 12.627618074417114,
+      "muon_heldout": 12.63783311843872,
+      "muon_minus_adamw": 0.010215044021606445,
+      "seed": 1
+    },
+    {
+      "adamw_heldout": 13.595227718353271,
+      "muon_heldout": 13.578664541244507,
+      "muon_minus_adamw": -0.01656317710876465,
+      "seed": 2
+    },
+    {
+      "adamw_heldout": 13.101516723632812,
+      "muon_heldout": 13.118772268295288,
+      "muon_minus_adamw": 0.017255544662475586,
+      "seed": 3
+    }
+  ],
+  "proposal": {
+    "action": "collect_new_independent_real_data_before_tuning",
+    "muon_on_lora_factors_validated": false,
+    "optimizer_switch_permitted": false
+  },
+  "schema": "sensorgraft.lfm3.real-lora-review.v1",
+  "seed_count": 3,
+  "status": "review_required",
+  "steps_per_arm": 20,
+  "synthetic_only": true,
+  "weight_promotion_permitted": false
+}
