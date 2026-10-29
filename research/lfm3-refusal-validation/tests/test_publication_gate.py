@@ -99,3 +99,42 @@ def test_publication_gate_rejects_unterminated_tail(tmp_path,monkeypatch):
     })
     report=g.readiness_status(tmp_path,tmp_path,tmp_path/"absent",hashes(),{})
     assert report["xstest_inference"]["status"]=="incomplete"
+
+
+def test_custom_arc_gate_distinguishes_official_and_custom(tmp_path,monkeypatch):
+    import src.publication_gate as p
+    import src.arc_likelihood_progress_audit as auditor
+    (tmp_path/"private_manifest.json").write_text("{}")
+    monkeypatch.setattr(auditor,"audit",lambda path,verify_live_weights=False:{
+        "checkpoint_sha256":hashes(),
+        "journal_integrity":"passed",
+        "recorded_cases":3516,
+        "expected_cases":3516,
+        "completion":"generations_complete",
+        "unterminated_tail_present":False,
+        "per_arm":{arm:{"recorded":1172} for arm in ARMS},
+    })
+    report=p.custom_arc_check(tmp_path,hashes())
+    assert report["status"]=="complete"
+    assert report["official_benchmark"] is False
+
+
+def test_custom_arc_gate_blocks_mismatched_models(tmp_path,monkeypatch):
+    import src.publication_gate as p
+    import src.arc_likelihood_progress_audit as auditor
+    (tmp_path/"private_manifest.json").write_text("{}")
+    monkeypatch.setattr(auditor,"audit",lambda path,verify_live_weights=False:{
+        "checkpoint_sha256":{arm:"wrong" for arm in ARMS},
+        "journal_integrity":"passed",
+        "recorded_cases":3516,
+        "expected_cases":3516,
+        "completion":"generations_complete",
+        "unterminated_tail_present":False,
+        "per_arm":{arm:{"recorded":1172} for arm in ARMS},
+    })
+    assert p.custom_arc_check(tmp_path,hashes())["status"]=="blocked"
+
+
+def test_custom_arc_gate_without_evidence_is_pending(tmp_path):
+    import src.publication_gate as p
+    assert p.custom_arc_check(tmp_path,hashes())["status"]=="pending"
