@@ -9,6 +9,8 @@ from src import training_admission as a
 
 @pytest.fixture
 def paths(tmp_path,monkeypatch):
+    # Never inherit a repository-wide test bypass when exercising recovery HOLD.
+    monkeypatch.delenv("AF_SKIP_UNMANAGED_CHECK", raising=False)
     parent=tmp_path/"private-custody"
     parent.mkdir(mode=0o700)
     parent.chmod(0o700)
