@@ -1,0 +1,58 @@
+{
+  "input_custody_sha256": "733d7b526700fd6e35c9f28d5d056f6949e8cd803a7b4ee0ee4ecff57274dc86",
+  "model": "tiny_cpu_mlp_not_lfm3",
+  "proposal": {
+    "best_observed_muon_lr": 0.002,
+    "may_change_running_optimizer": false,
+    "next_muon_lr_probe": null,
+    "requires_new_independent_heldout_evaluation": true
+  },
+  "results": [
+    {
+      "mean_adamw_holdout_loss": 0.3590877254803975,
+      "mean_muon_holdout_loss": 0.37647293011347455,
+      "muon_learning_rate": 0.0001,
+      "paired_muon_minus_adamw": [
+        0.018259912729263306,
+        0.01596134901046753,
+        0.017934352159500122
+      ]
+    },
+    {
+      "mean_adamw_holdout_loss": 0.3590877254803975,
+      "mean_muon_holdout_loss": 0.35201048851013184,
+      "muon_learning_rate": 0.0005,
+      "paired_muon_minus_adamw": [
+        -0.007299363613128662,
+        -0.007542073726654053,
+        -0.006390273571014404
+      ]
+    },
+    {
+      "mean_adamw_holdout_loss": 0.3590877254803975,
+      "mean_muon_holdout_loss": 0.3231319884459178,
+      "muon_learning_rate": 0.001,
+      "paired_muon_minus_adamw": [
+        -0.037400126457214355,
+        -0.03520762920379639,
+        -0.03525945544242859
+      ]
+    },
+    {
+      "mean_adamw_holdout_loss": 0.3590877254803975,
+      "mean_muon_holdout_loss": 0.27063039938608807,
+      "muon_learning_rate": 0.002,
+      "paired_muon_minus_adamw": [
+        -0.09183681011199951,
+        -0.0853148102760315,
+        -0.08822035789489746
+      ]
+    }
+  ],
+  "schema": "sensorgraft.lfm3.synthetic-sweep-review.v1",
+  "seed_count": 3,
+  "status": "review_required",
+  "steps_per_arm": 50,
+  "synthetic_only": true,
+  "weight_promotion_permitted": false
+}
