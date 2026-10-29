@@ -14,6 +14,7 @@ Workflow:
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 from dataclasses import asdict, dataclass, field
@@ -133,63 +134,51 @@ class AutoPromoter:
             result["details"] = "A/B test not running"
             return result
 
-        # Check if enough feedback collected
+        # An A/B score is a self-reported measurement, not a signed
+        # approval. Never finalize or activate a model in this observer.
+        # The registry's legacy complete_ab_test() is intentionally not
+        # called here: it activates a winner before reviewing thresholds.
         count_a = ab.metrics_a.get("score_count", 0)
         count_b = ab.metrics_b.get("score_count", 0)
+        if (type(count_a) is not int or type(count_b) is not int
+                or count_a <= 0 or count_b <= 0):
+            result["details"] = "Invalid or missing per-arm feedback counts"
+            return result
         total = count_a + count_b
-
         if total < self.config.min_feedback_samples:
             result["details"] = f"Insufficient feedback: {total}/{self.config.min_feedback_samples}"
             return result
-
-        # Check if test duration exceeded
-        elapsed_hours = (time.time() - ab.start_time) / 3600
-        if elapsed_hours < self.config.ab_test_duration_hours and total < self.config.min_feedback_samples * 2:
-            result["details"] = f"Test still running: {elapsed_hours:.1f}h / {self.config.ab_test_duration_hours}h"
+        # A single arm must not dominate the gate.
+        if min(count_a, count_b) < max(1, self.config.min_feedback_samples // 4):
+            result["details"] = "Insufficient feedback for one A/B arm"
             return result
 
-        # Complete the test
-        winner = self.registry.complete_ab_test(test_id, "score")
-        if winner:
-            self.state["active_ab_test"] = None
-            self.state["last_promotion"] = time.time()
-            self._save_state()
+        sum_a = ab.metrics_a.get("score")
+        sum_b = ab.metrics_b.get("score")
+        if (type(sum_a) not in (int, float) or type(sum_b) not in (int, float)
+                or not math.isfinite(sum_a) or not math.isfinite(sum_b)
+                or not 0 <= sum_a <= count_a or not 0 <= sum_b <= count_b):
+            result["details"] = "Invalid self-reported A/B scores"
+            return result
+        elapsed_hours = (time.time() - ab.start_time) / 3600
+        if not math.isfinite(elapsed_hours) or elapsed_hours < 0:
+            result["details"] = "Invalid A/B experiment timing"
+            return result
+        if (elapsed_hours < self.config.ab_test_duration_hours
+                and total < self.config.min_feedback_samples * 2):
+            result["details"] = "A/B observation window still running"
+            return result
 
-            # Get winner version
-            winner_v = self.registry.get(winner)
-            loser_id = ab.version_b if winner == ab.version_a else ab.version_a
-
-            # Check for regression
-            avg_winner = ab.metrics_a.get("score", 0) / max(1, ab.metrics_a.get("score_count", 1)) if winner == ab.version_a else ab.metrics_b.get("score", 0) / max(1, ab.metrics_b.get("score_count", 1))
-            avg_loser = ab.metrics_b.get("score", 0) / max(1, ab.metrics_b.get("score_count", 1)) if winner == ab.version_a else ab.metrics_a.get("score", 0) / max(1, ab.metrics_a.get("score_count", 1))
-
-            if avg_winner < self.config.min_score_threshold:
-                # New model doesn't meet minimum; rollback
-                if self.config.auto_rollback:
-                    # Re-promote the loser
-                    self.registry.promote(loser_id)
-                    self.state["last_rollback"] = time.time()
-                    self._save_state()
-                    self.alerts.fire("warning", "auto_promote",
-                                    f"New model {winner} below threshold ({avg_winner:.3f}); rolled back to {loser_id}")
-                    result = {"action": "rollback", "details": f"Promoted {loser_id} (winner {winner} below threshold)"}
-                else:
-                    result = {"action": "promoted_with_warning", "details": f"Promoted {winner} (below threshold)"}
-            elif avg_loser > 0 and (avg_loser - avg_winner) > self.config.max_regression:
-                # Regression detected
-                if self.config.auto_rollback:
-                    self.registry.promote(loser_id)
-                    self.state["last_rollback"] = time.time()
-                    self._save_state()
-                    self.alerts.fire("warning", "auto_promote",
-                                    f"Regression detected: {winner} ({avg_winner:.3f}) < {loser_id} ({avg_loser:.3f})")
-                    result = {"action": "rollback", "details": f"Rolled back to {loser_id}"}
-                else:
-                    result = {"action": "promoted_with_regression", "details": f"Promoted {winner} despite regression"}
-            else:
-                result = {"action": "promoted", "details": f"Promoted {winner} (score: {avg_winner:.3f})"}
-                self.alerts.fire("info", "auto_promote", f"Model promoted: {winner} (score: {avg_winner:.3f})")
-
+        # This is a research recommendation only. Even high scores cannot
+        # set an active model or mutate the registry without an independent
+        # authorized promotion receipt / provenance and rollback review.
+        mean_a, mean_b = sum_a / count_a, sum_b / count_b
+        result["action"] = "review_required"
+        result["details"] = (
+            "A/B feedback eligible for independent review only; "
+            f"observed mean scores: arm A={mean_a:.4f}, arm B={mean_b:.4f}; "
+            "no model activation or rollback performed"
+        )
         return result
 
     def status(self) -> dict:
