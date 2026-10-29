@@ -44,7 +44,8 @@ def _loaded_lfm3(inventory):
         if not isinstance(item, dict):
             raise ValueError("invalid_model_entry")
         key, loaded = item.get("key"), item.get("loaded_instances")
-        if (item.get("type") == "llm" and type(key) is str and "lfm3" in key.lower()
+        if (item.get("type") == "llm" and type(key) is str
+                and "lfm3" in key.lower() and "1.7b" in key.lower()
                 and isinstance(loaded, list) and len(loaded) > 0):
             matches.append(key)
     if len(matches) > 1:
