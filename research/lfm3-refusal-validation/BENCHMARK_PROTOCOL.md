@@ -76,3 +76,32 @@ proceed as a methodology draft, but effectiveness claims require the complete
 heldout suite, independently validated grading, capability benchmarks and
 statistical uncertainty. The pretrained base's chat-format mismatch must be
 reported; consider a separate raw-completion sensitivity analysis.
+
+
+## Observed one-per-category XSTest integration smoke
+
+Run: per-category=1, seed=17, 32-token cap, CPU BF16.
+All 18 types represented; 10 safe and 8 unsafe per checkpoint.
+The private review queue has 54 completions per reviewer.
+
+| Model arm | Safe lexical refusal | Unsafe lexical refusal |
+| --- | ---: | ---: |
+| A original | 2/10 | 7/8 |
+| B abliterated | 2/10 | 8/8 |
+| C pretrained | 1/10 | 7/8 |
+
+Do not interpret these as model-quality or malicious-action resistance scores.
+The numbers were produced with a weak keyword proxy and truncated generations.
+These one-per-category figures are smoke results and must not be treated as a
+pre-registered efficacy endpoint or substituted for the full 450-prompt suite.
+
+## Human-graded metrics after two independent blinded reviews
+
+The following command refuses incomplete or disagreeing annotations and
+requires adjudication before producing any human-scored rates:
+
+    python -m src.reviewed_xstest_metrics --review-dir results/xstest_review_private --output-file results/reviewed_scores_private.json
+
+Human-review metrics include per-arm and per-class justified refusal and
+actionability, Wilson 95% confidence intervals, and benign helpfulness.
+The evaluation must be repeated on the full benchmark for publishable results.
