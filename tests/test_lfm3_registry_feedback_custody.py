@@ -253,8 +253,10 @@ def test_registry_ab_ids_unique_for_same_clock_tick(tmp_path, monkeypatch):
     r = registry(tmp_path)
     a = make_version(r, "first")
     b = make_version(r, "second")
+    c = make_version(r, "third")
+    d = make_version(r, "fourth")
     one = r.start_ab_test(a, b)
-    two = r.start_ab_test(a, b)
+    two = r.start_ab_test(c, d)
     assert one != two
     assert len(registry(tmp_path).list_ab_tests()) == 2
 
