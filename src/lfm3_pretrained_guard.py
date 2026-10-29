@@ -80,13 +80,40 @@ def load_pretrained_lfm3(location: str, config_class, model_class, dtype):
     if not isinstance(result, tuple) or len(result) != 2:
         raise LFM3CheckpointError("lfm3_loading_report_missing")
     model, details = result
-    if not isinstance(details, dict) or not isinstance(details.get("missing_keys"), list):
-        raise LFM3CheckpointError("lfm3_loading_report_invalid")
-    if any(
-        details.get(key)
-        for key in ("missing_keys", "unexpected_keys", "mismatched_keys", "error_msgs")
+    fields = ("missing_keys", "unexpected_keys", "mismatched_keys", "error_msgs")
+    if (
+        not isinstance(details, dict)
+        or any(key not in details for key in fields)
+        or any(type(details[key]) not in (list, set, tuple) for key in fields)
     ):
+        raise LFM3CheckpointError("lfm3_loading_report_invalid")
+    if any(details[key] for key in fields):
         raise LFM3CheckpointError("lfm3_weight_keys_incomplete")
+
+    # Transformers 5.17 remaps legacy "conv" to "linear_attention" at config
+    # construction. The pinned official LFM3 model still expects "conv" in its
+    # mask mapping. Restore only that exact, known remap after keys are verified.
+    try:
+        raw_config = json.loads((Path(model_dir) / "config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, UnicodeError) as exc:
+        raise LFM3CheckpointError("lfm3_local_config_unreadable") from exc
+    original_layers = raw_config.get("layer_types")
+    if original_layers is not None:
+        allowed = {"conv", "full_attention", "sliding_attention"}
+        if (
+            not isinstance(original_layers, list)
+            or len(original_layers) != 24
+            or any(type(x) is not str or x not in allowed for x in original_layers)
+        ):
+            raise LFM3CheckpointError("lfm3_unexpected_original_layer_types")
+        runtime_layers = getattr(getattr(model, "config", None), "layer_types", None)
+        remapped = ["linear_attention" if name == "conv" else name for name in original_layers]
+        if runtime_layers != original_layers:
+            if runtime_layers != remapped:
+                raise LFM3CheckpointError("lfm3_unexpected_runtime_layer_remap")
+            model.config.layer_types = list(original_layers)
+        if model.config.layer_types != original_layers:
+            raise LFM3CheckpointError("lfm3_layer_type_restore_failed")
     return model
 
 
@@ -98,7 +125,7 @@ OFFICIAL_LFM3_SHA256 = {
     "configuration_lfm3.py": "176cced35657aedfea7d7002221360582d1c05fcaca882c21508bc3a73b282e5",
     "modeling_lfm3.py": "e8cd5254ea99ce6bd731b57b10908c2e8b5010ce8315341f895a38484885eeab",
     "lfm3_conv.py": "80d4a985382a22774212759248a6b4c737bfbf9c2a47b3dd7f797dda748e4bb4",
-    "tokenizer.json": "2f2b9098046f162fda0d84f886ec86cf89ac784b622c0a6d393a221d7a8e09a0",
+    "tokenizer.json": "7e226e34bface23ccf6e495d157bf77186c1c30a7659880e1a8994db528c3701",
     "tokenizer_config.json": "bf028f813efc6137bc07ed045cafe71820df9a5e26a38e39954706ed1e30a457",
     "model.safetensors": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
 }
