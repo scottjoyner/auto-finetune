@@ -105,9 +105,14 @@ class ModelRegistry:
         return sorted(versions, key=lambda v: v.created_at, reverse=True)
 
     def promote(self, version_id: str) -> bool:
-        """Promote a candidate to active (retires previous active)."""
+        """Promote reviewed legacy candidates; LFM3 remains strictly gated."""
         mv = self._versions.get(version_id)
         if not mv:
+            return False
+        # A locally stored LFM3 adapter, optimizer smoke receipt, or A/B score
+        # cannot replace an independent source/heldout/release approval. Manual
+        # and automatic registry paths share this fail-closed default.
+        if "lfm3" in mv.base_model.casefold():
             return False
         # Retire current active
         for v in self._versions.values():
@@ -178,9 +183,8 @@ class ModelRegistry:
         ab = self._ab_tests.get(test_id)
         if not ab or ab.status != "running":
             return None
-        ab.end_time = time.time()
-        ab.status = "completed"
-
+        # Determine an admissible winner before changing any persistent
+        # experiment or activation state.
         # Compute average metric
         count_a = ab.metrics_a.get(f"{metric}_count", 1)
         count_b = ab.metrics_b.get(f"{metric}_count", 1)
@@ -188,6 +192,12 @@ class ModelRegistry:
         avg_b = ab.metrics_b.get(metric, 0) / max(1, count_b)
 
         winner = ab.version_a if avg_a >= avg_b else ab.version_b
+        if not self._versions.get(winner) or (
+            "lfm3" in self._versions[winner].base_model.casefold()
+        ):
+            return None
+        ab.end_time = time.time()
+        ab.status = "completed"
         ab.winner = winner
 
         # Promote winner
