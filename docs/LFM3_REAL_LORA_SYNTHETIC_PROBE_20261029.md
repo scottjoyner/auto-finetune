@@ -56,3 +56,7 @@ The output file uses exclusive creation and will not overwrite an existing exper
 2. Prefer to keep LoRA factors on AdamW until a separate valid Muon-on-LoRA compatibility/optimization rationale is established.
 3. Integrate with SensorGraft using authenticated receipts and checkpoint provenance before any automatic optimizer suggestions.
 4. Keep automatic optimizer adjustment and weight promotion disabled until hosted admission/coverage CI, rollback and independent review have all passed.
+
+## Independent execution repeatability (seed 1)
+
+A second, separately launched CPU-only run of seed 1 at 20 steps per arm was compared with the original paired run. Both AdamW and experimental Muon produced **exactly the same initial adapter SHA-256, final adapter SHA-256, final held-out loss, and full 20-step training-loss trajectory**. Each execution correctly received a different run ID. The second set of full telemetry and a SHA-256-backed comparison summary are committed in the same research/evidence directory. This confirms deterministic replay of this narrow CPU configuration; it is not an independent new task-quality evaluation or evidence of a general optimizer advantage.
