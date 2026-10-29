@@ -12,6 +12,9 @@ from src.lfm3_optimizer_sweep_review import review
 
 @pytest.fixture(scope="module")
 def reports():
+    torch = pytest.importorskip("torch")
+    if not hasattr(torch.optim, "Muon"):
+        pytest.skip("PyTorch build has no torch.optim.Muon; synthetic trace fixture unavailable")
     return [benchmark(seeds=(1, 2, 3), steps=20, muon_lr=lr) for lr in (0.0001, 0.0005, 0.001)]
 
 
