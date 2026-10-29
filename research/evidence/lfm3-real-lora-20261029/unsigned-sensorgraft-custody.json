@@ -1,0 +1,82 @@
+{
+  "arm_proofs": [
+    {
+      "events_sha256": "f396e6ff7d3f2f0d4dc1ef5ed9b607ebd4964fea465fa5f46f2af9f6a5c8eab4",
+      "final_adapter_sha256": "33685784f55c82469b761b55a996c9efdbefae72dd0cda33cae9d7c7a03b69b5",
+      "heldout_sha256": "12fc3f06120950262fad62d24bc39a1b93c9a7a3dd4089f9e0912e5919eceeff",
+      "initial_adapter_sha256": "5e81a5ea0ab650f8dcd6692b927756f3600b2369db78c2596bab3a7fb5d061fe",
+      "optimizer": "adamw",
+      "run_id": "6c707f147d1c43e3b8d396140a884d74",
+      "seed": 1,
+      "step_count": 20,
+      "train_sha256": "71efee0215c198af1ff88c62270dcfb71d136aae77e178a756524d000764f5ba"
+    },
+    {
+      "events_sha256": "5d19e3d356e08ad516b8af90900f81d714489621c44efab429902332271967a1",
+      "final_adapter_sha256": "0561b444a267bb10361cec4364a103c2744313fcce97ca25a99dff4245988579",
+      "heldout_sha256": "12fc3f06120950262fad62d24bc39a1b93c9a7a3dd4089f9e0912e5919eceeff",
+      "initial_adapter_sha256": "5e81a5ea0ab650f8dcd6692b927756f3600b2369db78c2596bab3a7fb5d061fe",
+      "optimizer": "muon",
+      "run_id": "6be97350d5d54750a6c1a5d50acaf96f",
+      "seed": 1,
+      "step_count": 20,
+      "train_sha256": "71efee0215c198af1ff88c62270dcfb71d136aae77e178a756524d000764f5ba"
+    },
+    {
+      "events_sha256": "cf87b6727214690a6f919430dff3c813c8c338f327ac1fd25a20fc8c1a6ced9a",
+      "final_adapter_sha256": "df49a71e2e842ee0cb548ff10e72fb824a199c2184ab0519eaee8d9cb256ca06",
+      "heldout_sha256": "07f093baf28396d36d43d327273afc2ae95e1bde5354a8577f70819a20d11ddf",
+      "initial_adapter_sha256": "36204b6bc2b8297cd1cf01abaca7b9c16e9826624e944a2c1a11f1dfa65f586c",
+      "optimizer": "adamw",
+      "run_id": "bcd0e096e7c04c71a6ba49cc0180f004",
+      "seed": 2,
+      "step_count": 20,
+      "train_sha256": "92c6464a680823eb1cf899c02d5f2e153aa56c89619772ce9970850ab7de1da3"
+    },
+    {
+      "events_sha256": "65ad48825db8d6d04499440363789844adbb1b6a3a680f2f9372ebcf104c9cdd",
+      "final_adapter_sha256": "5b128457a8af177a2910eedb893a3dd9450e11638560603b6129263897000034",
+      "heldout_sha256": "07f093baf28396d36d43d327273afc2ae95e1bde5354a8577f70819a20d11ddf",
+      "initial_adapter_sha256": "36204b6bc2b8297cd1cf01abaca7b9c16e9826624e944a2c1a11f1dfa65f586c",
+      "optimizer": "muon",
+      "run_id": "df884fba7b7f488caf0a672ffa072371",
+      "seed": 2,
+      "step_count": 20,
+      "train_sha256": "92c6464a680823eb1cf899c02d5f2e153aa56c89619772ce9970850ab7de1da3"
+    },
+    {
+      "events_sha256": "5a6e36ef4362ca82556d20d859bdea172df623da81e4f02229fbdfd0c5b212c8",
+      "final_adapter_sha256": "c825553dec75c50cc1ea20d7923ed18e6881bc01b2c1f5dd33f238f9b3dd642d",
+      "heldout_sha256": "9f0217c9a7355fd1c05b59910e1fd7816e1960d6150daa7a61d9358614e0e025",
+      "initial_adapter_sha256": "5054f2a45e5c8c041ba54fc46a05771436f03bc03b12cf8f4b2a0e5196eb1266",
+      "optimizer": "adamw",
+      "run_id": "1b168fe982104b01ab3cea0a2d28a426",
+      "seed": 3,
+      "step_count": 20,
+      "train_sha256": "9dd3ac3f7962acbff37cbc62944358a66f9a99bfbd8683d889c68a7c77909e94"
+    },
+    {
+      "events_sha256": "17bad50ebd5d7309b41e0a865ea9d7e12664bfc49200c79cfcebead5059c9b0a",
+      "final_adapter_sha256": "13481e11be627134b67c92822969ece2edf08277e1095b51a4fdb976230638db",
+      "heldout_sha256": "9f0217c9a7355fd1c05b59910e1fd7816e1960d6150daa7a61d9358614e0e025",
+      "initial_adapter_sha256": "5054f2a45e5c8c041ba54fc46a05771436f03bc03b12cf8f4b2a0e5196eb1266",
+      "optimizer": "muon",
+      "run_id": "7187d72ee6e143009ca9914538c11ca6",
+      "seed": 3,
+      "step_count": 20,
+      "train_sha256": "9dd3ac3f7962acbff37cbc62944358a66f9a99bfbd8683d889c68a7c77909e94"
+    }
+  ],
+  "causal_self_improvement_verified": false,
+  "model_revision": "40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd",
+  "model_weights_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "previous_receipt_sha256": null,
+  "provenance": "producer-claimed-unattested",
+  "report_sha256": "266fc4f8ee55603868e5f034c9d2ffd7c93fb4f039364fa3cea0bc0f1bf91bef",
+  "review_sha256": "643cb28c23247d52480c14657cfdb7ebbd561076eb5929de438c997d918c68a7",
+  "schema": "sensorgraft.lfm3.experiment-custody.v1",
+  "semantic_retrieval_verified": false,
+  "sensor_graft_ingested": false,
+  "source": "auto-finetune-real-lora-synthetic-only",
+  "weight_promotion_permitted": false
+}
