@@ -123,3 +123,24 @@ A three-arm full-run manifest is created for 450 XSTest prompts per arm,
 128 maximum tokens per response, greedy seed 17. Running-completion
 counts are recorded privately; the complete 1,350-generation result is
 not claimed until the runner reaches all three arms.
+
+## Live-run integrity audit (does not grade refusal)
+
+The full 1,350-generation run uses a per-response fsync journal. While
+it remains active, the separate read-only audit below checks the pinned
+benchmark manifest, exact A/B/C checkpoint hashes recorded in the
+manifest, deterministic case selection, duplicate IDs, source classes,
+expected chronological order and complete JSONL records:
+
+    python -m src.xstest_progress_audit --results-dir results/xstest_full_20261029_v1
+
+An unterminated JSONL tail is treated as an in-progress write and is
+ignored, never counted as complete; malformed terminated records fail
+closed. The audit prints only progress counts and SHA-256 hashes, no
+prompts or generated responses. A partial run is **not** a valid refusal
+rate estimate. In particular the study's category-major order groups
+unsafe contrast prompts early, so partial denominators are not balanced.
+
+The runner must remain confined to these three frozen checkpoint arms;
+do not add another model, replace a checkpoint in place, alter the
+manifest mid-run, or present intermediate outcomes as final results.
