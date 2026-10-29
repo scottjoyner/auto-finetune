@@ -40,3 +40,18 @@ The synthetic random-token experiment's held-out loss cannot justify AdamW/Muon 
 For a real experiment: freeze source/model/tokenizer hashes; run isolated randomized AdamW, mixed-Muon/AdamW and justified Muon LoRA grouping only after architecture review; keep separate train, model-selection and locked final holdout splits; log actual gradient/update trajectories, effective LR, optimizer state, memory, time and per-domain quality; include negative/sham controls and rollback proof. Only after independent replay and review should a separate, explicitly authorized controller ever change a live training optimizer.
 
 **Protected state:** no production merge, autonomous gradient update, model checkpoint write, stop-file removal, recovery-latch release, resource eviction, or deployment is part of this PR.
+
+## October 2026 optimizer literature audit and experiment matrix
+
+**Critical issue:** applying ordinary `torch.optim.Muon` independently to LoRA A/B factor matrices is *not mathematically equivalent* to Muon applied to the effective full-rank weight update. Our initial Muon arm is therefore an experimental factor-wise reference, not a validated low-rank Muon solution.
+
+- **PyTorch Muon:** specifically designed for two-dimensional hidden-layer parameters. Bias, norm and embedding parameters belong on AdamW or another compatible optimizer. Review `adjust_lr_fn` semantics and count the actual per-parameter effective learning rates before comparisons: https://docs.pytorch.org/docs/stable/generated/torch.optim.Muon.html
+- **ICML 2026, Qu et al., Can Muon Fine-tune Adam-Pretrained Models?:** warns that switching Adam-pretrained weights naively to Muon can disrupt learned features; constraining update strength and LoRA can mitigate optimizer mismatch. Code: https://github.com/XingyuQu/muon-finetune ; paper: https://proceedings.mlr.press/v306/qu26e.html
+- **LoRA-Muon, 2026:** https://arxiv.org/abs/2606.12921 — an explicit low-rank spectral update, more appropriate as a genuine Muon-on-LoRA comparison than independent factor-wise Muon.
+- **sMuon, 2026:** https://arxiv.org/abs/2608.14492 — an approximate low-rank orthogonal update to inspect for reproducible, compatible reference implementations.
+- **PoLoRA, July 2026:** https://parshakova.github.io/polora/ — a product-aware, preconditioned orthogonalized LoRA optimizer; reproductions must independently confirm any reported compute/quality gains on LFM3.
+- **Riemannion, ICLR 2026:** https://proceedings.iclr.cc/paper_files/paper/2026/hash/8505a7e1da40320bf5692d7edec5aa45-Abstract-Conference.html — treats low-rank adapters directly on a fixed-rank matrix manifold.
+
+**Proposed prospective experiment arms**, after compatible implementation/licensing review: A0 AdamW LoRA rank-2 control; A1 original factor-wise Muon LoRA as a diagnostic only; A2 mixed Muon (eligible 2D full hidden weights) + AdamW (other parameters) as a separately scoped *non-LoRA* experiment; A3 proper low-rank LoRA-Muon; A4 sMuon; A5 PoLoRA. Re-run at multiple ranks and matched compute/gradient-update budgets, with a locked final test and strict aggregate/individual safety and retention thresholds. Do not compare optimizer learning rates as equivalent across update rules without validating effective update scale and per-step cost.
+
+This is a research shortlist only: no third-party optimizer was installed, executed, licensed for redistribution, or integrated into the training harness here.
