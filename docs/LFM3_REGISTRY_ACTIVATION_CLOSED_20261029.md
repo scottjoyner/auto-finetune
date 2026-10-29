@@ -44,3 +44,17 @@ independent blockers.
 Testing: pure mocked values, temporary JSON files, CLI subprocess
 entrypoints, and no GPU, production registry, network or weights.
 The project-wide 69% coverage threshold is unchanged.
+
+## Additional nonactivation transition controls
+
+The original retire method could drop an existing active model without
+an approved replacement. It now refuses retirement of active and
+currently testing versions. The A/B start operation additionally
+refuses identical model IDs, retired/testing inputs, two active arms,
+and overlap with any running experiment. Two disjoint candidate
+experiments may still proceed, with no model activation.
+
+Unit tests cover these cases with frozen/temporary registries. These
+guards are not a process-level transaction lock; independent writers
+and cross-process registry updates still require an atomic journal
+and external authorization before production use.
