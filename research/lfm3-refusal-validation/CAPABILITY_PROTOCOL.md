@@ -72,3 +72,30 @@ lm-evaluation-harness benchmark score and not a validated safety
 measure. Confirmation with a standardized independent harness,
 choice-order permutations, and separate instruction following
 remains required for strong capability-retention claims.
+
+## Auditing the running full ARC likelihood journal
+
+The independent read-only audit checks the exact three-arm manifest,
+pinned source checksum and revision, full selected case order, expected
+answer indices, finite log-probability scores, candidate token lengths,
+predicted-index consistency, boolean correctness and contiguous journal
+order. It does not report partial score or safety estimates.
+
+    python -m src.arc_likelihood_progress_audit \
+      --results-dir results/arc_choice_likelihood_full_private \
+      --verify-live-weights
+
+The --verify-live-weights option rehashes the actual three local weights
+and fails if any differs from the original run manifest. Omitting it
+verifies journal metadata only, and is faster for repeated read-only
+progress checks.
+
+The full run targets 1,172 questions for each of A/B/C, totaling
+3,516 scored questions. Only a completed run should be interpreted as a
+matched three-arm capability comparison, with a custom-scoring disclaimer.
+
+A supplementary inference parity check on two real ARC cases on the
+original LFM3 checkpoint compared batched, right-padded answer-option
+log-likelihoods with independent unpadded scoring. The largest observed
+absolute score difference was below 5e-7 log-probability units.
+This is an implementation smoke check, not a standardized benchmark.
