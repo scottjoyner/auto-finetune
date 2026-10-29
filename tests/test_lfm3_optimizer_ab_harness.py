@@ -9,7 +9,14 @@ import pytest
 from src.lfm3_optimizer_ab_harness import _make_data, benchmark
 
 
-def test_three_seed_paired_benchmark():
+@pytest.fixture
+def muon_runtime():
+    torch = pytest.importorskip("torch")
+    if not hasattr(torch.optim, "Muon"):
+        pytest.skip("PyTorch build has no torch.optim.Muon; real optimizer bench unavailable")
+
+
+def test_three_seed_paired_benchmark(muon_runtime):
     result = benchmark(seeds=(1, 2, 3), steps=20)
     assert result["status"] == "synthetic_surrogate_only"
     assert result["model"] == "tiny_cpu_mlp_not_lfm3"
@@ -37,7 +44,7 @@ def test_three_seed_paired_benchmark():
             assert all(e["update_norm"] > 0 for e in arm["events"])
 
 
-def test_repeatability_of_losses_not_timing():
+def test_repeatability_of_losses_not_timing(muon_runtime):
     a = benchmark(seeds=(2,), steps=20)
     b = benchmark(seeds=(2,), steps=20)
     for x, y in zip(a["arms"], b["arms"]):
@@ -81,7 +88,7 @@ def test_invalid_benchmark_configuration_refused(args):
         benchmark(**args)
 
 
-def test_actual_optimizer_arms_produce_different_weights():
+def test_actual_optimizer_arms_produce_different_weights(muon_runtime):
     result = benchmark(seeds=(1,), steps=20)
     a, b = result["arms"]
     assert a["checkpoint_after_sha256"] != b["checkpoint_after_sha256"]
@@ -89,10 +96,17 @@ def test_actual_optimizer_arms_produce_different_weights():
     assert b["learning_rate"] == 0.001
 
 
-def test_repeat_executions_do_not_reuse_sensorgraft_run_ids():
+def test_repeat_executions_do_not_reuse_sensorgraft_run_ids(muon_runtime):
     a = benchmark(seeds=(2,), steps=20)
     b = benchmark(seeds=(2,), steps=20)
     for x, y in zip(a["arms"], b["arms"]):
         assert x["base_sha256"] == y["base_sha256"]
         assert x["dataset_sha256"] == y["dataset_sha256"]
         assert x["events"][0]["run_id"] != y["events"][0]["run_id"]
+
+
+def test_missing_muon_runtime_fails_closed(monkeypatch):
+    torch = pytest.importorskip("torch")
+    monkeypatch.delattr(torch.optim, "Muon", raising=False)
+    with pytest.raises(RuntimeError, match="torch_muon_unavailable"):
+        benchmark(seeds=(1,), steps=20)
