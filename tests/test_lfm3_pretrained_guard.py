@@ -121,7 +121,12 @@ def test_missing_state_keys_are_not_accepted(tmp_path):
     class Model:
         @classmethod
         def from_pretrained(cls, *args, **kwargs):
-            return object(), {"missing_keys": ["model.layer.weight"]}
+            return object(), {
+                "missing_keys": ["model.layer.weight"],
+                "unexpected_keys": set(),
+                "mismatched_keys": set(),
+                "error_msgs": [],
+            }
 
     with pytest.raises(LFM3CheckpointError, match="keys_incomplete"):
         load_pretrained_lfm3(location, Config, Model, "bf16")
@@ -236,3 +241,109 @@ def test_snapshot_rejects_invalid_tensor_header(tmp_path, monkeypatch):
     monkeypatch.setattr(guard, "OFFICIAL_LFM3_SHA256", pins)
     with pytest.raises(LFM3CheckpointError, match="tensor_manifest_invalid"):
         guard.verify_official_lfm3_snapshot(location)
+
+
+def test_empty_set_loading_info_is_valid(tmp_path):
+    location = single(tmp_path)
+    model = object()
+
+    class Config:
+        model_type = "lfm3"
+
+        @classmethod
+        def from_pretrained(cls, *args, **kwargs):
+            return cls()
+
+    class Model:
+        @classmethod
+        def from_pretrained(cls, *args, **kwargs):
+            return model, {
+                "missing_keys": set(),
+                "unexpected_keys": set(),
+                "mismatched_keys": set(),
+                "error_msgs": [],
+            }
+
+    assert load_pretrained_lfm3(location, Config, Model, "bf16") is model
+
+
+def test_incomplete_loading_report_is_refused(tmp_path):
+    location = single(tmp_path)
+
+    class Config:
+        model_type = "lfm3"
+
+        @classmethod
+        def from_pretrained(cls, *args, **kwargs):
+            return cls()
+
+    class Model:
+        @classmethod
+        def from_pretrained(cls, *args, **kwargs):
+            return object(), {"missing_keys": set()}
+
+    with pytest.raises(LFM3CheckpointError, match="loading_report_invalid"):
+        load_pretrained_lfm3(location, Config, Model, "bf16")
+
+
+def test_verified_legacy_conv_layer_remap_restored(tmp_path):
+    from types import SimpleNamespace
+
+    location = single(tmp_path)
+    original = ["conv"] * 13 + ["full_attention"] * 6 + ["sliding_attention"] * 5
+    (tmp_path / "config.json").write_text(
+        json.dumps({"model_type": "lfm3", "layer_types": original})
+    )
+
+    class Config:
+        model_type = "lfm3"
+
+        @classmethod
+        def from_pretrained(cls, *args, **kwargs):
+            return SimpleNamespace(
+                model_type="lfm3",
+                layer_types=["linear_attention" if x == "conv" else x for x in original],
+            )
+
+    class Model:
+        @classmethod
+        def from_pretrained(cls, *args, config, **kwargs):
+            return SimpleNamespace(config=config), {
+                "missing_keys": set(),
+                "unexpected_keys": set(),
+                "mismatched_keys": set(),
+                "error_msgs": [],
+            }
+
+    result = load_pretrained_lfm3(location, Config, Model, "bf16")
+    assert result.config.layer_types == original
+
+
+def test_unrecognized_layer_mapping_stays_blocked(tmp_path):
+    from types import SimpleNamespace
+
+    location = single(tmp_path)
+    original = ["conv"] * 13 + ["full_attention"] * 6 + ["sliding_attention"] * 5
+    (tmp_path / "config.json").write_text(
+        json.dumps({"model_type": "lfm3", "layer_types": original})
+    )
+
+    class Config:
+        model_type = "lfm3"
+
+        @classmethod
+        def from_pretrained(cls, *args, **kwargs):
+            return SimpleNamespace(model_type="lfm3", layer_types=["unknown"] * 24)
+
+    class Model:
+        @classmethod
+        def from_pretrained(cls, *args, config, **kwargs):
+            return SimpleNamespace(config=config), {
+                "missing_keys": set(),
+                "unexpected_keys": set(),
+                "mismatched_keys": set(),
+                "error_msgs": [],
+            }
+
+    with pytest.raises(LFM3CheckpointError, match="unexpected_runtime_layer_remap"):
+        load_pretrained_lfm3(location, Config, Model, "bf16")
