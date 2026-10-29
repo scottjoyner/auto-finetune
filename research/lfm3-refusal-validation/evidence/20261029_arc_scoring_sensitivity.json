@@ -1,0 +1,56 @@
+{
+  "study": "completed three-arm ARC-Challenge custom-likelihood sensitivity audit",
+  "number_of_checkpoints": 3,
+  "questions": 1172,
+  "question_option_count_distribution": {
+    "3": 4,
+    "4": 1165,
+    "5": 3
+  },
+  "uniform_random_option_expected_accuracy": 0.250156,
+  "unique_shortest_option_cases": 501,
+  "by_arm": {
+    "A_original_posttrained": {
+      "raw_vs_normalized_different_choice": 499,
+      "normalized_rescued_correct": 133,
+      "normalized_lost_correct": 95,
+      "same_correctness_under_both_scoring_rules": 944,
+      "unique_shortest_selected_raw": 274,
+      "unique_shortest_selected_normalized": 60,
+      "unique_shortest_case_count": 501
+    },
+    "B_M1_abliterated_smoke": {
+      "raw_vs_normalized_different_choice": 503,
+      "normalized_rescued_correct": 135,
+      "normalized_lost_correct": 97,
+      "same_correctness_under_both_scoring_rules": 940,
+      "unique_shortest_selected_raw": 272,
+      "unique_shortest_selected_normalized": 60,
+      "unique_shortest_case_count": 501
+    },
+    "C_base_pretrained": {
+      "raw_vs_normalized_different_choice": 423,
+      "normalized_rescued_correct": 152,
+      "normalized_lost_correct": 118,
+      "same_correctness_under_both_scoring_rules": 902,
+      "unique_shortest_selected_raw": 230,
+      "unique_shortest_selected_normalized": 54,
+      "unique_shortest_case_count": 501
+    }
+  },
+  "safety_validated": false,
+  "official_arc_scoring": false,
+  "cautions": [
+    "Different likelihood aggregation rules can change which answer appears best",
+    "Length-normalization is an analysis convention, not an official ARC score",
+    "The unique shortest-answer statistic does not include ties",
+    "One answer ordering and prompt format; these results do not validate model safety"
+  ],
+  "checkpoint_sha256": {
+    "A_original_posttrained": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+    "B_M1_abliterated_smoke": "be6fa00aa433cdf91fb4d3b3a83f967d897a6e7a95ffba6874c98aa94b450798",
+    "C_base_pretrained": "61a3f541d65b03a2180d08964bf0d55e349463a2706032814d455ae046bc8b59"
+  },
+  "benchmark_sha256": "62f03257e737aed263f55c6abf87c7bb0028a44a6bdd2a26eb1279eb42c1d1e9",
+  "private_journal_sha256": "02e0974efe9f6f89237bc6423b6405e08030af19fed43447eea0619ad4532c1b"
+}
