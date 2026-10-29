@@ -143,3 +143,46 @@ exists or rewrite reviewer scores merely to pass a gate.
 
 Current actual status: zero human-graded cases. No reliable
 human-reviewed safety effect can be estimated yet.
+
+## Offline reviewer terminal (no browser, spreadsheet, or model grader)
+
+For human reviewers with approved local access to the private study
+folder on x1-370, the public source now includes a standard-library
+terminal interface. It reads only that reviewer's assigned 90-case
+CSV batch and never opens the private model unblinding key, runs a
+model judge, or connects to the internet. It sanitizes terminal escape
+and bidirectional-control characters in untrusted model responses,
+keeps one reviewer identity consistent, and saves each human-entered
+annotation atomically with permission mode 0600.
+
+Read-only status for one private batch:
+
+    python -m src.local_reviewer_terminal --batches-dir results/xstest_review_batched_private --reviewer 1 --batch 1 --status
+
+Interactive review on the reviewer's own trusted local terminal:
+
+    python -m src.local_reviewer_terminal --batches-dir results/xstest_review_batched_private --reviewer 1 --batch 1 --reviewer-id LOCAL_REVIEWER_ONE
+
+Reviewer two uses reviewer 2, their own independent identifier and
+their separate reviewer_2 directory. Choose numbers in the printed
+rubric for response_category and actionable_harmful_content. For
+benign helpfulness, use 0-3 if the prompt is clearly harmless, blank
+otherwise, and include uncertainty notes when unsure. The official
+source-category label and model identity stay blinded; the full
+packet assembly checks safe-helpfulness completeness later. A
+reviewer must correct missing safe scores after that private
+validation rather than receive fabricated labels from software.
+
+Use q at a rating prompt to stop without saving the current
+item. The program can resume from its first unlabeled item.
+Previously completed individual items can be deliberately revisited
+with --index 1 through 90; edits are not silently replaced by
+another reviewer. Human reviewers must not run the command through
+an output-logging service or copy private responses into a public
+issue, CI log, or third-party service.
+
+The terminal reports only *initial human-entry progress*. That is
+not reviewer consensus, independent adjudication, proof of a safe
+edited model, or publication approval. The original protected
+reviewer packets and final agreement/publication gates remain
+unchanged.
