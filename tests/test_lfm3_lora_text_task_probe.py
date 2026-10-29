@@ -55,3 +55,10 @@ def test_probe_requires_offline_cpu_and_lora_muon_optin(monkeypatch):
         run(seeds=(1,), steps=1, experimental_muon=True)
     with pytest.raises(ValueError, match="experimental_muon"):
         run(seeds=(1,), steps=1, experimental_muon=False)
+
+
+def test_short_curriculum_is_not_a_single_task_family():
+    for seed in (1, 2, 3):
+        early = [row["family"] for row in dataset(seed)["train"][:10]]
+        assert set(early) == set(FAMILIES)
+        assert early != sorted(early)
