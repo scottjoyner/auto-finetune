@@ -9,6 +9,8 @@ on:
       - "src/lfm3_dust_direction_attention.py"
       - "src/lfm3_dust_predictive_probe.py"
       - "tests/test_lfm3_dust_predictive_probe.py"
+      - "tests/test_lfm3_dust_forward_review.py"
+      - "research/evidence/lfm3-dust-forward-20261029/**"
       - ".github/workflows/lfm3-dust-forward-contracts.yml"
 
 permissions:
@@ -29,5 +31,5 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          python -m compileall -q src/lfm3_dust_direction_attention.py src/lfm3_dust_predictive_probe.py
-          python -m pytest -o addopts= -q tests/test_lfm3_dust_predictive_probe.py
+          python -m compileall -q src/lfm3_dust_direction_attention.py src/lfm3_dust_predictive_probe.py src/lfm3_dust_forward_review.py
+          python -m pytest -o addopts= -q tests/test_lfm3_dust_predictive_probe.py tests/test_lfm3_dust_forward_review.py
