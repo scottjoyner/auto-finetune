@@ -1,0 +1,113 @@
+{
+  "advice_reliable_across_all_eight_tested_views": false,
+  "checkpoint_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "correct_votes_out_of_eight": 4,
+  "counterbalanced_research_evidence_sufficient_for_execution": false,
+  "heldout_evaluated": false,
+  "independently_authenticated": false,
+  "model_can_promote": false,
+  "model_can_select_new_lr": false,
+  "model_can_train": false,
+  "optimizer_modified": false,
+  "original_format_all_correct": true,
+  "original_model_votes": [
+    {
+      "choice": "A",
+      "layout": 0,
+      "logits": {
+        "A": 20.875,
+        "B": 13.3125
+      },
+      "matches_external_gate": true,
+      "optimizer": "adamw"
+    },
+    {
+      "choice": "A",
+      "layout": 1,
+      "logits": {
+        "A": 21.375,
+        "B": 16.75
+      },
+      "matches_external_gate": true,
+      "optimizer": "adamw"
+    },
+    {
+      "choice": "A",
+      "layout": 0,
+      "logits": {
+        "A": 20.25,
+        "B": 13.4375
+      },
+      "matches_external_gate": true,
+      "optimizer": "muon_match_rms_adamw"
+    },
+    {
+      "choice": "A",
+      "layout": 1,
+      "logits": {
+        "A": 21.625,
+        "B": 16.625
+      },
+      "matches_external_gate": true,
+      "optimizer": "muon_match_rms_adamw"
+    }
+  ],
+  "production_ready": false,
+  "reversed_format_all_correct": false,
+  "reversed_model_votes": [
+    {
+      "choice": "A",
+      "layout": 0,
+      "logits": {
+        "A": 20.5,
+        "B": 13.5
+      },
+      "matches_reversed_truth": false,
+      "optimizer": "adamw",
+      "reversed_numeric_truth": "B"
+    },
+    {
+      "choice": "A",
+      "layout": 1,
+      "logits": {
+        "A": 21.875,
+        "B": 16.5
+      },
+      "matches_reversed_truth": false,
+      "optimizer": "adamw",
+      "reversed_numeric_truth": "B"
+    },
+    {
+      "choice": "A",
+      "layout": 0,
+      "logits": {
+        "A": 20.5,
+        "B": 13.4375
+      },
+      "matches_reversed_truth": false,
+      "optimizer": "muon_match_rms_adamw",
+      "reversed_numeric_truth": "B"
+    },
+    {
+      "choice": "A",
+      "layout": 1,
+      "logits": {
+        "A": 21.625,
+        "B": 17.125
+      },
+      "matches_reversed_truth": false,
+      "optimizer": "muon_match_rms_adamw",
+      "reversed_numeric_truth": "B"
+    }
+  ],
+  "schema": "sg-lfm3-real-ffn-schedule-label-counterbalance.v1",
+  "source_observer_commit": "db06a8b35b504f55fc6fc27a7f6f1af9ec82b628",
+  "weights_modified": false,
+  "experiment_date": "2026-10-28",
+  "node": "xwing",
+  "source_commit": "20c62b744cb7a56ca29a4ebca2f39ae34aaf7075",
+  "network_disabled": true,
+  "original_model_unmodified": true,
+  "holdout_custody_verified": false,
+  "label_bias_experiment_only": true
+}
