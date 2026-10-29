@@ -118,3 +118,28 @@ is stored under evidence/20261029_full_arc_paired_capability_diagnostics.json.
 No further checkpoints are part of this experiment. Two-human-reviewer
 XSTest outcomes and standardized independent capability confirmation
 remain pending.
+
+
+## Completed answer-length and scoring-rule sensitivity audit
+
+The exact completed three-arm ARC journal was audited using
+src/arc_scoring_sensitivity.py without new inference.
+The 1,172-question source has 4 three-option cases, 1,165
+four-option cases, and 3 five-option cases (uniform random
+option accuracy 25.02% in expectation).
+
+On the same prompts, switching between raw-sum conditional
+answer-text likelihood and per-token normalized likelihood
+changed A's predicted answer on 499/1,172 cases, B's on
+503/1,172, and C's on 423/1,172. Among 501 items
+with a uniquely shortest candidate by token count, the
+raw-sum method selected that option in 274 A, 272 B,
+and 230 C cases, versus 60, 60 and 54 respectively
+under length-normalized scoring.
+
+This demonstrates substantial scoring sensitivity. It
+does not establish the correctness of either rule, or
+show general capability loss or safety preservation.
+Formal replication with a standard independent
+benchmark implementation and order/prompt robustness
+is still necessary. All models stay frozen: A, B, C only.
