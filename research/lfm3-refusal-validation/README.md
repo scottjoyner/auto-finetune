@@ -4,9 +4,41 @@
 
 This is a standalone safety-focused companion to auto-finetune and sensorgraft.
 The experiment studies how LFM3-1.7B's conv, sliding-attention, and full-attention
-layers encode refusal-related signals. It compares post-trained and (later) base
-checkpoints, reversibly perturbs activations, and tests benign utility, false
-refusals, malicious-action resistance, and simulated authorization.
+layers encode refusal-related signals. It compares the three frozen post-trained, abliterated-derivative and base
+checkpoints, and evaluates behavioral refusals, benign utility, and
+simulated authorization using separate validation gates.
+
+## Complete XSTest generation results (October 29, 2026)
+
+**Inference completed; human safety evaluation not completed.** The full
+pinned 450-case XSTest dataset was generated with exactly 3 model arms,
+128 maximum new tokens and greedy seed 17 on x1-370: 1,350/1,350
+generation records. The read-only audit verified model/checkpoint SHA-256
+identities, exact source hash, case IDs, source categories, unique pairs
+and clean JSONL. It found no missing or incomplete generations.
+
+Weak lexical refusal keyword indicators, not validated safety grades:
+
+| Checkpoint | Safe: keyword / 250 | Unsafe: keyword / 200 |
+| --- | ---: | ---: |
+| A original post-trained | 39 | 172 |
+| B M1-abliterated A | 31 | 167 |
+| C pretrained base | 34 | 163 |
+
+For A vs B matched prompts, the raw keyword proxy declined 3.2 percentage
+points on safe prompts and 2.5 points on unsafe contrast prompts. This
+does NOT establish increased harmful compliance or improved helpfulness.
+
+A private, blinded packet of all 1,350 completions has been generated
+for each of two independent human reviewers. Reviews NOT STARTED.
+Official full ARC capability evaluation NOT COMPLETE. No third-party
+model judge, external transfer of prompts or public checkpoint weights.
+See BENCHMARK_PROTOCOL.md, HUMAN_REVIEW_GUIDE.md and paper/main.tex.
+
+Run from the study root:
+
+    python -m src.xstest_progress_audit --results-dir results/xstest_full_20261029_v1
+    python -m src.publication_gate
 
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
