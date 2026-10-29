@@ -48,3 +48,33 @@ separate safety and license reviews.
   results must not be pooled.
 - Work remains unpublished until enough independent human-graded holdout results
   exist, reproducibility is verified, and responsible-release review is complete.
+
+## Three-checkpoint M1 smoke extension (October 29, 2026)
+
+The v0.1 research scope is exactly three model checkpoints:
+A = original post-trained LFM3-1.7B; B = M1-style abliterated derivative
+of A; C = original LFM3-1.7B-Base. See STUDY_PROTOCOL.md.
+
+Source checksums and the direction-vector provenance are captured in a
+private local receipt. The base model is pinned at Hugging Face revision
+545fc8f4c7b5fa9f405105274cd29c4f8f44b526.
+
+The B checkpoint was edited locally using difference-of-means from two
+calibration prompts (SMOKE ONLY) and full-alpha rank-one orthogonalization
+of 48 residual-writing output matrices. Verification confirmed that all
+48 selected tensors changed exactly as prescribed and the other 238 did
+not change. The original model has not been modified.
+
+Exactly 4 heldout prompt conditions were executed per checkpoint with a
+20-token output cap. Refusal keyword counts were 2/4 in each arm and
+only 1/4 generated responses matched exactly between A and B. These
+are diagnostic integration results, NOT refusal or safety efficacy claims.
+
+Commands in this study directory:
+  /home/scott/lfm3-research/train-venv/bin/python -m pytest -q tests
+  /home/scott/lfm3-research/train-venv/bin/python -m src.verify_checkpoint
+  /home/scott/lfm3-research/train-venv/bin/python -m src.three_checkpoint_eval --max-heldout-pairs 2
+
+DO NOT rerun the B checkpoint builder unless using an explicitly new
+output path: it refuses to overwrite existing checkpoint material.
+Keep raw generations, vectors, and all model weights local.
