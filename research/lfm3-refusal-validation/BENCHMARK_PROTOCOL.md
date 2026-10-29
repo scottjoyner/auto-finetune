@@ -220,3 +220,14 @@ A private model-blinded two-reviewer packet of all 1,350 responses
 has been created in results/xstest_full_review_private.
 Follow HUMAN_REVIEW_GUIDE.md. Human annotation remains NOT STARTED.
 Independent official ARC capability validation also remains outstanding.
+
+## Private reviewer work packets
+
+Exactly the same 1,350 XSTest generations and 3 frozen model
+checkpoints remain the study inputs. For practical independent
+human review, the blinded private packets are split into 15 batches
+of 90 examples each for two distinct reviewers. All original
+prompt/response/ID fields must be unchanged in reassembly.
+There is no automated grading or publication authorization; full
+independent consensus and separate responsible release approval
+remain mandatory. See HUMAN_REVIEW_GUIDE.md.
