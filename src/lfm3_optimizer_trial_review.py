@@ -92,12 +92,12 @@ def review_trial(report, proposal, receipt, hmac_key):
     evaluations = receipt["evaluations"]
     if not isinstance(evaluations, list) or len(evaluations) != len(report["seeds"]):
         return blocked("invalid_evaluation_inventory")
-    seen, comparisons = set(), []
+    seen, run_ids, comparisons = set(), set(), []
     for row in evaluations:
         if not isinstance(row, dict) or set(row) != {
             "seed", "baseline_run_id", "candidate_run_id",
             "candidate_optimizer", "candidate_learning_rate",
-            "baseline", "candidate"
+            "baseline", "candidate", "starting_checkpoint_sha256"
         }:
             return blocked("invalid_paired_evaluation")
         seed = row["seed"]
@@ -107,11 +107,14 @@ def review_trial(report, proposal, receipt, hmac_key):
                 or row["candidate_learning_rate"] != advice["learning_rate"]):
             return blocked("unpaired_optimizer_or_seed")
         seen.add(seed)
+        if not _valid_digest(row["starting_checkpoint_sha256"]):
+            return blocked("missing_starting_checkpoint_identity")
         ids = (row["baseline_run_id"], row["candidate_run_id"])
         if any(type(x) is not str or not HEX32.fullmatch(x) for x in ids):
             return blocked("unverified_evaluation_run_id")
-        if ids[0] == ids[1]:
-            return blocked("same_evaluation_run_for_both_arms")
+        if ids[0] == ids[1] or ids[0] in run_ids or ids[1] in run_ids:
+            return blocked("reused_evaluation_run_id")
+        run_ids.update(ids)
         a, b = row["baseline"], row["candidate"]
         if not _metrics_valid(a) or not _metrics_valid(b):
             return blocked("invalid_quality_or_safety_metrics")
