@@ -24,7 +24,7 @@ Can the prior Dust/K2 backprop-free predictive work (PRs #13, #22–24), includi
 
 Across the new six gradient arms: 18 actual backward/update steps; no held-out score gains. Those records are in `research/evidence/lfm3-dust-matched-three-way-20261029/seed{1,2,3}-{adamw,muon}-matched-b3.json` and pass `src/lfm3_dust_matched_gradient_review.py`. The three-seed paired reviewer verifies the **exact same initial adapter digest**, dataset split hashes, parameter count, source model, step count, trust radius, and explicitly refuses any claim of matched compute, model superiority, or release authority.
 
-Measured training-loop elapsed seconds, excluding initial model load and selection evaluation:
+Measured elapsed intervals (timers start before training steps and end **after the post-training selection-score evaluation**, excluding model load and the initial selection evaluation). These are **not** isolated optimizer-step times:
 
 | Optimizer or forward-only policy | Seed 1 | Seed 2 | Seed 3 | Mean |
 | --- | ---: | ---: | ---: | ---: |
