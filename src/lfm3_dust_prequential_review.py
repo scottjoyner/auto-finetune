@@ -37,14 +37,18 @@ def _finite(x, low=-100, high=100):
 def review(report):
     if not isinstance(report, dict):
         return blocked("invalid_report")
+    seed = report.get("seed")
+    if type(seed) is not int or seed not in (1,2,3,4,5,6):
+        return blocked("unapproved_seed")
+    expected_episodes = EPISODES if seed in (1,2,3) else 12
     expected = {
         "schema": SOURCE, "status": "real_lfm3_prequential_prediction_only",
         "model": "LiquidAI/LFM3-1.7B", "base_sha256": BASE,
-        "episodes": EPISODES, "candidates_per_episode": CANDIDATES,
+        "episodes": expected_episodes, "candidates_per_episode": CANDIDATES,
         "sigma": SIGMA, "parameter_scope": "last_two_attention_vproj_lora_B_only",
         "observed_parameter_count": 2048, "metrics_exclude_cold_start": True,
-        "total_perturbed_forwards": 2 * CANDIDATES * EPISODES,
-        "total_context_forwards": EPISODES,
+        "total_perturbed_forwards": 2 * CANDIDATES * expected_episodes,
+        "total_context_forwards": expected_episodes,
         "total_backward_calls": 0, "model_adapter_update_count": 0,
         "independent_test_evaluated": False,
         "selection_partition_evaluated": False,
@@ -56,9 +60,6 @@ def review(report):
     }
     if any(report.get(k) != v for k, v in expected.items()):
         return blocked("unverified_run_or_false_promotion_claim")
-    seed = report.get("seed")
-    if type(seed) is not int or seed not in (1, 2, 3):
-        return blocked("unapproved_seed")
     if (type(report.get("model_run_id")) is not str
             or not H32.fullmatch(report["model_run_id"])
             or not _finite(report.get("elapsed_s"), 1e-10, 3600)):
@@ -71,7 +72,7 @@ def review(report):
     if report.get("data_manifest") != {name: _digest(rows) for name, rows in parts.items()}:
         return blocked("dataset_partition_provenance_mismatch")
     episodes = report.get("episode_receipts")
-    if not isinstance(episodes, list) or len(episodes) != EPISODES:
+    if not isinstance(episodes, list) or len(episodes) != expected_episodes:
         return blocked("missing_episode_receipts")
     previous_weights = None
     for ep, row in enumerate(episodes):
@@ -153,7 +154,7 @@ def review(report):
             return blocked("unverified_calibration_episode_count")
         previous_weights = end_weights
     try:
-        computed = _metrics(episodes)
+        computed = _metrics(episodes, expected_episodes=expected_episodes)
     except (ValueError, TypeError, KeyError, OverflowError):
         return blocked("invalid_prequential_metric_reconstruction")
     recorded = report.get("metrics")
@@ -169,7 +170,7 @@ def review(report):
                 return blocked("metric_misreported_or_holdout_contamination")
     return {
         "schema": SCHEMA, "status": "descriptive_review_required",
-        "seed": seed, "training_episodes": EPISODES,
+        "seed": seed, "training_episodes": expected_episodes,
         "prequential_cases_per_policy": computed["zero"]["cases"],
         "metric_mse": {name: computed[name]["mse"] for name in POLICIES},
         "gain_per_top1_candidate": {

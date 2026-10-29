@@ -1,0 +1,137 @@
+{
+  "adapter_updates": 0,
+  "aggregate": {
+    "activation": {
+      "all_seed_mse_beats_zero_5pct": false,
+      "mean_seedwise_ratio_vs_zero": 1.0070407706618139,
+      "total_abstentions": 33,
+      "total_recommended_probes": 0,
+      "total_scored_predictions": 264
+    },
+    "calibrated": {
+      "all_seed_mse_beats_zero_5pct": false,
+      "mean_seedwise_ratio_vs_zero": 1.0059568716712641,
+      "total_abstentions": 33,
+      "total_recommended_probes": 0,
+      "total_scored_predictions": 264
+    },
+    "direction": {
+      "all_seed_mse_beats_zero_5pct": false,
+      "mean_seedwise_ratio_vs_zero": 1.0065565129566145,
+      "total_abstentions": 33,
+      "total_recommended_probes": 0,
+      "total_scored_predictions": 264
+    }
+  },
+  "frozen_algorithm_preceded_new_seed_runs": true,
+  "gain_prediction_superiority_established": false,
+  "measured_perturbed_forwards": 288,
+  "measured_prompt_context_forwards": 36,
+  "model_backward_calls": 0,
+  "model_quality_improvement_proven": false,
+  "model_update_permitted": false,
+  "new_task_family_generalization_established": false,
+  "optimizer_switch_permitted": false,
+  "per_seed": {
+    "4": {
+      "policies": {
+        "activation": {
+          "abstentions": 11,
+          "final_shrinkage_coefficient": 0.0,
+          "prequential_mse": 0.0017439094756051062,
+          "probe_recommendations": 0,
+          "ratio_vs_zero": 1.014271572961979,
+          "zero_mse": 0.0017193713420483277
+        },
+        "calibrated": {
+          "abstentions": 11,
+          "final_shrinkage_coefficient": 0.0,
+          "prequential_mse": 0.0017389482033761802,
+          "probe_recommendations": 0,
+          "ratio_vs_zero": 1.0113860577113785,
+          "zero_mse": 0.0017193713420483277
+        },
+        "direction": {
+          "abstentions": 11,
+          "final_shrinkage_coefficient": 0.0,
+          "prequential_mse": 0.0017463627228710315,
+          "probe_recommendations": 0,
+          "ratio_vs_zero": 1.01569840101589,
+          "zero_mse": 0.0017193713420483277
+        }
+      },
+      "source_run_id": "042b514227bf4340aa274193dc24b925"
+    },
+    "5": {
+      "policies": {
+        "activation": {
+          "abstentions": 11,
+          "final_shrinkage_coefficient": 0.0,
+          "prequential_mse": 0.001813026444413844,
+          "probe_recommendations": 0,
+          "ratio_vs_zero": 1.0005808989408147,
+          "zero_mse": 0.0018119738707115638
+        },
+        "calibrated": {
+          "abstentions": 11,
+          "final_shrinkage_coefficient": 0.0,
+          "prequential_mse": 0.00181274031106376,
+          "probe_recommendations": 0,
+          "ratio_vs_zero": 1.0004229864263414,
+          "zero_mse": 0.0018119738707115638
+        },
+        "direction": {
+          "abstentions": 11,
+          "final_shrinkage_coefficient": 0.0,
+          "prequential_mse": 0.001812586592493319,
+          "probe_recommendations": 0,
+          "ratio_vs_zero": 1.0003381515548646,
+          "zero_mse": 0.0018119738707115638
+        }
+      },
+      "source_run_id": "c9292062924d432bb3bb036bdeb97a69"
+    },
+    "6": {
+      "policies": {
+        "activation": {
+          "abstentions": 11,
+          "final_shrinkage_coefficient": 0.0,
+          "prequential_mse": 0.0008419000681153258,
+          "probe_recommendations": 0,
+          "ratio_vs_zero": 1.0062698400826477,
+          "zero_mse": 0.000836654378954832
+        },
+        "calibrated": {
+          "abstentions": 11,
+          "final_shrinkage_coefficient": 0.007915059559068243,
+          "prequential_mse": 0.000841725818771643,
+          "probe_recommendations": 0,
+          "ratio_vs_zero": 1.0060615708760725,
+          "zero_mse": 0.000836654378954832
+        },
+        "direction": {
+          "abstentions": 11,
+          "final_shrinkage_coefficient": 0.011961010102556676,
+          "prequential_mse": 0.0008396939328506478,
+          "probe_recommendations": 0,
+          "ratio_vs_zero": 1.0036329862990891,
+          "zero_mse": 0.000836654378954832
+        }
+      },
+      "source_run_id": "65b80b2e752c4bd699366961850f81f3"
+    }
+  },
+  "schema": "sensorgraft.lfm3.dust-uncertainty-seed456-summary.v1",
+  "scored_future_episodes_per_policy": 33,
+  "scored_signed_directions_per_policy": 264,
+  "seeds": [
+    4,
+    5,
+    6
+  ],
+  "source_reports_independently_attested": false,
+  "source_train_episodes": 36,
+  "status": "hold_not_qualified",
+  "unique_training_example_keys": 36,
+  "weight_promotion_permitted": false
+}
