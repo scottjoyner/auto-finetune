@@ -1,0 +1,233 @@
+{
+  "adapter_policy": "last_two_attention_vproj_lora_B_only",
+  "base_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "comparable_to_full_lora_adamw_muon": false,
+  "data_manifest": {
+    "selection": "54c326a518f5e8bd00cbdbd8489b26cf23d9f4df90291bdc8f4c67fde527848a",
+    "train": "1911ff10e61dbd6fa9590dfdbed7e1289f7385d2fa7f56f9c94636d95a470afa",
+    "untouched_test": "805f619cc24342715597bca9be2d15066c94f569314fbd2f609d6fbfe1dafda0"
+  },
+  "direction_head": "causal_prompt_activation_two_head_train_online_calibrated",
+  "elapsed_s": 8.41402163496241,
+  "extra_prompt_only_forwards": 3,
+  "final_lora_b_sha256": "0dde164feb6e380125188e2060356eb4b489d2be84dbb099f360ba3dfaf9e80d",
+  "final_test_evaluated": false,
+  "forward_only": true,
+  "gradient_backwards": 0,
+  "initial_lora_b_sha256": "9f1dcbc35c350d6027f98be0f5c8b43b42ca52b7604459c0c42be3aa88913d47",
+  "model": "LiquidAI/LFM3-1.7B",
+  "model_weight_checkpoint_written": false,
+  "optimizer_object_used": false,
+  "policy": "activation_calibrated",
+  "raw_activations_persisted": false,
+  "real_task_generalization_established": false,
+  "records": [
+    {
+      "actual_antithetic_forwards": 4,
+      "actual_backwards": 0,
+      "antithetic_probe_results": [
+        {
+          "candidate": 0,
+          "minus_gain": -0.001720428466796875,
+          "plus_gain": 0.041378021240234375,
+          "predicted_gain": 0.0
+        },
+        {
+          "candidate": 1,
+          "minus_gain": 0.043425559997558594,
+          "plus_gain": -0.0388031005859375,
+          "predicted_gain": 0.0
+        }
+      ],
+      "attention_head_disagreement": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "calibration_events_after_probes": 0,
+      "calibration_events_before_probes": 0,
+      "calibration_weights_after_probes": [
+        0.5,
+        0.5
+      ],
+      "calibration_weights_before_probes": [
+        0.5,
+        0.5
+      ],
+      "cumulative_lora_b_update_norm": 0.04999999827705321,
+      "preprobe_order": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "prior_memory_entries": 0,
+      "prompt_context_sha256": "ee74b5e248b89412325739e07c4ca0a8c75a6ae56c7a41ae00b2414da844a9d6",
+      "prompt_only_extra_forwards": 1,
+      "selected_candidates": [
+        0,
+        1
+      ],
+      "step": 0,
+      "step_accepted": true,
+      "train_loss_after": 10.91880989074707,
+      "train_loss_before": 10.962235450744629
+    },
+    {
+      "actual_antithetic_forwards": 4,
+      "actual_backwards": 0,
+      "antithetic_probe_results": [
+        {
+          "candidate": 3,
+          "minus_gain": -0.06074047088623047,
+          "plus_gain": 0.00023508071899414062,
+          "predicted_gain": 0.03504869868023501
+        },
+        {
+          "candidate": 0,
+          "minus_gain": -0.0002880096435546875,
+          "plus_gain": -0.061565399169921875,
+          "predicted_gain": 0.032843444863373567
+        }
+      ],
+      "attention_head_disagreement": [
+        0.014667454441873444,
+        0.0073273172894133985,
+        0.01331299111283113,
+        0.012458609674801783
+      ],
+      "calibration_events_after_probes": 4,
+      "calibration_events_before_probes": 0,
+      "calibration_weights_after_probes": [
+        0.3942677903841098,
+        0.6057322096158901
+      ],
+      "calibration_weights_before_probes": [
+        0.5,
+        0.5
+      ],
+      "cumulative_lora_b_update_norm": 0.08554589116388635,
+      "preprobe_order": [
+        3,
+        0,
+        2,
+        1
+      ],
+      "prior_memory_entries": 4,
+      "prompt_context_sha256": "0993408bd170f98b60136daa7ca17d48a88a4fc8bf68a31e0a9175ba475d8652",
+      "prompt_only_extra_forwards": 1,
+      "selected_candidates": [
+        3,
+        0
+      ],
+      "step": 1,
+      "step_accepted": true,
+      "train_loss_after": 7.353543758392334,
+      "train_loss_before": 7.353778839111328
+    },
+    {
+      "actual_antithetic_forwards": 4,
+      "actual_backwards": 0,
+      "antithetic_probe_results": [
+        {
+          "candidate": 0,
+          "minus_gain": -0.0028319284319877625,
+          "plus_gain": -0.002344854176044464,
+          "predicted_gain": -0.0060265647242226375
+        },
+        {
+          "candidate": 3,
+          "minus_gain": -0.0005695968866348267,
+          "plus_gain": -0.00025478750467300415,
+          "predicted_gain": -0.006519619577965784
+        }
+      ],
+      "attention_head_disagreement": [
+        0.015146674107753843,
+        0.001418640081576883,
+        0.0005892502584353664,
+        0.01905914415141154
+      ],
+      "calibration_events_after_probes": 8,
+      "calibration_events_before_probes": 4,
+      "calibration_weights_after_probes": [
+        0.3734220378278567,
+        0.6265779621721435
+      ],
+      "calibration_weights_before_probes": [
+        0.3942677903841098,
+        0.6057322096158901
+      ],
+      "cumulative_lora_b_update_norm": 0.08554589252473863,
+      "preprobe_order": [
+        0,
+        3,
+        2,
+        1
+      ],
+      "prior_memory_entries": 8,
+      "prompt_context_sha256": "2d171297f6189c370a879212b8fd1b9d7f99028b1792d2b381b7d867079942a8",
+      "prompt_only_extra_forwards": 1,
+      "selected_candidates": [
+        0,
+        3
+      ],
+      "step": 2,
+      "step_accepted": false,
+      "train_loss_after": 0.07193627953529358,
+      "train_loss_before": 0.07193627953529358
+    }
+  ],
+  "schema": "sensorgraft.lfm3.dust-forward-text-pilot.v1",
+  "seed": 2,
+  "selected_adapter_names": [
+    "base_model.model.model.layers.20.self_attn.v_proj.lora_B.default.weight",
+    "base_model.model.model.layers.22.self_attn.v_proj.lora_B.default.weight"
+  ],
+  "selected_parameter_count": 2048,
+  "selection_after": {
+    "correct": 7,
+    "families": {
+      "greater": {
+        "correct": 1,
+        "total": 3
+      },
+      "parity": {
+        "correct": 3,
+        "total": 3
+      },
+      "sum": {
+        "correct": 3,
+        "total": 3
+      }
+    },
+    "mean_correct_minus_foil_logprob": 4.218750044703484,
+    "total": 9
+  },
+  "selection_before": {
+    "correct": 7,
+    "families": {
+      "greater": {
+        "correct": 1,
+        "total": 3
+      },
+      "parity": {
+        "correct": 3,
+        "total": 3
+      },
+      "sum": {
+        "correct": 3,
+        "total": 3
+      }
+    },
+    "mean_correct_minus_foil_logprob": 4.2350260648462505,
+    "total": 9
+  },
+  "status": "research_forward_only_text_diagnostic",
+  "steps": 3,
+  "total_accepted_steps": 2,
+  "total_antithetic_forwards": 12,
+  "trial_authorized": false,
+  "weight_promotion_permitted": false
+}
