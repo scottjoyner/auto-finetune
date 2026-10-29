@@ -39,7 +39,10 @@ def test_input_order_does_not_change_grid(reports):
 
 def test_cross_report_replayed_run_id_denied(reports):
     changed = copy.deepcopy(reports)
-    changed[1]["arms"][0]["run_id"] = changed[0]["arms"][0]["run_id"]
+    duplicate = changed[0]["arms"][0]["run_id"]
+    changed[1]["arms"][0]["run_id"] = duplicate
+    for event in changed[1]["arms"][0]["events"]:
+        event["run_id"] = duplicate
     assert analyze(changed)["reason"] == "replayed_optimizer_run_id"
 
 
