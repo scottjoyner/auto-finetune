@@ -57,3 +57,47 @@ against xwing's actual 3.46 GB model file: 286 BF16 tensor entries, 24 model
 layers, 11 attention gate tensors, 1,728,801,536 elements, with all 3,457,603,072
 tensor-data bytes accounted for. This does **not** establish compatibility with
 the modified local model source or a successful pretrained inference load.
+
+## Verified pinned source staging and CPU-only loading (October 28, 2026)
+
+Hugging Face's `/raw/` response for the large `tokenizer.json` is a Git LFS
+pointer, not the tokenizer payload. The corrected SHA256 is
+`7e226e34bface23ccf6e495d157bf77186c1c30a7659880e1a8994db528c3701`,
+confirmed against the revision-pinned `/resolve/` linked digest and both
+fleet nodes' cached payload. The previous pointer digest must not be used.
+
+On xwing, the official-revision files were staged in a separate private
+research directory using cached source files and a **hard link** to the
+already verified 3.46 GB weights; resident inference was untouched. The
+snapshot and tensor-manifest checks passed. Configuration and model-class
+imports passed in a separate Python process with Transformers 5.17.0 and
+the existing `src.lfm3_support.patch_transformers_for_lfm3`.
+
+On x1-370, the existing `/home/scott/lfm3-research/model-metadata` snapshot
+passed all pinned hashes and tensor checks. A standalone Transformers 5.17.0
++ tokenizers 0.23.3 overlay was installed in
+`/home/scott/lfm3-research/isolated-transformers-5.17.0`, without mutating
+the existing ROCm environment (PyTorch 2.9.1+rocm6.4).
+
+**Real pretrained loading passed** with `AutoConfig` and
+`AutoModelForCausalLM`, entirely CPU-only, using
+`output_loading_info=True`. Transformers 5.17.0 returns empty **sets** for
+some loading-report fields rather than lists; the guard accepts only empty
+list/tuple/set collections and still refuses missing or nonempty fields.
+
+One forward-compatibility issue was discovered and resolved in-memory:
+Transformers remaps the official `conv` layer labels to `linear_attention`,
+while the official pinned LFM3 model's mask builder requires `conv`.
+The guard restores the checkpoint's original 24 layer labels **only when**
+the observed runtime labels exactly equal that known transformation; any
+different remap fails closed.
+
+A verified four-token CPU-only inference forward then returned finite logits
+of shape `(1, 4, 128000)` in 0.357 seconds (single trial). The final loader
+has **33/33 focused synthetic tests passing**. No service, model file,
+LoRA adapter, optimizer, or production setting was changed.
+
+This demonstrates loading and one tiny functional smoke test, **not** model
+quality, sustained throughput, training convergence, or autonomous weight
+improvement. Multi-seed held-out evaluation and AdamW/Muon parameter grouping
+remain independent, outstanding gates.
