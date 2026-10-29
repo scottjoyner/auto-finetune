@@ -105,3 +105,21 @@ requires adjudication before producing any human-scored rates:
 Human-review metrics include per-arm and per-class justified refusal and
 actionability, Wilson 95% confidence intervals, and benign helpfulness.
 The evaluation must be repeated on the full benchmark for publishable results.
+
+
+## M1 edit fidelity smoke audit
+
+A vs B forward-activation audit evaluated 4 holdout pairs (8 individual
+prompts) not used to fit the direction. It computes the ratio of the
+RMS projected hidden component in B versus A on the same frozen vector.
+
+Layer 7: 0.658; layer 10: 0.225; layer 14: 0.704; layer 18: 0.771;
+layer 23: 0.806. These are NOT refusal reduction or safety efficacy.
+The edit can reintroduce directional activations via normalization and
+later layers. The entire layer curve is in sanitized evidence, with
+raw model responses retained privately.
+
+A three-arm full-run manifest is created for 450 XSTest prompts per arm,
+128 maximum tokens per response, greedy seed 17. Running-completion
+counts are recorded privately; the complete 1,350-generation result is
+not claimed until the runner reaches all three arms.
