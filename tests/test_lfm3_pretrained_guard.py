@@ -84,8 +84,8 @@ def test_verified_from_pretrained_not_constructor(tmp_path):
         model_type = "lfm3"
 
         @classmethod
-        def from_pretrained(cls, path, *, local_files_only):
-            assert path == location and local_files_only
+        def from_pretrained(cls, path, *, local_files_only, trust_remote_code):
+            assert path == location and local_files_only and trust_remote_code
             return cls()
 
     class Model:
@@ -93,8 +93,10 @@ def test_verified_from_pretrained_not_constructor(tmp_path):
             raise AssertionError("random constructor must never run")
 
         @classmethod
-        def from_pretrained(cls, path, *, config, local_files_only, dtype, output_loading_info):
-            assert path == location and local_files_only
+        def from_pretrained(
+            cls, path, *, config, local_files_only, trust_remote_code, dtype, output_loading_info
+        ):
+            assert path == location and local_files_only and trust_remote_code
             assert config.model_type == "lfm3" and dtype == "bf16" and output_loading_info
             return model, {
                 "missing_keys": [],
@@ -169,4 +171,52 @@ def test_train_entrypoint_calls_verified_pretrained_loader():
     code = (Path(__file__).resolve().parents[1] / "src/train.py").read_text()
     assert "model = Lfm3ForCausalLM(config)" not in code
     assert "model = load_pretrained_lfm3(" in code
-    assert "lfm3_dir = verify_local_checkpoint(" in code
+    assert "lfm3_dir = verify_official_lfm3_snapshot(" in code
+    assert "lfm3_dir, AutoConfig, AutoModelForCausalLM" in code
+    assert "from modeling_lfm3 import Lfm3ForCausalLM" not in code
+
+
+def test_unavailable_pretrained_api_is_explicitly_refused(tmp_path):
+    location = single(tmp_path)
+
+    class Config:
+        model_type = "lfm3"
+
+    class Model:
+        pass
+
+    with pytest.raises(LFM3CheckpointError, match="loader_api_incompatible"):
+        load_pretrained_lfm3(location, Config, Model, "bf16")
+
+
+def test_snapshot_pins_admit_exact_files_and_refuse_tampering(tmp_path, monkeypatch):
+    import hashlib
+
+    from src import lfm3_pretrained_guard as guard
+
+    location = single(tmp_path)
+    for filename in ("modeling_lfm3.py", "configuration_lfm3.py", "lfm3_conv.py", "tokenizer.json"):
+        (tmp_path / filename).write_bytes(b"synthetic example")
+    names = (
+        "config.json",
+        "model.safetensors",
+        "modeling_lfm3.py",
+        "configuration_lfm3.py",
+        "lfm3_conv.py",
+        "tokenizer.json",
+    )
+    pins = {name: hashlib.sha256((tmp_path / name).read_bytes()).hexdigest() for name in names}
+    monkeypatch.setattr(guard, "OFFICIAL_LFM3_SHA256", pins)
+    assert guard.verify_official_lfm3_snapshot(location) == location
+    (tmp_path / "modeling_lfm3.py").write_bytes(b"modified code")
+    with pytest.raises(LFM3CheckpointError, match="revision_mismatch:modeling_lfm3.py"):
+        guard.verify_official_lfm3_snapshot(location)
+
+
+def test_missing_pinned_modeling_file_refused(tmp_path, monkeypatch):
+    from src import lfm3_pretrained_guard as guard
+
+    location = single(tmp_path)
+    monkeypatch.setattr(guard, "OFFICIAL_LFM3_SHA256", {"modeling_lfm3.py": "0" * 64})
+    with pytest.raises(LFM3CheckpointError, match="pinned_file_missing"):
+        guard.verify_official_lfm3_snapshot(location)
