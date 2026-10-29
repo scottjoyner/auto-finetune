@@ -207,6 +207,7 @@ def test_snapshot_pins_admit_exact_files_and_refuse_tampering(tmp_path, monkeypa
     )
     pins = {name: hashlib.sha256((tmp_path / name).read_bytes()).hexdigest() for name in names}
     monkeypatch.setattr(guard, "OFFICIAL_LFM3_SHA256", pins)
+    monkeypatch.setattr(guard, "audit_tensor_manifest", lambda path: {"synthetic_only": True})
     assert guard.verify_official_lfm3_snapshot(location) == location
     (tmp_path / "modeling_lfm3.py").write_bytes(b"modified code")
     with pytest.raises(LFM3CheckpointError, match="revision_mismatch:modeling_lfm3.py"):
@@ -219,4 +220,19 @@ def test_missing_pinned_modeling_file_refused(tmp_path, monkeypatch):
     location = single(tmp_path)
     monkeypatch.setattr(guard, "OFFICIAL_LFM3_SHA256", {"modeling_lfm3.py": "0" * 64})
     with pytest.raises(LFM3CheckpointError, match="pinned_file_missing"):
+        guard.verify_official_lfm3_snapshot(location)
+
+
+def test_snapshot_rejects_invalid_tensor_header(tmp_path, monkeypatch):
+    import hashlib
+
+    from src import lfm3_pretrained_guard as guard
+
+    location = single(tmp_path)
+    pins = {
+        name: hashlib.sha256((tmp_path / name).read_bytes()).hexdigest()
+        for name in ("config.json", "model.safetensors")
+    }
+    monkeypatch.setattr(guard, "OFFICIAL_LFM3_SHA256", pins)
+    with pytest.raises(LFM3CheckpointError, match="tensor_manifest_invalid"):
         guard.verify_official_lfm3_snapshot(location)
