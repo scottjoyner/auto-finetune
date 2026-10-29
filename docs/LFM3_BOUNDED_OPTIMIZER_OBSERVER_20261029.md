@@ -51,3 +51,18 @@ Candidate model JSON now requires exactly `optimizer`, `learning_rate`, `base_sh
 At the last read-only x1-370 LM Studio inventory check, a K2-Horizon model was loaded but **no LFM3 model was loaded**. No loaded model was evicted and no LFM3 generation was performed, so there is no claimed autoregressive model-suggested LR result yet.
 
 The 0.8×/1.0×/1.2× grid remains **purely a preregistered trial design**. Independent authorized evaluation, multiple-comparison correction, telemetry signing, and rollback tests must precede any controlled adaptive optimizer setting.
+
+## Optional actual local LFM3 inference (still read-only)
+
+`src.lfm3_optimizer_feedback_client` is an explicitly opted-in, localhost-only bridge to the LM Studio endpoint. It first examines `127.0.0.1:1234/api/v1/models` and only sends the numerical observation packet if exactly one `LFM3-1.7B` model is **already loaded**. It does not load or evict models. This is a **single inference sample**, not a training feedback daemon, not actual autonomous optimizer updates.
+
+```bash
+python -m src.lfm3_optimizer_feedback_client \
+  research/evidence/lfm3-real-lora-20261029/lfm3-real-lora-3seed-20step-equal-lr-20261029.json \
+  --research-only --allow-local-inference
+python -m pytest -o addopts= -q tests/test_lfm3_optimizer_feedback_client.py
+```
+
+Model text is parsed as strict JSON, then reviewed with exact base and report digests, safe optimizer names, and bounded LR. Invalid responses are never executed. There is no user-configurable endpoint, shell command, optimizer setter, or checkpoint writer. Request timeout is 50 seconds; response cap is 32 KiB; inference cap is 160 tokens. Only pure-Python mocked network contract tests belong in CI. The client itself remains optional and disabled without both CLI opt-in flags.
+
+**Not yet accomplished:** verification against an actually loaded LFM3 model, CPU/ROCm end-to-end model-generated proposals, signed SensorGraft provenance, mixed Muon/AdamW parameter-group optimizer experiments, and independently graded task-quality changes. These must be measured separately. Never use synthetic-token loss to authorize weight promotion.
