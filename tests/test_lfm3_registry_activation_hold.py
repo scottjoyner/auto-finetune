@@ -130,3 +130,79 @@ def test_ab_complete_does_not_rewrite_existing_registry(tmp_path):
     original = (Path(tmp_path) / "model-registry.json").read_bytes()
     assert r.complete_ab_test(test_id) is None
     assert original == (Path(tmp_path) / "model-registry.json").read_bytes()
+
+
+def test_active_incumbent_cannot_be_retired_by_legacy_registry(tmp_path):
+    r = rstore(tmp_path)
+    incumbent = registered(r, "active", "Qwen/Qwen3")
+    r._versions[incumbent].status = "active"
+    r._save()
+    before = (Path(tmp_path) / "model-registry.json").read_bytes()
+    assert r.retire(incumbent) is False
+    assert (Path(tmp_path) / "model-registry.json").read_bytes() == before
+    assert rstore(tmp_path).active_version().version_id == incumbent
+
+
+def test_testing_candidate_cannot_be_retired_mid_experiment(tmp_path):
+    r = rstore(tmp_path)
+    incumbent = registered(r, "incumbent", "Other")
+    challenger = registered(r, "challenger", "Other")
+    r._versions[incumbent].status = "active"
+    r._save()
+    assert r.start_ab_test(incumbent, challenger)
+    before = (Path(tmp_path) / "model-registry.json").read_bytes()
+    assert r.retire(challenger) is False
+    assert (Path(tmp_path) / "model-registry.json").read_bytes() == before
+
+
+def test_same_model_ab_test_is_refused_without_writing(tmp_path):
+    r = rstore(tmp_path)
+    incumbent = registered(r, "incumbent", "Other")
+    before = (Path(tmp_path) / "model-registry.json").read_bytes()
+    assert r.start_ab_test(incumbent, incumbent) is None
+    assert (Path(tmp_path) / "model-registry.json").read_bytes() == before
+
+
+def test_overlapping_ab_test_refused_without_overwriting_first(tmp_path):
+    r = rstore(tmp_path)
+    incumbent = registered(r, "incumbent", "Other")
+    first = registered(r, "first", "Other")
+    second = registered(r, "second", "Other")
+    r._versions[incumbent].status = "active"
+    r._save()
+    first_ab = r.start_ab_test(incumbent, first)
+    before = (Path(tmp_path) / "model-registry.json").read_bytes()
+    assert r.start_ab_test(incumbent, second) is None
+    assert (Path(tmp_path) / "model-registry.json").read_bytes() == before
+    assert rstore(tmp_path).get_ab_test(first_ab).status == "running"
+
+
+def test_retired_candidate_cannot_enter_ab_test(tmp_path):
+    r = rstore(tmp_path)
+    first = registered(r, "first", "Other")
+    retired = registered(r, "retired", "Other")
+    assert r.retire(retired)
+    before = (Path(tmp_path) / "model-registry.json").read_bytes()
+    assert r.start_ab_test(first, retired) is None
+    assert (Path(tmp_path) / "model-registry.json").read_bytes() == before
+
+
+def test_nonoverlapping_experiments_remain_supported(tmp_path):
+    r = rstore(tmp_path)
+    names = [registered(r, f"model{i}", "Other") for i in range(4)]
+    a = r.start_ab_test(names[0], names[1])
+    b = r.start_ab_test(names[2], names[3])
+    assert a is not None and b is not None and a != b
+    assert rstore(tmp_path).summary()["ab_tests_running"] == 2
+
+
+def test_two_active_versions_cannot_start_ab_test(tmp_path):
+    r = rstore(tmp_path)
+    a = registered(r, "active-a", "Other")
+    b = registered(r, "active-b", "Other")
+    r._versions[a].status = "active"
+    r._versions[b].status = "active"
+    r._save()
+    original = (Path(tmp_path) / "model-registry.json").read_bytes()
+    assert r.start_ab_test(a, b) is None
+    assert (Path(tmp_path) / "model-registry.json").read_bytes() == original
