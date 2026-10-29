@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path, PurePosixPath
 
@@ -59,13 +60,18 @@ def verify_local_checkpoint(location: str) -> str:
 def load_pretrained_lfm3(location: str, config_class, model_class, dtype):
     """Only return model after checking from_pretrained reported all keys loaded."""
     model_dir = verify_local_checkpoint(location)
-    config = config_class.from_pretrained(model_dir, local_files_only=True)
+    if not callable(getattr(config_class, "from_pretrained", None)) or not callable(
+        getattr(model_class, "from_pretrained", None)
+    ):
+        raise LFM3CheckpointError("lfm3_loader_api_incompatible")
+    config = config_class.from_pretrained(model_dir, local_files_only=True, trust_remote_code=True)
     if getattr(config, "model_type", None) != "lfm3":
         raise LFM3CheckpointError("lfm3_model_type_mismatch")
     result = model_class.from_pretrained(
         model_dir,
         config=config,
         local_files_only=True,
+        trust_remote_code=True,
         dtype=dtype,
         output_loading_info=True,
     )
@@ -80,3 +86,36 @@ def load_pretrained_lfm3(location: str, config_class, model_class, dtype):
     ):
         raise LFM3CheckpointError("lfm3_weight_keys_incomplete")
     return model
+
+
+# Pinned file digests from LiquidAI/LFM3-1.7B revision 40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd.
+# A modified compatibility fork requires separately reviewed source pin updates.
+OFFICIAL_LFM3_REVISION = "40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd"
+OFFICIAL_LFM3_SHA256 = {
+    "config.json": "8c6ae8b8f6d88c87cfb98cf4b5e34e943d0ee07e24215c4121b3159a46e1399d",
+    "configuration_lfm3.py": "176cced35657aedfea7d7002221360582d1c05fcaca882c21508bc3a73b282e5",
+    "modeling_lfm3.py": "e8cd5254ea99ce6bd731b57b10908c2e8b5010ce8315341f895a38484885eeab",
+    "lfm3_conv.py": "80d4a985382a22774212759248a6b4c737bfbf9c2a47b3dd7f797dda748e4bb4",
+    "tokenizer.json": "2f2b9098046f162fda0d84f886ec86cf89ac784b622c0a6d393a221d7a8e09a0",
+    "tokenizer_config.json": "bf028f813efc6137bc07ed045cafe71820df9a5e26a38e39954706ed1e30a457",
+    "model.safetensors": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+}
+
+
+def verify_official_lfm3_snapshot(location: str) -> str:
+    """Admit only the exact reviewed model, config, tokenizer and source bytes."""
+    root = Path(verify_local_checkpoint(location))
+    for name, expected in OFFICIAL_LFM3_SHA256.items():
+        candidate = root / name
+        if candidate.is_symlink() or not candidate.is_file():
+            raise LFM3CheckpointError("lfm3_pinned_file_missing:" + name)
+        h = hashlib.sha256()
+        try:
+            with candidate.open("rb") as f:
+                for block in iter(lambda: f.read(4 * 1024 * 1024), b""):
+                    h.update(block)
+        except OSError as exc:
+            raise LFM3CheckpointError("lfm3_pinned_file_unreadable:" + name) from exc
+        if h.hexdigest() != expected:
+            raise LFM3CheckpointError("lfm3_revision_mismatch:" + name)
+    return str(root)
