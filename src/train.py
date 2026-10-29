@@ -200,8 +200,10 @@ def _train_peft(cfg: Config, data: list[dict],
             lfm3_dir or model_name, trust_remote_code=True,
             local_files_only=bool(lfm3_dir),
         )
-    except (ValueError, OSError):
-        # Fall back to PreTrainedTokenizerFast with tokenizer.json
+    except (ValueError, OSError) as exc:
+        if lfm3_dir:
+            raise TrainError("pinned LFM3 tokenizer load failed; fallback refused") from exc
+        # Legacy non-LFM3 fallback, never used for a pinned LFM3 checkpoint.
         from transformers import PreTrainedTokenizerFast
         tok_path = lfm3_dir or model_name
         if not os.path.exists(os.path.join(tok_path, "tokenizer.json")):
@@ -213,11 +215,12 @@ def _train_peft(cfg: Config, data: list[dict],
         tokenizer = PreTrainedTokenizerFast(
             tokenizer_file=os.path.join(tok_dir, "tokenizer.json"),
             bos_token="<|startoftext|>",
-            eos_token="\u6620",  # LFM3 EOS token
+            eos_token="<|im_end|>",
             pad_token="<|pad|>",
         )
-    if is_lfm3_model(model_name):
-        tokenizer.chat_template = "{% for message in messages %}{% if message['role'] == 'system' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% elif message['role'] == 'user' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% elif message['role'] == 'assistant' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% endif %}{% endfor %}"
+    if lfm3_dir:
+        from src.lfm3_chat_template_guard import ensure_native_lfm3_chat_template
+        ensure_native_lfm3_chat_template(tokenizer, lfm3_dir)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
