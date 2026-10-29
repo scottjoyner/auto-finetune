@@ -62,7 +62,33 @@ def human_review_check(review_dir, benchmark):
             "two_independent_consensus_reviewers":True}
 
 
-def readiness_status(full_results_dir, review_dir, capability_report, hashes, benchmark):
+def custom_arc_check(results_dir, hashes):
+    """Recognize finished custom ARC likelihood, never call it official validation."""
+    if results_dir is None or not (Path(results_dir)/"private_manifest.json").is_file():
+        return {"status":"pending","reason":"three-arm custom ARC likelihood evidence missing"}
+    try:
+        from src.arc_likelihood_progress_audit import audit as arc_audit
+        state=arc_audit(results_dir,verify_live_weights=False)
+        if (state.get("checkpoint_sha256")!=hashes or
+                state.get("journal_integrity")!="passed" or
+                state.get("recorded_cases")!=3516 or
+                state.get("expected_cases")!=3516 or
+                state.get("completion")!="generations_complete" or
+                state.get("unterminated_tail_present") or
+                any(state["per_arm"][arm]["recorded"]!=1172 for arm in ARMS)):
+            raise ValueError("incomplete or mismatched custom ARC run")
+    except (OSError, ValueError, KeyError, TypeError):
+        return {"status":"blocked","reason":"custom likelihood run not complete or provenance mismatch"}
+    return {
+        "status":"complete",
+        "evaluated_case_model_pairs":3516,
+        "questions_per_checkpoint":1172,
+        "official_benchmark":False,
+        "reason":"custom answer-choice likelihood; independent standard benchmarking still needed"
+    }
+
+
+def readiness_status(full_results_dir, review_dir, capability_report, hashes, benchmark, custom_arc_dir=None):
     progress = audit(full_results_dir)
     model_match = (progress.get("checkpoint_sha256") == hashes and len(hashes) == 3)
     full = (model_match and
@@ -102,6 +128,7 @@ def readiness_status(full_results_dir, review_dir, capability_report, hashes, be
         except (ValueError, OSError):
             results["capability_validation"]={"status":"blocked",
                 "reason":"capability evidence cannot be parsed"}
+    results["arc_custom_likelihood"] = custom_arc_check(custom_arc_dir, hashes)
     results["publication_approved"] = False
     results["release_approved"] = False
     results["model_count_frozen"] = 3
@@ -117,11 +144,13 @@ def main():
                    default=ROOT/"results/xstest_full_review_private")
     p.add_argument("--capability-report", type=Path,
                    default=ROOT/"results/arc_official_full_private.json")
+    p.add_argument("--arc-custom-dir",type=Path,
+                   default=ROOT/"results/arc_choice_likelihood_full_private")
     args = p.parse_args()
     hashes=checked_arm_paths(ARMS)
     benchmark={r["id"]:r for r in read_verified_dataset()}
     summary=readiness_status(args.full_results_dir,args.review_dir,
-                             args.capability_report,hashes,benchmark)
+                             args.capability_report,hashes,benchmark,args.arc_custom_dir)
     print(json.dumps(summary,indent=2))
 
 
