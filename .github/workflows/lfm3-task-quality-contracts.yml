@@ -7,7 +7,9 @@ on:
   pull_request:
     paths:
       - "src/lfm3_lora_text_task_probe.py"
+      - "src/lfm3_lora_text_task_review.py"
       - "tests/test_lfm3_lora_text_task_probe.py"
+      - "tests/test_lfm3_lora_text_task_review.py"
       - ".github/workflows/lfm3-task-quality-contracts.yml"
 
 permissions:
@@ -28,5 +30,5 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          python -m compileall -q src/lfm3_lora_text_task_probe.py
-          python -m pytest -o addopts= -q tests/test_lfm3_lora_text_task_probe.py
+          python -m compileall -q src/lfm3_lora_text_task_probe.py src/lfm3_lora_text_task_review.py
+          python -m pytest -o addopts= -q tests/test_lfm3_lora_text_task_probe.py tests/test_lfm3_lora_text_task_review.py
