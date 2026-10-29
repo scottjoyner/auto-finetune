@@ -76,6 +76,9 @@ def dataset(seed):
                         break
                 else:
                     raise ValueError("dataset_sampling_exhausted")
+    # Keep all three task families represented throughout a short run; a
+    # contiguous family-block curriculum biases 10-20 step comparisons.
+    random.Random(640017 + seed).shuffle(sections["train"])
     return sections
 
 
