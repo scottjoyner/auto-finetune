@@ -35,3 +35,19 @@ No model weights, GPU, Hugging Face authentication, network connection, or runti
 The underlying run used official LFM3-1.7B weights, a frozen backbone, rank-2 LoRA adapters and synthetic random token IDs. Its held-out loss is not a language-capability measure. The proposed 0.8/1.0/1.2 grid is a research *design*, not a data-backed best learning rate. Timings in this evidence are CPU-only and cannot establish R9700 ROCm throughput. Muon-on-LoRA compatibility is not validated for production. This change does not implement recursive weight self-modification or autonomous tuning; it establishes an auditable observation/feedback boundary for later experiments.
 
 See PyTorch's Muon optimizer documentation and LiquidAI LFM3 documentation for architecture and optimizer constraints.
+
+## Read-only LFM3 self-observation packet (v0.1)
+
+The new `src.lfm3_optimizer_feedback_packet` serializes only verified numeric optimizer summaries, candidate learning rates and pinned digests as a two-message observation prompt for a locally hosted LFM3 model. It does not contact a server, start inference, enqueue training, or write checkpoints; the packet is an **input contract**, not a measured AI-generated improvement.
+
+```bash
+python -m src.lfm3_optimizer_feedback_packet \
+  research/evidence/lfm3-real-lora-20261029/lfm3-real-lora-3seed-20step-equal-lr-20261029.json
+python -m pytest -o addopts= -q tests/test_lfm3_optimizer_feedback_packet.py tests/test_lfm3_optimizer_observer.py
+```
+
+Candidate model JSON now requires exactly `optimizer`, `learning_rate`, `base_sha256`, `report_sha256`, `reason`. `report_sha256` is the SHA-256 of the **canonicalized full input telemetry JSON**, protecting a recommendation from accidental stale/replayed telemetry. It is not an authentication signature and does **not** make the source trusted: independent signed SensorGraft provenance is still required. Invalid types, mismatched report identity, nonfinite or out-of-bounds LR, control characters, extra keys and unsupported optimizers fail closed.
+
+At the last read-only x1-370 LM Studio inventory check, a K2-Horizon model was loaded but **no LFM3 model was loaded**. No loaded model was evicted and no LFM3 generation was performed, so there is no claimed autoregressive model-suggested LR result yet.
+
+The 0.8×/1.0×/1.2× grid remains **purely a preregistered trial design**. Independent authorized evaluation, multiple-comparison correction, telemetry signing, and rollback tests must precede any controlled adaptive optimizer setting.
