@@ -1,0 +1,33 @@
+name: LFM3 Dust forward-only research contracts
+
+on:
+  push:
+    branches:
+      - "research/lfm3-dust-forward-predictive-head-*"
+  pull_request:
+    paths:
+      - "src/lfm3_dust_direction_attention.py"
+      - "src/lfm3_dust_predictive_probe.py"
+      - "tests/test_lfm3_dust_predictive_probe.py"
+      - ".github/workflows/lfm3-dust-forward-contracts.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  head-and-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install offline unit-test tools
+        run: python -m pip install pytest==9.0.3 pyyaml==6.0.3
+      - name: Verify no-model causal feedback contracts
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m compileall -q src/lfm3_dust_direction_attention.py src/lfm3_dust_predictive_probe.py
+          python -m pytest -o addopts= -q tests/test_lfm3_dust_predictive_probe.py
