@@ -32,23 +32,26 @@ from src.lfm3_real_lora_probe import BASE_SHA256, MODEL_PATH, _load, _preflight,
 
 SCHEMA = "sensorgraft.lfm3.dust-prequential-all-candidates.v1"
 EPISODES = 8
+NEW_COHORT_EPISODES = 12
+NEW_COHORT_SEEDS = (4, 5, 6)
 CANDIDATES = 4
 SIGMA = .05
 POLICIES = ("zero", "historical_mean", "direction", "activation", "calibrated")
 
 
 def validate(*, seed, episodes, candidates, sigma):
-    if (type(seed) is not int or seed not in (1, 2, 3)
-            or type(episodes) is not int or episodes != EPISODES
+    if (type(seed) is not int or type(episodes) is not int
+            or not ((seed in (1, 2, 3) and episodes == EPISODES)
+                    or (seed in NEW_COHORT_SEEDS and episodes == NEW_COHORT_EPISODES))
             or type(candidates) is not int or candidates != CANDIDATES
             or type(sigma) not in (int, float) or sigma != SIGMA):
         raise ValueError("unpreregistered_prequential_experiment")
 
 
-def _metrics(episodes):
+def _metrics(episodes, *, expected_episodes=EPISODES):
     """No information from the current episode may enter its forecasts."""
     evaluation = [r for r in episodes if r["episode"] > 0]
-    if len(evaluation) != EPISODES - 1:
+    if len(evaluation) != expected_episodes - 1:
         raise ValueError("incomplete_prequential_period")
     result = {}
     for policy in POLICIES:
@@ -199,7 +202,7 @@ def run(*, seed=1, episodes=EPISODES, candidates=CANDIDATES,
             or any(not torch.equal(p.detach(), original)
                    for p, original in zip(params, saved, strict=True))):
         raise RuntimeError("frozen_adapter_modified_after_observation")
-    metrics = _metrics(episode_rows)
+    metrics = _metrics(episode_rows, expected_episodes=episodes)
     return {
         "schema": SCHEMA, "status": "real_lfm3_prequential_prediction_only",
         "model": "LiquidAI/LFM3-1.7B", "base_sha256": BASE_SHA256,
@@ -233,7 +236,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--research-only", action="store_true", required=True)
     p.add_argument("--allow-forward-only-all-candidate-audit", action="store_true", required=True)
-    p.add_argument("--seed", type=int, choices=(1,2,3), required=True)
+    p.add_argument("--seed", type=int, choices=(1,2,3,4,5,6), required=True)
     p.add_argument("--episodes", type=int, default=EPISODES)
     p.add_argument("--candidates", type=int, default=CANDIDATES)
     p.add_argument("--sigma", type=float, default=SIGMA)
