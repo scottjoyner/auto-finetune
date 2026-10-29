@@ -122,9 +122,9 @@ def review(report):
             if sign == -1 and any(abs(x + y) > 1e-6 for x, y in zip(
                     coeffs, cases[pos-1]["direction_coefficients"], strict=True)):
                 return blocked("antithetic_direction_not_paired")
-            if (candidate["direction_evidence"] != 2*CANDIDATES*ep
-                    or candidate["activation_evidence"] != 2*CANDIDATES*ep
-                    or candidate["calibrated_evidence"] != 2*CANDIDATES*ep):
+            if (candidate["direction_evidence"] != min(32, 2*CANDIDATES*ep)
+                    or candidate["activation_evidence"] != min(32, 2*CANDIDATES*ep)
+                    or candidate["calibrated_evidence"] != min(32, 2*CANDIDATES*ep)):
                 return blocked("same_episode_result_used_as_prediction")
             forecasts = candidate["predictions"]
             if (not isinstance(forecasts, dict) or set(forecasts) != set(POLICIES)
