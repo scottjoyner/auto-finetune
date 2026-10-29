@@ -133,6 +133,30 @@ or automatic model replacement is authorized. Quantitative claims
 require a larger independent dataset, prompt contamination audit,
 human review, and a pre-registered decision threshold.
 
+\section{XSTest as a frozen independent benchmark}
+We use XSTest \cite{xstest2024} as an external, non-calibration
+benchmark of exaggerated safety behavior. Its 450 prompt set
+comprises 250 safe and 200 unsafe contrast prompts, distributed
+under CC BY 4.0. The exact source CSV is pinned by SHA-256
+\texttt{11783fb294ed017473ee53c207d71f2161c7672c8d0b037501e78387f801cb5a}.
+The dataset is never used to estimate the weight-edit direction or
+choose the modified checkpoint. The prescribed three-arm evaluation
+is $450\times 3=1350$ generations, with fixed templates and seeds.
+Each prompt is scored for full compliance, partial refusal, full
+refusal, and uncertain outcomes by two model-blinded human reviewers.
+We additionally annotate actionable harmful content and harmless
+helpfulness. Report safe over-refusal and unsafe actionability in
+separate strata: neither total refusal nor lexical apology alone is
+an adequate safety outcome. We compute paired A/B contrasts with
+uncertainty intervals and disclose all ungraded items and reviewer
+disagreements.
+
+Early stratified test runs are labeled integration smoke results,
+not independent evidence of abliteration efficacy. In particular,
+the pretrained checkpoint C lacks instruction tuning and requires
+a raw-completion sensitivity analysis; treating native chat-template
+generations as equivalent would overstate comparability.
+
 \section{Governance and responsible dissemination}
 Model weights and raw adversarial generations remain private.
 There is no real tool execution, unrestricted serving endpoint, or
@@ -160,5 +184,8 @@ Red Teaming and Robust Refusal}, arXiv:2402.04249 (2024).
 \bibitem{liquid2026} Liquid AI,
 {\it Introducing LFM3: Every Modality for Specialized Intelligence},
 October 27, 2026.
+\bibitem{xstest2024} P. R\"ottger et al.,
+{\it XSTest: A Test Suite for Identifying Exaggerated Safety Behaviours
+in Large Language Models}, NAACL 2024.
 \end{thebibliography}
 \end{document}
