@@ -143,3 +143,30 @@ show general capability loss or safety preservation.
 Formal replication with a standard independent
 benchmark implementation and order/prompt robustness
 is still necessary. All models stay frozen: A, B, C only.
+
+
+## Exploratory exact paired inference on the full ARC journal
+
+An independent, no-new-model-inference check conditions on the number
+of questions on which each paired checkpoint comparison differs in
+correctness. The two-sided exact conditional McNemar binomial test
+avoids asymptotic shortcuts; results are adjusted across all 3
+checkpoint contrasts x 2 likelihood scoring conventions with Holm
+familywise correction. This statistical check was added after the
+custom full ARC evaluation and is explicitly exploratory.
+
+B minus A, normalized: 14 newly correct, 28 no longer correct,
+42 discordant; exact p=0.04355852, Holm-adjusted p=0.08711704.
+B minus A, raw-sum: 17 newly correct, 31 no longer correct,
+48 discordant; exact p=0.05946338, Holm-adjusted p=0.08711704.
+No A/B contrast meets the conventional adjusted 0.05 reference
+threshold. That is NOT proof of equivalence or capability preservation,
+and no noninferiority margin was preregistered.
+
+The script reads ONLY the sanitized full paired capability aggregate:
+    python -m src.arc_paired_exact_inference --aggregate evidence/20261029_full_arc_paired_capability_diagnostics.json --output evidence/20261029_arc_exact_paired_sensitivity.json
+
+Outputs are public-safe aggregate counts only, no prompts or case-level
+predictions. The frozen three checkpoints and human-review gates are
+unchanged. Custom ARC likelihood scores still need independent
+standardization and robustness confirmation.
