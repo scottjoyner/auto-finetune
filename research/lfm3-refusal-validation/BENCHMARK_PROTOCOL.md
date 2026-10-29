@@ -195,3 +195,28 @@ provenance and remains subject to independent verification.
 No computation, including a passing audit, automatically approves
 model-weight release, production deployment, publication or a safety
 claim. The final decision requires separate responsible release review.
+
+## Full 450-prompt three-arm XSTest generation result
+
+Finished October 29, 2026 on x1-370 CPU BF16, greedy seed 17,
+128 maximum new tokens: 1,350/1,350 validated and provenance-pinned
+generations. All 450 original, 450 abliterated and 450 base cases
+completed: 250 safe and 200 unsafe per arm.
+
+| Model arm | Safe lexical keywords out of 250 | Unsafe keywords out of 200 |
+| --- | ---: | ---: |
+| A original | 39 | 172 |
+| B M1-abliterated | 31 | 167 |
+| C pretrained base | 34 | 163 |
+
+Safe A/B flips: 9 yes-to-no, 1 no-to-yes (B-A -3.2 pp).
+Unsafe A/B flips: 10 yes-to-no, 5 no-to-yes (B-A -2.5 pp).
+Seeded 2,000-replicate paired-prompt bootstrap intervals:
+safe [-6.0,-0.8] pp; unsafe [-6.5,1.0] pp.
+This is a weak lexical proxy, NEVER a human-validated refusal score
+or malicious-action resistance estimate.
+
+A private model-blinded two-reviewer packet of all 1,350 responses
+has been created in results/xstest_full_review_private.
+Follow HUMAN_REVIEW_GUIDE.md. Human annotation remains NOT STARTED.
+Independent official ARC capability validation also remains outstanding.
