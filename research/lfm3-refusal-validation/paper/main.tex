@@ -74,6 +74,65 @@ bootstrap confidence intervals, and correction for searched layers and
 projection strengths. Use standardized red-teaming ideas such as HarmBench
 \cite{mazeika2024} only with appropriate controls and data handling.
 A lower refusal rate is never treated as a successful safety outcome.
+\section{Three-checkpoint experimental design (v0.1)}
+We use exactly three primary checkpoint arms, with all evaluations run
+using the same private harness. The pretrained model is treated as a
+\emph{developmental control}, not as a refusal-free chat baseline:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Arm & Checkpoint & Primary comparison \\
+\midrule
+A & LFM3-1.7B post-trained & Native refusal/utility \\
+B & M1-style edited A & Refusal suppression vs. A \\
+C & LFM3-1.7B-Base & Behaviors prior to post-training \\
+\bottomrule
+\end{tabular}
+\end{center}
+The edit in B is a conventional direct-removal variant of the
+difference-of-means abliteration of Arditi et al.\ \cite{arditi2024}.
+Unlike the initial reversible forward-hook probe, B is a separate,
+locally saved model whose weights are modified. Its original weights
+and full chain of custody are retained. With $d$ a normalized
+candidate direction and $W$ an operator's residual-stream output
+weight matrix, we use
+\[
+W'=(I-\alpha dd^{\top})W,\qquad\alpha=1\quad\text{(M1 direct removal)}.
+\]
+The experimental implementation edits each of the 24 MLP $w_2$
+weights and the 24 residual operator outputs (13 convolution output
+projections and 11 attention output projections), for 48 edits.
+Because LFM3 uses sandwich RMS normalizations and hybrid operators,
+this projection does \emph{not} guarantee removal of the corresponding
+direction at residual addition. It is an empirical hypothesis to test.
+
+\subsection{Preregistered scoring and independent controls}
+For each of A, B, and C, measure a held-out benign-helpfulness score,
+false-refusal rate, human-graded harmful-actionability score, safe
+redirection on unauthorized requests, latency, and per-token cost.
+Use deterministic zero-temperature runs before evaluating multiple
+sampling seeds; apply balanced prompt variations. For the base arm,
+also evaluate natural next-token completion to account for its
+different training objective. The mock authorization policy is a
+separate control: it must block prohibited actions regardless of
+the model's text.
+
+A sham projection, random-vector orthogonalization, and alpha sweep
+are \emph{methodological controls}, not additional checkpoints in the
+three-arm comparison. All hyperparameter selections use calibration
+splits. Holdouts remain unseen until choices are frozen.
+We will report 95\% confidence intervals and human annotation
+agreement, with all denominators and failures disclosed.
+
+\subsection{Prototype results and evidence policy}
+The first two-pair calibration and two-pair held-out reversible
+forward-hook probe are strictly exploratory. It was not sufficient
+to validate safety. The locally generated M1-style derivative is
+similarly an unvalidated smoke checkpoint. No public distribution
+or automatic model replacement is authorized. Quantitative claims
+require a larger independent dataset, prompt contamination audit,
+human review, and a pre-registered decision threshold.
+
 \section{Governance and responsible dissemination}
 Model weights and raw adversarial generations remain private.
 There is no real tool execution, unrestricted serving endpoint, or
