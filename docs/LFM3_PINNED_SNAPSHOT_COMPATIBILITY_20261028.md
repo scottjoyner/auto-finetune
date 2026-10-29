@@ -45,3 +45,15 @@ retrieval and no service mutation. It is intentionally fail-closed on the
 currently modified xwing snapshot. The local digest manifest is not a
 cryptographic signature of the model publisher; the remote reference and
 release provenance must be independently reviewed.
+
+## Verified metadata-only tensor audit
+
+The new `src/lfm3_tensor_manifest.py` inspects the SafeTensors header only, never
+allocating model weights. It rejects duplicate JSON keys, malformed shapes,
+non-BF16 tensors, overlapping/out-of-bounds byte spans, missing model layers,
+missing gate matrices, and unexpected tensor/parameter counts. The official
+snapshot gate runs this check after validating SHA-256 digests. Verified read-only
+against xwing's actual 3.46 GB model file: 286 BF16 tensor entries, 24 model
+layers, 11 attention gate tensors, 1,728,801,536 elements, with all 3,457,603,072
+tensor-data bytes accounted for. This does **not** establish compatibility with
+the modified local model source or a successful pretrained inference load.
