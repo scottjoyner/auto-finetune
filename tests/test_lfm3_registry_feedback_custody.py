@@ -42,27 +42,27 @@ def test_registry_register_persist_reload_and_list(tmp_path):
     assert restored.summary()["total_versions"] == 2
 
 
-def test_registry_safe_manual_non_lfm3_active_transition_persists(tmp_path):
+def test_registry_non_lfm3_manual_promotion_rejected_persistently(tmp_path):
     r = registry(tmp_path)
     v1 = make_version(r, "baseline")
     v2 = make_version(r, "candidate")
-    assert r.promote(v1)
-    assert r.promote(v2)
+    assert not r.promote(v1)
+    assert not r.promote(v2)
     restored = registry(tmp_path)
-    assert restored.active_version().version_id == v2
-    assert restored.get(v1).status == "retired"
-    assert restored.get(v2).status == "active"
-    assert len(restored.list_versions(status="active")) == 1
+    assert restored.active_version() is None
+    assert restored.get(v1).status == "candidate"
+    assert restored.get(v2).status == "candidate"
+    assert len(restored.list_versions(status="active")) == 0
 
 
 def test_registry_denies_lfm3_direct_promotion_across_restarts(tmp_path):
     r = registry(tmp_path)
     old = make_version(r, "original")
     trial = make_version(r, "trial", base="LiquidAI/LFM3-1.7B")
-    assert r.promote(old)
+    assert not r.promote(old)
     assert not r.promote(trial)
     restored = registry(tmp_path)
-    assert restored.active_version().version_id == old
+    assert restored.active_version() is None
     assert restored.get(trial).status == "candidate"
 
 
@@ -122,19 +122,19 @@ def test_registry_ab_winner_lfm3_persists_uncompleted(tmp_path):
     assert state.active_version() is None
 
 
-def test_registry_ab_non_lfm3_winner_persists(tmp_path):
+def test_registry_ab_non_lfm3_cannot_activate_winner(tmp_path):
     r = registry(tmp_path)
     a = make_version(r, "baseline")
     b = make_version(r, "candidate")
     ab_id = r.start_ab_test(a, b)
     assert r.record_ab_metric(ab_id, a, "score", .3)
     assert r.record_ab_metric(ab_id, b, "score", .8)
-    assert r.complete_ab_test(ab_id) == b
+    assert r.complete_ab_test(ab_id) is None
     state = registry(tmp_path)
-    assert state.get_ab_test(ab_id).winner == b
-    assert state.active_version().version_id == b
-    assert state.get(a).status == "retired"
-    assert state.summary()["ab_tests_completed"] == 1
+    assert state.get_ab_test(ab_id).winner is None
+    assert state.get_ab_test(ab_id).status == "running"
+    assert state.active_version() is None
+    assert state.get(a).status == "testing" and state.get(b).status == "testing"
 
 
 def test_registry_ab_cannot_complete_again(tmp_path):
@@ -142,8 +142,9 @@ def test_registry_ab_cannot_complete_again(tmp_path):
     a = make_version(r, "baseline")
     b = make_version(r, "candidate")
     id_ = r.start_ab_test(a, b)
-    assert r.complete_ab_test(id_) is not None
     assert r.complete_ab_test(id_) is None
+    assert r.complete_ab_test(id_) is None
+    assert registry(tmp_path).get_ab_test(id_).status == "running"
 
 
 def test_corrupt_registry_fails_non_destructively(tmp_path):
@@ -252,8 +253,10 @@ def test_registry_ab_ids_unique_for_same_clock_tick(tmp_path, monkeypatch):
     r = registry(tmp_path)
     a = make_version(r, "first")
     b = make_version(r, "second")
+    c = make_version(r, "third")
+    d = make_version(r, "fourth")
     one = r.start_ab_test(a, b)
-    two = r.start_ab_test(a, b)
+    two = r.start_ab_test(c, d)
     assert one != two
     assert len(registry(tmp_path).list_ab_tests()) == 2
 

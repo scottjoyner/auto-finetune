@@ -56,15 +56,15 @@ def test_registry_unknown_promotion_does_not_change_state():
     r._save.assert_not_called()
 
 
-def test_existing_non_lfm3_manual_promotion_remains_compatible():
+def test_non_lfm3_manual_promotion_held_pending_release_review():
     prior = version("prior")
     prior.status = "active"
     candidate = version("candidate")
     r = stub_registry(prior, candidate)
-    assert r.promote("candidate") is True
-    assert prior.status == "retired"
-    assert candidate.status == "active"
-    r._save.assert_called_once()
+    assert r.promote("candidate") is False
+    assert prior.status == "active"
+    assert candidate.status == "candidate"
+    r._save.assert_not_called()
 
 
 def test_lfm3_ab_winner_not_completed_or_promoted():
@@ -83,8 +83,9 @@ def test_lfm3_ab_winner_not_completed_or_promoted():
     r._save.assert_not_called()
 
 
-def test_non_lfm3_ab_completion_still_supported():
+def test_non_lfm3_ab_completion_also_held():
     prior = version("prior")
+    prior.status = "active"
     cand = version("candidate")
     r = stub_registry(prior, cand)
     ab = ABTest(test_id="ab-1", version_a="prior", version_b="candidate",
@@ -92,9 +93,10 @@ def test_non_lfm3_ab_completion_still_supported():
                 metrics_a={"score": 5, "score_count": 10},
                 metrics_b={"score": 8, "score_count": 10})
     r._ab_tests["ab-1"] = ab
-    assert r.complete_ab_test("ab-1") == "candidate"
-    assert ab.status == "completed" and ab.winner == "candidate"
-    assert cand.status == "active" and prior.status == "retired"
+    assert r.complete_ab_test("ab-1") is None
+    assert ab.status == "running" and ab.winner is None
+    assert cand.status == "candidate" and prior.status == "active"
+    r._save.assert_not_called()
 
 
 def test_autopromote_lfm3_is_candidate_only_with_active_version():

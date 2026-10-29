@@ -108,26 +108,22 @@ class ModelRegistry:
         return sorted(versions, key=lambda v: v.created_at, reverse=True)
 
     def promote(self, version_id: str) -> bool:
-        """Promote reviewed legacy candidates; LFM3 remains strictly gated."""
-        mv = self._versions.get(version_id)
-        if not mv:
-            return False
-        # A locally stored LFM3 adapter, optimizer smoke receipt, or A/B score
-        # cannot replace an independent source/heldout/release approval. Manual
-        # and automatic registry paths share this fail-closed default.
-        if "lfm3" in mv.base_model.casefold():
-            return False
-        # Retire current active
-        for v in self._versions.values():
-            if v.status == "active" and v.version_id != version_id:
-                v.status = "retired"
-        mv.status = "active"
-        self._save()
-        return True
+        """HOLD: legacy registry has no verifiable release approval protocol.
+
+        No model family or user-supplied base_model string is sufficient to
+        authorize an active-version transition. This method deliberately
+        cannot activate weights. A separately designed, independently
+        reviewed signed release mechanism is required.
+        """
+        return False
 
     def retire(self, version_id: str) -> bool:
         mv = self._versions.get(version_id)
         if not mv:
+            return False
+        # Retiring the incumbent or an active A/B arm without a reviewed
+        # replacement is a denial of service, not a safe model release.
+        if mv.status in {"active", "testing"}:
             return False
         mv.status = "retired"
         self._save()
@@ -148,8 +144,21 @@ class ModelRegistry:
         return True
 
     def start_ab_test(self, version_a: str, version_b: str) -> str | None:
-        """Start an A/B test between two versions."""
-        if version_a not in self._versions or version_b not in self._versions:
+        """Start an A/B test without dislodging the incumbent."""
+        if (version_a == version_b
+                or version_a not in self._versions
+                or version_b not in self._versions):
+            return None
+        left, right = self._versions[version_a], self._versions[version_b]
+        if (left.status not in {"active", "candidate"}
+                or right.status not in {"active", "candidate"}
+                or (left.status == "active" and right.status == "active")):
+            return None
+        # Concurrent/overlapping A/B arms can corrupt score attribution
+        # and change current routing. Require disjoint live experiments.
+        if any(t.status == "running" and
+               ({version_a, version_b} & {t.version_a, t.version_b})
+               for t in self._ab_tests.values()):
             return None
         test_id = f"ab-{uuid.uuid4().hex}"
         ab = ABTest(
@@ -161,8 +170,11 @@ class ModelRegistry:
         self._ab_tests[test_id] = ab
         self._versions[version_a].ab_test_group = test_id
         self._versions[version_b].ab_test_group = test_id
-        self._versions[version_a].status = "testing"
-        self._versions[version_b].status = "testing"
+        # The incumbent must remain active while a candidate is being
+        # evaluated. Entering an experiment must not unroute production.
+        for version_id in (version_a, version_b):
+            if self._versions[version_id].status != "active":
+                self._versions[version_id].status = "testing"
         self._save()
         return test_id
 
@@ -193,36 +205,13 @@ class ModelRegistry:
         return True
 
     def complete_ab_test(self, test_id: str, metric: str = "score") -> str | None:
-        """Complete an A/B test and determine winner by metric."""
-        ab = self._ab_tests.get(test_id)
-        if not ab or ab.status != "running":
-            return None
-        # Determine an admissible winner before changing any persistent
-        # experiment or activation state.
-        # Compute average metric
-        count_a = ab.metrics_a.get(f"{metric}_count", 1)
-        count_b = ab.metrics_b.get(f"{metric}_count", 1)
-        avg_a = ab.metrics_a.get(metric, 0) / max(1, count_a)
-        avg_b = ab.metrics_b.get(metric, 0) / max(1, count_b)
+        """HOLD: observations do not authorize model activation.
 
-        winner = ab.version_a if avg_a >= avg_b else ab.version_b
-        if not self._versions.get(winner) or (
-            "lfm3" in self._versions[winner].base_model.casefold()
-        ):
-            return None
-        ab.end_time = time.time()
-        ab.status = "completed"
-        ab.winner = winner
-
-        # Promote winner
-        self.promote(winner)
-        # Retire loser
-        loser = ab.version_b if winner == ab.version_a else ab.version_a
-        if loser in self._versions:
-            self._versions[loser].status = "retired"
-
-        self._save()
-        return winner
+        No experiment completion, winner, active version, or persisted record
+        changes until an independently verified approval protocol exists.
+        The read-only evaluation is in AutoPromoter.check_promotion.
+        """
+        return None
 
     def get_ab_test(self, test_id: str) -> ABTest | None:
         return self._ab_tests.get(test_id)
@@ -260,7 +249,7 @@ def main(argv=None) -> int:
     sub.add_parser("active", help="Show active version")
     sub.add_parser("summary", help="Show registry summary")
 
-    prom = sub.add_parser("promote", help="Promote a version to active")
+    prom = sub.add_parser("promote", help="HOLD: reviewed release approval required")
     prom.add_argument("--version", required=True)
 
     ab = sub.add_parser("ab-test", help="Start A/B test")
@@ -273,11 +262,17 @@ def main(argv=None) -> int:
     abm.add_argument("--metric", required=True)
     abm.add_argument("--value", type=float, required=True)
 
-    abc = sub.add_parser("ab-complete", help="Complete A/B test")
+    abc = sub.add_parser("ab-complete", help="HOLD: completion cannot activate weights")
     abc.add_argument("--test", required=True)
     abc.add_argument("--metric", default="score")
 
     args = parser.parse_args(argv)
+
+    # Refuse activation commands before opening even a registry data file.
+    # An authenticated release receipt verifier is not implemented.
+    if args.action in {"promote", "ab-complete"}:
+        print("[registry] HOLD: independently reviewed signed activation required")
+        return 78
 
     cfg = load()
     registry = ModelRegistry(cfg)
