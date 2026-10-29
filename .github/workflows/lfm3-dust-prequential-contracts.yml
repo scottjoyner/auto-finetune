@@ -1,0 +1,35 @@
+name: LFM3 prospective Dust prediction benchmark
+
+on:
+  push:
+    branches:
+      - "research/lfm3-dust-prequential-prediction-*"
+  pull_request:
+    paths:
+      - "src/lfm3_dust_prequential_*.py"
+      - "src/lfm3_dust_predictor_admission.py"
+      - "tests/test_lfm3_dust_prequential_*.py"
+      - "tests/test_lfm3_dust_predictor_admission.py"
+      - "research/evidence/lfm3-dust-prequential-20261029/**"
+      - ".github/workflows/lfm3-dust-prequential-contracts.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  retrospective-metric-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deterministic CPU-free verification dependencies
+        run: python -m pip install pytest==9.0.3 pyyaml==6.0.3
+      - name: Validate frozen prequential forecasts, all candidate receipts and negative-control admission
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m compileall -q src/lfm3_dust_prequential_audit.py src/lfm3_dust_prequential_review.py src/lfm3_dust_predictor_admission.py
+          python -m pytest -o addopts= -q tests/test_lfm3_dust_prequential_audit.py tests/test_lfm3_dust_prequential_review.py tests/test_lfm3_dust_predictor_admission.py
