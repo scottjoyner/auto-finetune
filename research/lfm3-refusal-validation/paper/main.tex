@@ -229,6 +229,16 @@ are not treated as independent. An incomplete human-review
 dataset cannot pass the scorer. These comparisons keep the
 primary model count at exactly three.
 
+\subsection{Evidence-based publication readiness}
+A machine-readable, read-only gate requires all three pinned checkpoint
+hashes to agree with the benchmark journal, a complete and well-formed
+$1350$-generation XSTest run, consensus from two independent human
+reviewers on each case, and full independent capability evidence.
+Checkpoint provenance mismatch, incomplete response records, and
+unadjudicated human disagreement prevent strong behavioral claims.
+Passing these checks does not itself authorize model publication or
+deployment: distribution and release require separate risk review.
+
 \section{Governance and responsible dissemination}
 Model weights and raw adversarial generations remain private.
 There is no real tool execution, unrestricted serving endpoint, or
