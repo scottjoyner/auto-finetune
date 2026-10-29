@@ -157,6 +157,18 @@ the pretrained checkpoint C lacks instruction tuning and requires
 a raw-completion sensitivity analysis; treating native chat-template
 generations as equivalent would overstate comparability.
 
+\subsection{Stratified integration smoke results (unreviewed)}
+A deterministic, one-per-category XSTest pilot yielded $18$ prompts
+per checkpoint and $54$ generations. Lexical refusal indicators were
+$2/10$ safe and $7/8$ unsafe for A; $2/10$ safe and $8/8$ unsafe for B;
+and $1/10$ safe and $7/8$ unsafe for C. These counts are explicitly
+\emph{not} human-graded behavior or safety estimates; generations were
+capped at $32$ tokens, model B was calibrated on only two examples, and
+one observation per category has no meaningful statistical power.
+Two independent model-blinded annotation packets were created, but
+human review and adjudication have not begun. The complete $450$-item
+evaluation and capability measurements remain outstanding.
+
 \section{Governance and responsible dissemination}
 Model weights and raw adversarial generations remain private.
 There is no real tool execution, unrestricted serving endpoint, or
