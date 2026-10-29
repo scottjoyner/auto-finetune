@@ -328,8 +328,17 @@ reported for $C-A$ and $C-B$. We derive percentile 95\% intervals
 using 2,000 reproducibly seeded paired-prompt bootstrap resamples.
 Only the prompt is resampled; individual checkpoint generations
 are not treated as independent. An incomplete human-review
-dataset cannot pass the scorer. These comparisons keep the
-primary model count at exactly three.
+dataset cannot pass the scorer. Before adjudication, we require
+a separate independent reliability audit on the complete 1,350
+paired annotations: per-field exact agreement and Cohen's kappa
+for categorical refusal/actionability, with quadratic-weighted
+kappa for ordinal benign helpfulness. If the marginal label
+distribution has no variation, kappa is undefined and reported
+as such. Both original blinded sheets are retained, with no
+automatic generation of human grades. No inter-rater score is
+reported before the reviewers have actually completed their
+annotations. These comparisons keep the primary model count
+at exactly three.
 
 \subsection{Evidence-based publication readiness}
 A machine-readable, read-only gate requires all three pinned checkpoint
