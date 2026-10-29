@@ -13,6 +13,7 @@ from src.lfm3_dust_matched_gradient_probe import (
 )
 from src.lfm3_lora_text_task_probe import dataset, _digest
 from src.lfm3_real_lora_review import BASE
+from src.lfm3_dust_forward_review import verify as verify_dust
 
 SCHEMA="sensorgraft.lfm3.matched-lora-b-gradient-review.v1"
 H64=re.compile(r"[a-f0-9]{64}\Z")
@@ -113,6 +114,9 @@ def matched_pair(adamw,muon,dust):
     x,y=verify(adamw),verify(muon)
     if x["status"]!="manual_review_only" or y["status"]!="manual_review_only":
         return blocked("invalid_gradient_control")
+    dust_review = verify_dust(dust)
+    if dust_review.get("status") != "manual_review_only":
+        return blocked("invalid_or_tampered_dust_source")
     if (x["optimizer"]!="adamw" or y["optimizer"]!="muon"
             or x["seed"]!=y["seed"] or x["initial_adapter_sha256"]!=y["initial_adapter_sha256"]
             or x["data_sha256"]!=y["data_sha256"]
@@ -121,6 +125,8 @@ def matched_pair(adamw,muon,dust):
             or dust.get("selected_parameter_count")!=2048
             or dust.get("initial_lora_b_sha256")!=x["initial_adapter_sha256"]
             or dust.get("data_manifest")!=x["data_sha256"]
+            or dust.get("selected_adapter_names")!=adamw.get("selected_adapter_names")
+            or dust.get("selected_adapter_names")!=muon.get("selected_adapter_names")
             or dust.get("final_test_evaluated") is not False
             or dust.get("weight_promotion_permitted") is not False):
         return blocked("mismatched_starting_weights_or_parameter_scope")
