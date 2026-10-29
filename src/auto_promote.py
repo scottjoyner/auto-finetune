@@ -72,6 +72,11 @@ class AutoPromoter:
             notes="Auto-registered for A/B testing",
         )
         print(f"[promote] Registered: {vid}")
+        # Research LFM3 adapters must never auto-activate on self-reported
+        # scores or the absence of an incumbent model.
+        if "lfm3" in base_model.casefold():
+            print("[promote] HOLD: LFM3 requires independent promotion approval")
+            return vid
 
         # Start A/B test if there's an active model
         active = self.registry.active_version()
@@ -85,13 +90,12 @@ class AutoPromoter:
                                 f"A/B test started: {active.version_id} vs {vid}")
                 return vid
             else:
-                print("[promote] Failed to start A/B test; promoting directly")
-                self.registry.promote(vid)
+                print("[promote] HOLD: A/B test unavailable; candidate retained")
                 return vid
         else:
-            # No active model; promote directly
-            self.registry.promote(vid)
-            print(f"[promote] No active model; promoted {vid} directly")
+            # Initial bootstrap is not proof of model quality or authorization.
+            # A separate explicit review/activation step is required.
+            print("[promote] HOLD: No active model; candidate retained for review")
             return vid
 
     def record_inference(self, model_version: str, session_id: str,
