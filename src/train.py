@@ -189,8 +189,8 @@ def _train_peft(cfg: Config, data: list[dict],
     grad_ckpt = t.get("gradient_checkpointing", False)
     lfm3_dir = None
     if is_lfm3_model(model_name):
-        from src.lfm3_pretrained_guard import verify_local_checkpoint
-        lfm3_dir = verify_local_checkpoint(LFM3_MODEL_LOCAL_PATH)
+        from src.lfm3_pretrained_guard import verify_official_lfm3_snapshot
+        lfm3_dir = verify_official_lfm3_snapshot(LFM3_MODEL_LOCAL_PATH)
         if load_4bit or load_8bit:
             raise TrainError("LFM3 direct pretrained loader cannot claim 4/8-bit quantization")
 
@@ -238,15 +238,13 @@ def _train_peft(cfg: Config, data: list[dict],
 
     # Load model with LFM3 support (transformers patches applied in train.main())
     if lfm3_dir:
-        # Load actual checkpoint tensors, never a randomly initialized config-only model.
-        import transformers.configuration_utils  # noqa: F401
-        if lfm3_dir not in sys.path:
-            sys.path.insert(0, lfm3_dir)
-        from configuration_lfm3 import Lfm3Config
-        from modeling_lfm3 import Lfm3ForCausalLM
+        # Auto classes load the pinned local remote-code modules in a proper
+        # package namespace, and report actual checkpoint loading anomalies.
+        from transformers import AutoConfig
         from src.lfm3_pretrained_guard import load_pretrained_lfm3
+
         model = load_pretrained_lfm3(
-            lfm3_dir, Lfm3Config, Lfm3ForCausalLM,
+            lfm3_dir, AutoConfig, AutoModelForCausalLM,
             torch.bfloat16 if _detect_rocm() else torch.float16,
         )
         model.config._name_or_path = lfm3_dir
