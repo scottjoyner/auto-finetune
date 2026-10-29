@@ -47,7 +47,7 @@ def _model_suggestion(suggestion, lrs):
     }:
         return {"status": "rejected", "reason": "invalid_schema"}
     name, lr, reason = suggestion["optimizer"], suggestion["learning_rate"], suggestion["reason"]
-    if name not in lrs or suggestion["base_sha256"] != BASE:
+    if type(name) is not str or name not in lrs or suggestion["base_sha256"] != BASE:
         return {"status": "rejected", "reason": "target_mismatch"}
     if not _finite(lr) or not isinstance(reason, str) or not 1 <= len(reason) <= 240:
         return {"status": "rejected", "reason": "invalid_value"}
