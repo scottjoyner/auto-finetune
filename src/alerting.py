@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import uuid
 import urllib.request
 from dataclasses import asdict, dataclass, field
 from typing import Any
@@ -39,15 +40,20 @@ class AlertManager:
 
     def _load(self) -> None:
         if os.path.exists(self.alerts_path):
+            # The JSONL file is append-only, including acknowledgement updates.
+            # Replay the *latest* state of each alert_id rather than reviving
+            # stale pre-ack records on application restart.
+            by_id: dict[str, Alert] = {}
             try:
                 with open(self.alerts_path) as f:
                     for line in f:
                         line = line.strip()
                         if line:
-                            data = json.loads(line)
-                            self.alerts.append(Alert(**data))
+                            item = Alert(**json.loads(line))
+                            by_id[item.alert_id] = item
             except Exception:
                 pass
+            self.alerts = list(by_id.values())
 
     def _save_alert(self, alert: Alert) -> None:
         os.makedirs(os.path.dirname(self.alerts_path), exist_ok=True)
@@ -57,7 +63,7 @@ class AlertManager:
     def fire(self, level: str, source: str, message: str,
              metadata: dict | None = None) -> str:
         """Fire a new alert."""
-        alert_id = f"alert-{int(time.time() * 1000)}"
+        alert_id = f"alert-{uuid.uuid4().hex}"
         alert = Alert(
             alert_id=alert_id,
             level=level,
