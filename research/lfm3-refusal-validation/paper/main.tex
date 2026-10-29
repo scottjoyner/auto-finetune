@@ -275,6 +275,34 @@ format. A measured difference in these scores is not by itself
 evidence of general capability loss or of safety preservation.
 Human ratings of the refusal benchmark remain outstanding.
 
+\subsection{Exploratory exact matched-question inference}
+As a secondary statistical sensitivity check on the complete
+frozen ARC journal, we computed the exact two-sided conditional
+McNemar binomial test on correct-to-incorrect and
+incorrect-to-correct flips for three checkpoint contrasts and
+both likelihood scoring conventions (six exploratory tests).
+To avoid promoting a post hoc single contrast, Holm--Bonferroni
+familywise adjustment was applied across all six.
+
+For length-normalized choice scoring, B versus A had 14
+gained and 28 lost correct answers among 42 discordant
+questions ($p_{\mathrm{exact}}=0.04356$). For raw-sum likelihood,
+B versus A had 17 gained and 31 lost among 48 discordant
+questions ($p_{\mathrm{exact}}=0.05946$). Both adjusted
+$p$-values were $0.08712$, exceeding the conventional
+$0.05$ reference threshold. These exploratory tests are
+reported alongside the paired bootstrap interval, rather
+than interpreted as a formal preregistered treatment effect.
+
+Neither statistical non-significance nor a small observed
+difference constitutes an equivalence or noninferiority
+demonstration. No acceptable capability loss margin was
+preregistered, and the results remain sensitive to an
+unstandardized scoring method, single option order, and
+chat-versus-base prompt mismatch. Human-graded refusal
+and actionability remain unavailable. The evidence is
+specific to the frozen three-checkpoint comparison.
+
 \subsection{ARC answer-length and scoring-rule sensitivity}
 To assess the influence of a plausible scoring confound without
 adding checkpoints or generating new answers, we audited both
