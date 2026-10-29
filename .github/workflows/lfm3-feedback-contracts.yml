@@ -1,0 +1,34 @@
+name: LFM3 bounded optimizer research contracts
+
+on:
+  push:
+    branches:
+      - "research/lfm3-optimizer-feedback-integrated-*"
+  pull_request:
+    paths:
+      - "src/lfm3_optimizer_*.py"
+      - "tests/test_lfm3_optimizer_*.py"
+      - "src/lfm3_real_lora_review.py"
+      - "research/evidence/lfm3-real-lora-20261029/**"
+      - ".github/workflows/lfm3-feedback-contracts.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  feedback-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install offline test dependency
+        run: python -m pip install pytest==9.0.3
+      - name: Validate strict source and replay without GPU, network or model
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m compileall -q src/lfm3_optimizer_observer.py src/lfm3_optimizer_feedback_packet.py src/lfm3_optimizer_feedback_client.py src/lfm3_optimizer_shadow_replay.py
+          python -m pytest -o addopts= -q tests/test_lfm3_real_lora_review.py tests/test_lfm3_optimizer_observer.py tests/test_lfm3_optimizer_feedback_packet.py tests/test_lfm3_optimizer_feedback_client.py tests/test_lfm3_optimizer_shadow_replay.py
