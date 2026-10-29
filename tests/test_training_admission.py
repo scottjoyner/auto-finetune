@@ -58,8 +58,10 @@ class IntegrationGateTests(unittest.TestCase):
     def test_direct_train_main_refuses_before_dataset_read(self):
         from unittest.mock import patch
         from src import train
-        with patch("src.training_admission.read_live", return_value=Decision(False, "stop_file")):
-            self.assertEqual(train.main(cfg=None), 78)
+        # This test must not inherit conftest's unrelated dispatch-test bypass.
+        with patch.dict("os.environ", {"AF_SKIP_UNMANAGED_CHECK": "0"}):
+            with patch("src.training_admission.read_live", return_value=Decision(False, "stop_file")):
+                self.assertEqual(train.main(cfg=None), 78)
 
     def test_queue_guard_precedes_reset_and_training(self):
         from pathlib import Path
