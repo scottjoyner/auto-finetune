@@ -1,0 +1,26 @@
+name: LFM3 refusal-study research contracts
+on:
+  pull_request:
+    paths:
+      - research/lfm3-refusal-validation/**
+      - .github/workflows/lfm3-refusal-study.yml
+permissions:
+  contents: read
+jobs:
+  research-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install CPU-only smoke-test requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install 'pytest>=8,<10' 'safetensors>=0.5,<1' 'numpy>=1.26,<3'
+      - name: Run isolated offline tests without model weights
+        working-directory: research/lfm3-refusal-validation
+        run: |
+          python -m pytest -o addopts= -q tests
