@@ -38,7 +38,7 @@ def review(report):
     if not isinstance(report, dict):
         return blocked("invalid_report")
     seed = report.get("seed")
-    if type(seed) is not int or seed not in (1,2,3,4,5,6):
+    if type(seed) is not int or seed not in (1,2,3,4,5,6,7,8,9):
         return blocked("unapproved_seed")
     expected_episodes = EPISODES if seed in (1,2,3) else 12
     expected = {

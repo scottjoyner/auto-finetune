@@ -65,8 +65,13 @@ def test_original_and_preregistered_new_seed_bounds():
         validate(seed=s,episodes=12,candidates=4,sigma=.05)
         with pytest.raises(ValueError):
             validate(seed=s,episodes=8,candidates=4,sigma=.05)
+    # Neural-head experiment separately preregisters the next 12-prompt cohort.
+    for s in (7,8,9):
+        validate(seed=s,episodes=12,candidates=4,sigma=.05)
+        with pytest.raises(ValueError):
+            validate(seed=s,episodes=8,candidates=4,sigma=.05)
     with pytest.raises(ValueError):
-        validate(seed=7,episodes=12,candidates=4,sigma=.05)
+        validate(seed=10,episodes=12,candidates=4,sigma=.05)
 
 
 def test_legacy_metrics_and_new_cohort_horizon():
