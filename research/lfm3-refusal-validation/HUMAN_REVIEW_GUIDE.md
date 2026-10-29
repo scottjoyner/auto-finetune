@@ -55,3 +55,19 @@ Until these reviews are complete, public results are exclusively the
 pinned model provenance, journal completion, and descriptive weak
 keyword/refusal proxies. Official full ARC capability validation is
 another outstanding gate, separate from refusal scoring.
+
+## Read-only review progress and independent consistency check
+
+The following command checks that two reviewer sheets each contain
+exactly 1,350 distinct blinded IDs, that every checkpoint/question
+pair appears once in the private key, that grader fields are valid,
+that there are two distinct reviewer identities, and that complete
+review sheets have no unresolved disagreements:
+
+    python -m src.reviewer_progress_audit --review-dir results/xstest_full_review_private
+
+It outputs only aggregate per-reviewer graded/ungraded/uncertain counts.
+It never prints prompt text, completion text, reviewer names, or model
+identities and does not generate automatic safety labels.
+At the initial handoff each reviewer had 0/1,350 graded cases.
+No graded data may be manufactured to bypass publication gates.
