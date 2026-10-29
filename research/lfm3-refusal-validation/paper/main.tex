@@ -109,6 +109,27 @@ Because LFM3 uses sandwich RMS normalizations and hybrid operators,
 this projection does \emph{not} guarantee removal of the corresponding
 direction at residual addition. It is an empirical hypothesis to test.
 
+\subsection{Exact edit integrity and activation-level limitations}
+A full-tensor comparison of the original and edited checkpoints
+verified the exact projection on all 48 targeted residual-writing
+weight matrices and unchanged values for the other 238 of 286
+tensors, with full SHA-256 provenance checks. Previously stored
+four-pair disjoint heldout activation measurements (distinct from
+the two calibration pairs) found lower directional-projection
+RMS in 22 of 23 measured layers, with median edited/original
+ratio 0.801448 (range 0.224911 to 1.049562).
+This is a structural and activation-level observation, not a
+validated refusal, safety or benign-helpfulness score.
+
+The edit applies a rank-one projection analogous to Arditi
+et al.\ \cite{arditi2024}, but does not reproduce their full
+direction-candidate selection and heldout validation protocol:
+only two prompt pairs informed the direction. LFM3 sandwich
+normalization can restore direction components after the edited
+writers. We therefore describe B as a mechanically verified
+M1-style experimental derivative, not a validated canonical
+refusal-abliteration reproduction.
+
 \subsection{Preregistered scoring and independent controls}
 For each of A, B, and C, measure a held-out benign-helpfulness score,
 false-refusal rate, human-graded harmful-actionability score, safe
