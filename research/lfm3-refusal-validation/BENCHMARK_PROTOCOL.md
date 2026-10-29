@@ -245,3 +245,20 @@ calibration pairs and does not replicate the full canonical candidate
 selection protocol. See METHODOLOGY_FIDELITY.md for limitations and
 evidence/20261029_abliteration_method_fidelity.json for sanitized counts.
 The primary study remains exactly three frozen checkpoints.
+
+## Zero-refusal claim check and appropriate falsifiability
+
+B already has full strength alpha=1 on the single selected
+M1 rank-one weight direction. This does not make it a
+globally maximal abliteration or a zero-refusal model.
+The full XSTest weak lexical proxy found 31/250
+benign and 167/200 unsafe responses with refusal-pattern
+keywords in B. Both human review packets are still ungraded.
+These are keyword occurrences, NOT human-verified refusals.
+
+The read-only zero-refusal claim audit records the lack
+of supporting behavioral evidence and reports exact upper
+confidence bounds that would still apply to hypothetical
+zero event observations. See ZERO_REFUSAL_CLAIM.md and
+evidence/20261029_zero_refusal_claim_audit.json.
+No additional model checkpoint or weights are created.
