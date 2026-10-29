@@ -186,3 +186,20 @@ not reviewer consensus, independent adjudication, proof of a safe
 edited model, or publication approval. The original protected
 reviewer packets and final agreement/publication gates remain
 unchanged.
+
+## Full-scale synthetic workflow validation
+
+The test tests/test_full_private_review_handoff.py exercises the complete
+handoff across exactly 450 wholly synthetic prompt IDs, three frozen
+arm labels, and two distinct synthetic graders (1,350 rows each).
+It confirms that independent batch assembly, exact agreement checks and
+paired human-effect reporting can complete for fully graded mock data.
+Negative tests prove that a missing safe helpfulness grade blocks
+assembly and that one inter-reviewer disagreement blocks paired
+analysis.
+
+These test grades are generated fixtures, NOT human judgments or
+evidence about LFM3, and they never change either real blinded review
+packet. Only real completed independent reviewer work can satisfy the
+publication and release gates. No model generation, new checkpoint,
+or training takes place in these tests.
