@@ -260,3 +260,52 @@ output computes paired human-reviewed effects without revealing
 individual prompts/responses or granting model release approval.
 Existing ungraded packets are deliberately rejected, and synthetic
 CI tests cannot count as independent human judgments.
+
+## Start and resume a private human assignment (2026-10-30)
+
+The reviewer terminal now supports --list-batches (read-only status)
+and --next-batch (start at the first batch missing initial ratings).
+This removes the need to remember which of the 15 private batches
+contains the next unfinished response. It still uses the original
+unchanged local CSV packets and the established atomic-save lock.
+
+From the trusted x1-370 shell in the research working directory,
+first inspect ONLY the assigned blinded packet, without displaying
+any prompt or response:
+
+    /home/scott/lfm3-research/train-venv/bin/python \
+      -m src.local_reviewer_terminal \
+      --batches-dir results/xstest_review_batched_private \
+      --reviewer 1 --list-batches
+
+For an authorized human reviewer #1 to start or resume their actual
+private interactive evaluation (replace the placeholder reviewer ID
+with their established local identity):
+
+    /home/scott/lfm3-research/train-venv/bin/python \
+      -m src.local_reviewer_terminal \
+      --batches-dir results/xstest_review_batched_private \
+      --reviewer 1 --reviewer-id REVIEWER_ONE --next-batch
+
+Reviewer #2 must be a DIFFERENT actual human and use --reviewer 2
+with a distinct approved local reviewer identity. Reviewers must not
+inspect each other's labels or the hidden model key.
+
+An authorized human may revisit a specific row using
+--batch N --index M, where batches are 1..15 and rows are 1..90.
+Private terminal output is shown only on a real interactive TTY.
+The new launcher checks every batch of the selected assignment for a
+pre-existing reviewer identity before allowing edits, so a fresh batch
+cannot silently transfer an assignment to another reviewer.
+
+LIMITS OF PROGRESS TRACKING: --list-batches reports only presence
+of initial labels and count of items marked uncertain; it is NOT a
+scientific scoring audit, cannot know hidden source safe/unsafe labels,
+does not validate benign helpfulness, and never claims full human
+review or independent consensus. After initial annotation, the
+private custody/completeness auditor and, where needed, the separate
+third-human adjudication protocol are still mandatory.
+
+As verified on 2026-10-30 both live assignments were still at
+0/1,350 initial entries with batch 1 as their next target. No human
+labels were fabricated or altered by this launcher.
