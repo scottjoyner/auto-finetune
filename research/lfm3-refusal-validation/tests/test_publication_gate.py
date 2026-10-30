@@ -198,3 +198,55 @@ def test_local_full_arc_never_unlocks_publication(tmp_path,monkeypatch):
     assert out["human_review"]["status"]=="blocked"
     assert out["publication_approved"] is False
     assert out["release_approved"] is False
+
+
+def test_canonical_arc_report_is_capability_evidence_not_release(tmp_path):
+    import json
+    from src.publication_gate import canonical_full_arc_check
+    from src.arc_canonical_full_report import CANONICAL_ROWS_HASH
+    h=hashes()
+    rep={
+        "evidence_class":"real full canonical EleutherAI arc_challenge 3-arm zero-shot evaluation",
+        "harness_version":"0.4.13",
+        "n_questions_per_arm":1172,"checkpoint_sha256":h,
+        "dataset_content_sha256":CANONICAL_ROWS_HASH,
+        "canonical_builtin_task_used":True,
+        "hub_dataset_revision_content_matches_pinned_source":True,
+        "human_refusal_review_complete":False,
+        "model_release_approved":False,"publication_approved":False,
+        "matched_question_comparisons":[{}]*6,
+        "metrics":{arm:{
+            "acc":{"correct":276,"n":1172,"fraction":276/1172,"stderr":.012},
+            "acc_norm":{"correct":306,"n":1172,"fraction":306/1172,"stderr":.013},
+        } for arm in ARMS},
+    }
+    file=tmp_path/"canonical-aggregate.json"
+    file.write_text(json.dumps(rep))
+    out=canonical_full_arc_check(file,h)
+    assert out["status"]=="evidence_present"
+    assert out["canonical_builtin_task"] is True
+    assert out["independent_external_replication"] is False
+    assert out["release_approved"] is False
+    assert canonical_full_arc_check(tmp_path/"missing",h)["status"]=="pending"
+    rep["metrics"][next(iter(ARMS))]["acc"]["correct"]=9999
+    file.write_text(json.dumps(rep))
+    assert canonical_full_arc_check(file,h)["status"]=="blocked"
+
+
+def test_canonical_evidence_never_unblocks_human_review_or_release(tmp_path,monkeypatch):
+    import src.publication_gate as g
+    monkeypatch.setattr(g,"audit",lambda path:{
+        "recorded_generations":1350,
+        "evidence_status":"GENERATIONS COMPLETE; HUMAN REVIEW PENDING",
+        "journal_integrity":"passed","checkpoint_sha256":hashes(),
+        "ignored_unterminated_tail":False,
+    })
+    monkeypatch.setattr(g,"human_review_check",lambda *_:{"status":"blocked"})
+    monkeypatch.setattr(g,"canonical_full_arc_check",lambda *a:{
+        "status":"evidence_present","independent_external_replication":False})
+    report=g.readiness_status(tmp_path,tmp_path,tmp_path/"missing",hashes(),{})
+    assert report["arc_full_canonical"]["status"]=="evidence_present"
+    assert report["capability_validation"]["status"]=="evidence_present"
+    assert report["human_review"]["status"]=="blocked"
+    assert report["publication_approved"] is False
+    assert report["release_approved"] is False
