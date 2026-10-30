@@ -170,3 +170,16 @@ Outputs are public-safe aggregate counts only, no prompts or case-level
 predictions. The frozen three checkpoints and human-review gates are
 unchanged. Custom ARC likelihood scores still need independent
 standardization and robustness confirmation.
+
+
+## Independent harness readiness (2026-10-30)
+
+The isolated EleutherAI lm-eval 0.4.13 validated its
+official arc_challenge multiple-choice task. A read-only
+audit compared the official task and parent task YAML,
+distinct acc/acc_norm metrics, the 1,172-question test
+source SHA256, and the three immutable checkpoint SHA256s.
+See evidence/20261030_official_arc_static_readiness.json
+and OFFICIAL_ARC_REPLICATION.md. No official model score
+was obtained because the model-scoring attempt did not run.
+Independent completion and human review remain required.
