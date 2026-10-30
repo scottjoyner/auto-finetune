@@ -65,7 +65,7 @@ def test_actual_diagnostic_losses_do_not_support_predictive_head():
     lambda d:d["baseline_diagnostic"].update({"mean_completion_loss":0.}),
     lambda d:d["policy_results"]["neural_one_probe"].update({"diagnostic_loss_delta_after_minus_before":-10.}),
     lambda d:d["policy_results"]["neural_one_probe"].update({"candidate_index":7}),
-    lambda d:d["policy_results"]["neural_one_probe"].update({"applied_in_memory_for_diagnostic_only":True}),
+    lambda d:d["policy_results"]["neural_one_probe"].update({"applied_in_memory_for_diagnostic_only":False}),
     lambda d:d["policy_results"]["empirical_best_eight_probes"].update({"counterfactual_minimum_candidate_probe_forwards":1}),
     lambda d:d["policy_results"]["no_update"].update({"diagnostic_after":None}),
     lambda d:d.update({"final_adapter_sha256":"f"*64}),
