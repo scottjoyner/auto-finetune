@@ -40,7 +40,7 @@ def test_all_three_methods_have_same_exact_lora_b_scope_and_distinct_update_rule
     assert r["matched_parameter_scope"] is True
     assert r["matched_total_compute"] is False
     assert r["historical_three_seed_selection_accuracy"]=={"1":5,"2":7,"3":6}
-    assert len(r["evidence_sha256"])==24
+    assert len(r["evidence_sha256"])==27
     assert r["source_receipts_independently_authenticated"] is False
     for name in METHODS:
         entry=r["methods"][name]
@@ -78,6 +78,11 @@ def test_real_transfer_failure_blocks_predictive_method():
     assert r["variance_useful_head_updates_vetoed"]==1
     assert r["variance_real_model_loss_forwards"]==83
     assert r["variance_accepted_neural_updates"]==1
+    assert r["equal_one_probe_admission"]=="hold_not_qualified"
+    assert r["equal_probe_model_loss_forwards"]==63
+    assert r["equal_probe_neural_diagnostic_losses"]["26"]<0
+    assert r["equal_probe_neural_diagnostic_losses"]["27"]>0
+    assert r["equal_probe_neural_transfer_losses"]["27"]>0
     assert r["neural_head_one_step_diagnostic_loss_deltas"]["18"]>0
     assert r["methods"]["predictive_dust"]["head_recommendations_enabled"] is False
     assert r["model_training_permitted"] is False
@@ -112,6 +117,7 @@ def test_no_automatic_optimizer_selection_or_training(method,intent):
     ("one_step_seed18",lambda x:x["policy_results"]["neural_one_probe"].update({"diagnostic_loss_delta_after_minus_before":-100.})),
     ("three_prompt_seed21",lambda x:x["results"]["neural_multi"].update({"diagnostic_mean_loss_delta":-100.})),
     ("variance_seed24",lambda x:x["results"]["neural_variance"].update({"diagnostic_mean_loss_delta":-100.})),
+    ("equal_probe_seed27",lambda x:x["policy_results"]["neural_one_probe"].update({"diagnostic_completion_loss_delta":-100.})),
 ])
 def test_source_tampering_never_allows_strategy_registration(tmp_path,source,change):
     root=_copy_evidence(tmp_path)

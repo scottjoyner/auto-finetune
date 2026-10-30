@@ -25,6 +25,7 @@ from src.lfm3_dust_task_shift_admission import assess as assess_novelty
 from src.lfm3_dust_sandbox_update_admission import assess as assess_actual_quality
 from src.lfm3_dust_multiprompt_admission import assess as assess_multi
 from src.lfm3_dust_variance_admission import assess as assess_variance
+from src.lfm3_dust_equal_probe_admission import assess as assess_equal_probe
 
 SCHEMA="sensorgraft.lfm3.three-way-shadow-methods.v1"
 METHODS=("adamw","muon","predictive_dust")
@@ -36,6 +37,7 @@ NOVELTY_SEEDS=(13,14,15)
 ONE_STEP_SEEDS=(16,17,18)
 MULTI_SEEDS=(19,20,21)
 VARIANCE_SEEDS=(22,23,24)
+EQUAL_PROBE_SEEDS=(25,26,27)
 METHOD_SPEC={
     "adamw":{
         "update_mechanism":"autograd_backward_plus_adamw",
@@ -66,6 +68,7 @@ METHOD_SPEC={
         "actual_one_step_quality_gate":"hold_not_qualified",
         "three_prompt_confirmation_gate":"hold_not_qualified",
         "variance_proxy_quality_gate":"hold_not_qualified",
+        "actual_equal_probe_budget_quality":"hold_not_qualified",
     },
 }
 MAX_FILE_BYTES=175000
@@ -122,6 +125,10 @@ def evidence_paths():
         paths[f"variance_seed{s}"]=(
             "research/evidence/lfm3-dust-variance-20261030/"
             f"seed{s}-variance-gated-quality.json")
+    for s in EQUAL_PROBE_SEEDS:
+        paths[f"equal_probe_seed{s}"]=(
+            "research/evidence/lfm3-dust-equal-probe-20261030/"
+            f"seed{s}-matched-one-probe.json")
     return paths
 
 
@@ -192,6 +199,15 @@ def review(root,*,requested_method="all",intent="inspect"):
                 or variance.get("model_update_permitted") is not False
                 or variance.get("weight_promotion_permitted") is not False):
             return blocked("unverified_variance_aware_neural_quality_study")
+        equal_probe=assess_equal_probe(
+            [data[f"equal_probe_seed{s}"] for s in EQUAL_PROBE_SEEDS],repo_root=folder)
+        if (equal_probe.get("status")!="hold_not_qualified"
+                or equal_probe.get("model_candidate_probe_budgets_equal") is not True
+                or equal_probe.get("model_weights_changed_persistently") is not False
+                or equal_probe.get("model_training_permitted") is not False
+                or equal_probe.get("optimizer_switch_permitted") is not False
+                or equal_probe.get("weight_promotion_permitted") is not False):
+            return blocked("actual_equal_probe_neural_diagnostic_evidence_not_verified")
         if any(m.get("adamw")!=m.get("muon") or m.get("adamw")!=m.get("dust")
                for m in matched):
             return blocked("inconsistent_three_way_task_score_inventory")
@@ -217,6 +233,7 @@ def review(root,*,requested_method="all",intent="inspect"):
                 "actual_one_step_quality_admission":quality["status"] if name=="predictive_dust" else None,
                 "three_prompt_quality_admission":multi["status"] if name=="predictive_dust" else None,
                 "variance_quality_admission":variance["status"] if name=="predictive_dust" else None,
+                "equal_one_probe_admission":equal_probe["status"] if name=="predictive_dust" else None,
                 "reason":"cross_family_predictive_head_failed_zero_gain_baseline"
                          if name=="predictive_dust"
                          else "research_pilot_only_requires_separate_release_review",
@@ -253,6 +270,10 @@ def review(root,*,requested_method="all",intent="inspect"):
             "variance_useful_head_updates_vetoed":variance["methods"]["neural"]["useful_single_updates_vetoed_by_variance"],
             "variance_real_model_loss_forwards":variance["real_model_loss_forwards"],
             "variance_accepted_neural_updates":variance["methods"]["neural"]["variance"]["temporary_steps_applied"],
+            "equal_one_probe_admission":equal_probe["status"],
+            "equal_probe_neural_diagnostic_losses":equal_probe["policy_outcomes"]["neural_one_probe"]["per_seed_diagnostic_loss_delta"],
+            "equal_probe_neural_transfer_losses":equal_probe["policy_outcomes"]["neural_one_probe"]["per_seed_transfer_loss_delta"],
+            "equal_probe_model_loss_forwards":equal_probe["total_actual_model_completion_loss_forwards"],
             "methods":methods if requested_method=="all" else {
                 requested_method:methods[requested_method]},
             "evidence_sha256":digests,
