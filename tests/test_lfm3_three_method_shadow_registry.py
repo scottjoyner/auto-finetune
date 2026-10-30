@@ -40,7 +40,7 @@ def test_all_three_methods_have_same_exact_lora_b_scope_and_distinct_update_rule
     assert r["matched_parameter_scope"] is True
     assert r["matched_total_compute"] is False
     assert r["historical_three_seed_selection_accuracy"]=={"1":5,"2":7,"3":6}
-    assert len(r["evidence_sha256"])==15
+    assert len(r["evidence_sha256"])==18
     assert r["source_receipts_independently_authenticated"] is False
     for name in METHODS:
         entry=r["methods"][name]
@@ -68,6 +68,9 @@ def test_real_transfer_failure_blocks_predictive_method():
     assert r["neural_head_novel_prompts_flagged"]==17
     assert r["neural_head_novel_prompts_total"]==18
     assert r["neural_head_new_task_candidates_abstained"]==144
+    assert r["neural_head_one_step_quality_admission"]=="hold_not_qualified"
+    assert r["one_step_persistent_model_adapter_updates"]==0
+    assert r["neural_head_one_step_diagnostic_loss_deltas"]["18"]>0
     assert r["methods"]["predictive_dust"]["head_recommendations_enabled"] is False
     assert r["model_training_permitted"] is False
     assert r["production_execution_permitted"] is False
@@ -98,6 +101,7 @@ def test_no_automatic_optimizer_selection_or_training(method,intent):
     ("transfer_seed10",lambda x:x["transfer_metrics"]["neural"].update({"mean_squared_error":0})),
     ("transfer_seed11",lambda x:x.update({"weight_promotion_permitted":True})),
     ("novelty_seed14",lambda x:x["episodes"][0]["raw_head_predicted_directions"][0]["guard"].update({"abstained":False})),
+    ("one_step_seed18",lambda x:x["policy_results"]["neural_one_probe"].update({"diagnostic_loss_delta_after_minus_before":-100.})),
 ])
 def test_source_tampering_never_allows_strategy_registration(tmp_path,source,change):
     root=_copy_evidence(tmp_path)
