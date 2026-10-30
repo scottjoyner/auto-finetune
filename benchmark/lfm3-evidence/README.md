@@ -98,3 +98,11 @@ Compile the smoke test on a gfx1151 node with a functioning ROCm installation:
 hipcc -O2 --offload-arch=gfx1151 benchmark/lfm3-evidence/rocm_gfx1151_smoke.cpp -o /tmp/rocm-gfx1151-smoke
 /tmp/rocm-gfx1151-smoke
 ```
+
+## Retrieval scoring: require the final answer, not just a mentioned code
+
+`score_retrieval.py` re-evaluates all three deterministic synthetic probes after the explicit `</think>` boundary, normalizes non-breaking hyphens and whitespace, and refuses to strip explanatory prose. On the recorded runs FP16 KV yielded **3/3 strict final answers**; Q8 KV yielded **1/3 strict final answers**, although the expected code occurred somewhere in all outputs. This tiny set is evidence of a potential **instruction-following format difference**, not a statistically valid quantization-quality conclusion. Raw synthetic generations are retained for audit.
+
+```bash
+python3 benchmark/lfm3-evidence/score_retrieval.py
+```
