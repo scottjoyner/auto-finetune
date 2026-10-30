@@ -104,3 +104,75 @@ def test_cli_gguf_dispatches_selected_quantization_without_real_export(monkeypat
     assert calls==[("/fake",target,"q4_0")]
     assert "review gate closed" in capsys.readouterr().out
     assert not Path(target).exists()
+
+
+def _fake_model_modules(monkeypatch):
+    """A synthetic model interface that writes only tiny placeholder bytes."""
+    import sys
+    class FakeModel:
+        @classmethod
+        def from_pretrained(cls,*args,**kwargs):
+            assert kwargs.get("device_map")=="cpu"
+            return cls()
+        def merge_and_unload(self):
+            return self
+        def save_pretrained(self,path):
+            (Path(path)/"fake-model.bin").write_bytes(b"not real weights")
+    class FakeTokenizer:
+        @classmethod
+        def from_pretrained(cls,*args,**kwargs):
+            return cls()
+        def save_pretrained(self,path):
+            (Path(path)/"fake-tokenizer.json").write_text("{}")
+        def __call__(self,*args,**kwargs):
+            return {"input_ids":[[1,2,3]]}
+    class FakePeft:
+        @staticmethod
+        def from_pretrained(model,path):
+            assert path=="/inert/adapter"
+            return model
+    class FakeTorch:
+        bfloat16="synthetic-bfloat16"
+        onnx=SimpleNamespace(export=lambda model,args,output,**kwargs:
+                             Path(output).write_bytes(b"synthetic-onnx"))
+    monkeypatch.setitem(sys.modules,"transformers",
+                        SimpleNamespace(AutoModelForCausalLM=FakeModel,AutoTokenizer=FakeTokenizer))
+    monkeypatch.setitem(sys.modules,"peft",SimpleNamespace(PeftModel=FakePeft))
+    monkeypatch.setitem(sys.modules,"torch",FakeTorch)
+    return FakeModel
+
+
+def test_disposable_merged_export_flow_without_real_model(monkeypatch,tmp_path):
+    _fake_model_modules(monkeypatch)
+    output=tmp_path/"merged"
+    result=exp.export_merged("/inert/adapter",str(output),base_model="synthetic-base")
+    assert result.success is True
+    assert result.size_bytes==len(b"not real weights")+2
+    assert (output/"fake-model.bin").read_bytes()==b"not real weights"
+    assert result.format=="merged"
+
+
+def test_disposable_onnx_export_flow_without_real_model(monkeypatch,tmp_path):
+    _fake_model_modules(monkeypatch)
+    output=tmp_path/"onnx"
+    result=exp.export_onnx("/inert/adapter",str(output),base_model="synthetic-base")
+    assert result.success is True
+    assert (output/"model.onnx").read_bytes()==b"synthetic-onnx"
+    assert (output/"fake-tokenizer.json").exists()
+    assert result.format=="onnx"
+
+
+def test_merged_export_failure_propagates_without_treating_as_success(monkeypatch,tmp_path):
+    import sys
+    monkeypatch.setitem(sys.modules,"transformers",
+                        SimpleNamespace(AutoModelForCausalLM=SimpleNamespace(
+                            from_pretrained=lambda *a,**k: (_ for _ in ()).throw(
+                                RuntimeError("synthetic missing base"))),
+                            AutoTokenizer=SimpleNamespace()))
+    monkeypatch.setitem(sys.modules,"peft",SimpleNamespace(PeftModel=SimpleNamespace()))
+    monkeypatch.setitem(sys.modules,"torch",SimpleNamespace(bfloat16="mock"))
+    out=tmp_path/"no-real-model"
+    result=exp.export_merged("/inert/adapter",str(out),base_model="synthetic")
+    assert not result.success
+    assert "synthetic missing base" in result.error
+    assert not (out/"fake-model.bin").exists()
