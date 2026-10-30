@@ -40,7 +40,7 @@ jobs:
           import json
           r=json.load(open("/tmp/lfm3-quality-review.json"))
           assert r["status"]=="verified_shadow_only"
-          assert len(r["evidence_sha256"])==18
+          assert len(r["evidence_sha256"])==21
           assert r["neural_head_one_step_quality_admission"]=="hold_not_qualified"
           assert r["neural_head_one_step_diagnostic_loss_deltas"]["18"]>0
           assert r["one_step_persistent_model_adapter_updates"]==0
