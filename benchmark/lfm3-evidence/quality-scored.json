@@ -1,0 +1,60 @@
+{
+  "schema": "lfm3.synthetic-retrieval-score.v1",
+  "notice": "Three fixed retrieval fixtures per cache type; exact final answer is not broad accuracy.",
+  "scores": [
+    {
+      "receipt": "quality-f16-20261030T220654117073Z.json",
+      "cache_type": "f16",
+      "case_count": 3,
+      "exact_after_reasoning_count": 3,
+      "substring_count": 3,
+      "cases": [
+        {
+          "row": 4,
+          "final_exact": true,
+          "substring_present": true,
+          "final_answer_excerpt": "JQ7X-2649"
+        },
+        {
+          "row": 32,
+          "final_exact": true,
+          "substring_present": true,
+          "final_answer_excerpt": "LP5B-7103"
+        },
+        {
+          "row": 64,
+          "final_exact": true,
+          "substring_present": true,
+          "final_answer_excerpt": "ZD4N-8192"
+        }
+      ]
+    },
+    {
+      "receipt": "quality-q8_0-20261030T220704993731Z.json",
+      "cache_type": "q8_0",
+      "case_count": 3,
+      "exact_after_reasoning_count": 1,
+      "substring_count": 3,
+      "cases": [
+        {
+          "row": 4,
+          "final_exact": false,
+          "substring_present": true,
+          "final_answer_excerpt": "The verification code for inventory row 004 is **JQ7X\u20102649**"
+        },
+        {
+          "row": 32,
+          "final_exact": false,
+          "substring_present": true,
+          "final_answer_excerpt": "The verification code for inventory row 032 is **LP5B\u20107103**"
+        },
+        {
+          "row": 64,
+          "final_exact": true,
+          "substring_present": true,
+          "final_answer_excerpt": "ZD4N-8192"
+        }
+      ]
+    }
+  ]
+}
