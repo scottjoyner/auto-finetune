@@ -275,3 +275,18 @@ finding therefore does not meet the adjusted 0.05 criterion.
 The measure is not human-coded refusal or harmful actionability.
 See XSTEST_PAIRED_EXACT.md and
 evidence/20261030_xstest_proxy_paired_exact.json.
+
+
+## Full local-parquet ARC test split scored (2026-10-30)
+
+The exact three frozen A/B/C model checkpoints were actually scored
+on all 1,172 original test questions each (14,061 likelihood requests)
+with EleutherAI lm-eval 0.4.13. CPU bfloat16 zero-shot,
+official-format choice scoring inherited via a private local
+parquet adapter. Unmodified canonical Hub task still pending.
+Acc/acc_norm: A 23.55/26.11%; B 22.61/25.34%;
+C 39.16/42.83%. Exact paired 6-test Holm-adjusted A/B p
+is 0.287730 for both metrics. These results do not prove
+capability equivalence, refusal elimination, safety or release
+readiness. See ARC_LOCAL_FULL_RESULTS_20261030.md and
+evidence/20261030_arc_local_full1172_cpu_aggregate.json.
