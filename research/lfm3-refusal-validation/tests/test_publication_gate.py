@@ -138,3 +138,63 @@ def test_custom_arc_gate_blocks_mismatched_models(tmp_path,monkeypatch):
 def test_custom_arc_gate_without_evidence_is_pending(tmp_path):
     import src.publication_gate as p
     assert p.custom_arc_check(tmp_path,hashes())["status"]=="pending"
+
+
+def test_full_local_arc_is_complete_but_never_canonical(tmp_path):
+    import json
+    from src.publication_gate import local_full_arc_check
+    h=hashes()
+    report={
+        "evidence_class":"actual full 1172-case locally pinned ARC-Challenge multiple-choice likelihood scoring",
+        "n_questions_per_arm":1172,
+        "checkpoint_count":3,
+        "checkpoint_sha256":h,
+        "dataset_sha256":ARC_SHA256,
+        "local_parquet_adapter_used":True,
+        "canonical_unmodified_hub_task_used":False,
+        "source_documents_verified_against_pinned_parquet":True,
+        "human_refusal_review_complete":False,
+        "model_release_approved":False,
+        "matched_question_comparisons":[{} for _ in range(6)],
+        "metrics":{arm:{
+            "acc":{"correct":265,"n":1172,"fraction":265/1172},
+            "acc_norm":{"correct":297,"n":1172,"fraction":297/1172},
+        } for arm in ARMS},
+    }
+    path=tmp_path/"full-local.json"
+    path.write_text(json.dumps(report))
+    result=local_full_arc_check(path,h)
+    assert result["status"]=="complete"
+    assert result["canonical_official_benchmark"] is False
+    assert result["release_approved"] is False
+    assert local_full_arc_check(tmp_path/"missing",h)["status"]=="pending"
+    arm=next(iter(ARMS))
+    report["metrics"][arm]["acc"]["correct"]=True
+    path.write_text(json.dumps(report))
+    assert local_full_arc_check(path,h)["status"]=="blocked"
+    report["metrics"][arm]["acc"]["correct"]=265
+    report["metrics"][arm]["acc"]["fraction"]=float("nan")
+    path.write_text(json.dumps(report))
+    assert local_full_arc_check(path,h)["status"]=="blocked"
+
+
+def test_local_full_arc_never_unlocks_publication(tmp_path,monkeypatch):
+    import json
+    import src.publication_gate as g
+    monkeypatch.setattr(g,"audit",lambda path:{
+        "recorded_generations":1350,
+        "evidence_status":"GENERATIONS COMPLETE; HUMAN REVIEW PENDING",
+        "journal_integrity":"passed",
+        "checkpoint_sha256":hashes(),
+        "ignored_unterminated_tail":False,
+    })
+    monkeypatch.setattr(g,"human_review_check",lambda d,b:{"status":"blocked"})
+    monkeypatch.setattr(g,"local_full_arc_check",lambda *a:{
+        "status":"complete","canonical_official_benchmark":False})
+    out=g.readiness_status(tmp_path,tmp_path,tmp_path/"absent",hashes(),{},
+                           local_arc_report=tmp_path/"local.json")
+    assert out["arc_full_local_pinned"]["status"]=="complete"
+    assert out["capability_validation"]["status"]=="pending"
+    assert out["human_review"]["status"]=="blocked"
+    assert out["publication_approved"] is False
+    assert out["release_approved"] is False
