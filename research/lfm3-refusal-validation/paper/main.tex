@@ -366,6 +366,32 @@ helpfulness or safe compliance. Blinded
 independent human review is still ungraded
 and release is not approved.
 
+\subsection{Canonical ARC-Challenge reproduction and dataset identity}
+We subsequently completed a separate, unmodified EleutherAI
+\texttt{lm-eval} v0.4.13 \texttt{arc\_challenge}
+evaluation using the original Hugging Face ARC-Challenge
+dataset at pinned revision 210d026faf9955653af8916fad021475a3f00453,
+with zero-shot CPU bfloat16 scoring on exactly the same three
+frozen LFM3 checkpoints. All 1,172 test question texts,
+IDs, answer choices and keys agreed exactly with the
+original pinned local test parquet in the same order.
+Every one of the 3,516 canonical model-question case-level
+outcomes also agreed with the separate full local-parquet
+adapter results for both \texttt{acc} and
+\texttt{acc\_norm}, yielding zero disagreements.
+
+The fully scored canonical results were A 276 and 306
+correct out of 1,172 (23.55\% and 26.11\%), B 265
+and 297 (22.61\% and 25.34\%), and C 459 and
+502 (39.16\% and 42.83\%). B relative to A
+had Holm-adjusted exploratory two-sided exact
+matched-test $p=0.287730$ for both raw and normalized
+accuracy. This concordance validates scoring transport
+and task execution, not causal refusal circuitry,
+capability equivalence, or model safety. Independent
+human behavioral review and external-host replication
+have not been completed; release remains blocked.
+
 \subsection{Full paired ARC-Challenge likelihood results}
 The complete pinned ARC-Challenge test evaluation comprises
 1,172 questions per checkpoint, totaling 3,516 model-question
