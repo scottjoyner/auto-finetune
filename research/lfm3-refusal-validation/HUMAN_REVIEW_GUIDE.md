@@ -245,3 +245,18 @@ The lock does not control third-party spreadsheet editors that ignore
 advisory file locking; do not use multiple writing applications for
 one reviewer directory. No reviewer text is sent to an external service.
 This is a custody improvement, not human grading or model evaluation.
+
+## Third-human dispute resolution (2026-10-30)
+
+The research branch includes src.reviewer_adjudication and
+HUMAN_ADJUDICATION_PROTOCOL.md. Once both independent original
+reviews are actually completed, the private custodian can create a
+blinded disagreement queue; a separately verified third human can
+resolve every disputed or uncertain response in the same offline
+terminal interface. Finalization verifies immutable original source
+SHA-256 receipts, the two original distinct identities, and the
+third distinct human's complete, non-uncertain labels. The private
+output computes paired human-reviewed effects without revealing
+individual prompts/responses or granting model release approval.
+Existing ungraded packets are deliberately rejected, and synthetic
+CI tests cannot count as independent human judgments.
