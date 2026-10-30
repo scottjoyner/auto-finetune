@@ -30,7 +30,9 @@ or a release authorization. The separate canonical full-ARC gate, two real
 blinded human reviewers, adjudication and safety/release approval remain
 independent mandatory requirements.
 
-The original A run completed all 1,172 cases on CPU and independently passed
-this per-question integrity check on October 30, 2026. No B/C full-run result
-is represented by this note; a three-arm aggregate may be published only when
-all three corresponding private records exist and the strict audit passes.
+All three A/B/C runs completed all 1,172 cases each on CPU on October 30,
+2026. The per-question source and aggregate reconciliation passed for
+every arm; a matched aggregate-only statistical report was generated.
+See ARC_LOCAL_FULL_RESULTS_20261030.md and
+evidence/20261030_arc_local_full1172_cpu_aggregate.json.
+Canonical unmodified Hub-task and human review gates remain closed.
