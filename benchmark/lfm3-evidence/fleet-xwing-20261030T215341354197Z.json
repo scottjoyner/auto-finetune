@@ -1,0 +1,51 @@
+{
+  "schema": "lfm3.fleet-benchmark.v1",
+  "created_utc": "20261030T215341354197Z",
+  "orchestrator": "x1-370",
+  "node": "xwing",
+  "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+  "expected_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+  "prompt": 512,
+  "decode": 64,
+  "repetitions": 3,
+  "gpu_layers": 0,
+  "status": "completed",
+  "preflight": {
+    "returncode": 0,
+    "stdout": "xwing\n7686\n43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452  /home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf\n",
+    "stderr": ""
+  },
+  "available_mib": 7686,
+  "observed_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+  "command": [
+    "nice",
+    "-n",
+    "10",
+    "timeout",
+    "240",
+    "env",
+    "LD_LIBRARY_PATH=/home/scott/lfm3-research/runtime-avx2/bin",
+    "/home/scott/lfm3-research/runtime-avx2/bin/llama-bench",
+    "-m",
+    "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+    "-ngl",
+    "0",
+    "-t",
+    "4",
+    "-p",
+    "512",
+    "-n",
+    "64",
+    "-r",
+    "3",
+    "-o",
+    "json"
+  ],
+  "elapsed_seconds": 21.556,
+  "returncode": 0,
+  "stdout": "[\n  {\n    \"build_commit\": \"8ca4060\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD RYZEN AI MAX PRO 390 w/ Radeon 8050S\",\n    \"gpu_info\": \"\",\n    \"backends\": \"CPU\",\n    \"model_filename\": \"/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf\",\n    \"model_type\": \"lfm3 1.7B Q4_0\",\n    \"model_size\": 1041368320,\n    \"model_n_params\": 1728801600,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"load_mode\": \"auto\",\n    \"lazy_mode\": \"auto\",\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"repack\": true,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-10-30T21:53:44Z\",\n    \"avg_ns\": 3874082112,\n    \"stddev_ns\": 65354347,\n    \"avg_ts\": 132.185237,\n    \"stddev_ts\": 2.213996,\n    \"samples_ns\": [ 3821707642, 3947321201, 3853217493 ],\n    \"samples_ts\": [ 133.972, 129.708, 132.876 ]\n  },\n  {\n    \"build_commit\": \"8ca4060\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD RYZEN AI MAX PRO 390 w/ Radeon 8050S\",\n    \"gpu_info\": \"\",\n    \"backends\": \"CPU\",\n    \"model_filename\": \"/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf\",\n    \"model_type\": \"lfm3 1.7B Q4_0\",\n    \"model_size\": 1041368320,\n    \"model_n_params\": 1728801600,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"load_mode\": \"auto\",\n    \"lazy_mode\": \"auto\",\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"repack\": true,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 64,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-10-30T21:53:59Z\",\n    \"avg_ns\": 1641465726,\n    \"stddev_ns\": 24061199,\n    \"avg_ts\": 38.995141,\n    \"stddev_ts\": 0.572772,\n    \"samples_ns\": [ 1664386592, 1643603584, 1616407004 ],\n    \"samples_ts\": [ 38.4526, 38.9388, 39.594 ]\n  }\n]\n",
+  "stderr": "",
+  "backend": [
+    "CPU"
+  ]
+}
