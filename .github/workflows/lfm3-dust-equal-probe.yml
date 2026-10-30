@@ -40,7 +40,7 @@ jobs:
           import json
           r=json.load(open('/tmp/lfm3-equal-probe-registry.json'))
           assert r["status"]=="verified_shadow_only"
-          assert len(r["evidence_sha256"])==27
+          assert len(r["evidence_sha256"])==30
           assert r["equal_one_probe_admission"]=="hold_not_qualified"
           assert r["equal_probe_model_loss_forwards"]==63
           assert r["equal_probe_neural_diagnostic_losses"]["26"]<0
