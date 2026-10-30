@@ -106,3 +106,11 @@ hipcc -O2 --offload-arch=gfx1151 benchmark/lfm3-evidence/rocm_gfx1151_smoke.cpp 
 ```bash
 python3 benchmark/lfm3-evidence/score_retrieval.py
 ```
+
+## Additional hardware checks, October 30
+
+**Deathstar RX 480 / Vulkan, Q4_K_M**, paired 4096-prompt + 64-generation workload with three repetitions: FP16 KV **617.77 combined tok/s**, Q8 KV **627.97 combined tok/s**. The roughly 1.7% difference is too small for a reliable conclusion; raw receipts include build and timing metadata.
+
+**x1-370 gfx1150 ROCm packaging conflict:** the installed `hipcc` is **5.7.1-3**, while HIP runtime is **7.2.26015.70200** with ROCm LLVM clang-22. Legacy `hipcc` seeks a nonexistent clang-17 in the ROCm 7.2 tree; installed `libamdhip64-dev` also belongs to the 5.7 generation. The attempted direct compiler smoke test was unsuccessful. Neither ROCm installation nor system-level packages were changed. Details are in `rocm-x1-toolchain-20261030.json`.
+
+Do not infer HIP backend performance, or recommend replacing system packages without isolating service compatibility and ensuring rollback.
