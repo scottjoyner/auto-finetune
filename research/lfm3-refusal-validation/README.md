@@ -58,6 +58,19 @@ No model weights were modified. See
 [REVERSIBLE_ALPHA_CONTROLS_20261030.md](REVERSIBLE_ALPHA_CONTROLS_20261030.md).
 Two real human XSTest reviews remain the primary publication blocker.
 
+## Multiple orthogonal random-control repetitions (October 30, 2026)
+
+Three additional orthogonal random-control directions (seeds 23, 41, 59)
+were evaluated on the same six disjoint pairs, producing 36 new
+CPU BF16 generations. All 4 shams (including existing seed 17)
+changed fewer exact response strings than the fitted alpha=1 direction
+on these small heldouts. However, **no paired control comparison passed
+the six-test Holm adjustment** (smallest corrected p=0.375), and
+refusal-keyword classifications never changed across conditions.
+These are *response-string* findings, not behavioral safety grades.
+See [ORTHOGONAL_SHAM_REPEATS_20261030.md](ORTHOGONAL_SHAM_REPEATS_20261030.md).
+All A/B/C model weights and the frozen XSTest journal remain unchanged.
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
