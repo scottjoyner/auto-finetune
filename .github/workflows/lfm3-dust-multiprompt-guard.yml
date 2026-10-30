@@ -40,7 +40,7 @@ jobs:
           import json
           r=json.load(open("/tmp/lfm3-three-prompt-review.json"))
           assert r['status']=='verified_shadow_only'
-          assert len(r['evidence_sha256'])==21
+          assert len(r['evidence_sha256'])==24
           assert r['multiprompt_quality_admission']=='hold_not_qualified'
           assert r['multiprompt_harmful_neural_updates']==1
           assert r['multiprompt_beneficial_greedy_updates_vetoed']==1
