@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fail-closed validation of measured LFM3 benchmark evidence."""
-import json, pathlib, sys
+import json, pathlib, sys, hashlib
 ROOT=pathlib.Path(__file__).resolve().parent
 EXPECTED={
  'LFM3-1.7B-Q4_K_M.gguf':'3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4',
@@ -51,7 +51,17 @@ def main():
  if summary.is_file():
   names={x['receipt'] for x in json.loads(summary.read_text())['results']}
   require(names=={p.name for p in base},'fleet-summary.json missing or duplicating receipts')
- print('PASS',len(base),'core receipts +',len(extra),'extended experiment receipts')
+ smokes=list(ROOT.glob('rocm-*.json'))
+ for p in smokes:
+  r=json.loads(p.read_text())
+  require(r.get('schema')=='lfm3.rocm-compatibility.v1',f'{p.name}: invalid ROCm receipt schema')
+  x=r.get('xwing',{})
+  require(x.get('hipcc_returncode')==0,f'{p.name}: invalid xwing HIP compiler result')
+  require(x.get('smoke_returncode')==0 and x.get('smoke_passed') is True and 'mismatches=0' in x.get('smoke_stdout',''),f'{p.name}: HIP smoke did not pass')
+  source=ROOT/'rocm_gfx1151_smoke.cpp'
+  require(source.is_file() and hashlib.sha256(source.read_bytes()).hexdigest()==x.get('smoke_source_sha256'),f'{p.name}: missing or mismatched HIP source')
+  require('NO LFM3 HIP inference result' in x.get('llama_hip_build',''),f'{p.name}: model benchmark status not explicit')
+ print('PASS',len(base),'core receipts +',len(extra),'extended experiment receipts +',len(smokes),'ROCm compatibility receipt')
  return 0
 if __name__=='__main__':
  try:sys.exit(main())
