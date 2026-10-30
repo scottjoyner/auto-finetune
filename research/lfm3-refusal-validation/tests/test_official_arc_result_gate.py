@@ -8,6 +8,16 @@ from src.official_arc_readiness import ARMS_EXPECTED
 from src.three_checkpoint_eval import ARMS
 
 
+@pytest.fixture(autouse=True)
+def synthetic_arm_directories(tmp_path, monkeypatch):
+    # Hosted CI does not have local model weights. Keep strict path checks,
+    # but scope this test's known-good model directories to disposable data.
+    for arm in ARMS_EXPECTED:
+        place=tmp_path/arm
+        place.mkdir()
+        monkeypatch.setitem(ARMS,arm,place)
+
+
 def fake_arm(arm):
     return {
         "config":{"model":"hf","model_args":f"pretrained={ARMS[arm]}",
