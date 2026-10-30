@@ -1,0 +1,50 @@
+{
+  "kind": "static readiness only: no model inference",
+  "harness": {
+    "name": "EleutherAI lm-evaluation-harness",
+    "version": "0.4.13"
+  },
+  "arc_task": {
+    "task": "arc_challenge",
+    "metrics": [
+      "acc",
+      "acc_norm"
+    ],
+    "zero_shot_eval_required": true,
+    "prompt": "Question: {{question}}\nAnswer:",
+    "target_delimiter": " ",
+    "prompt_source": "official EleutherAI task, not custom answer-text proxy",
+    "source_task_yaml_sha256": "682621c26ae24b1065a2d732460a55a8ef2b9f2544574431666c9309a9efd7bd",
+    "source_parent_yaml_sha256": "96da1d9efe1df88659481cedc13985cb347dc068554a2eae561303fa39bfab3f"
+  },
+  "dataset": {
+    "dataset": "allenai/ai2_arc ARC-Challenge test",
+    "dataset_revision": "210d026faf9955653af8916fad021475a3f00453",
+    "local_parquet_sha256": "62f03257e737aed263f55c6abf87c7bb0028a44a6bdd2a26eb1279eb42c1d1e9",
+    "n_unique_questions": 1172,
+    "counts_by_number_of_options": {
+      "4": 1165,
+      "3": 4,
+      "5": 3
+    },
+    "raw_test_questions_or_answers_exported": false
+  },
+  "checkpoint_sha256": {
+    "A_original_posttrained": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+    "B_M1_abliterated_smoke": "be6fa00aa433cdf91fb4d3b3a83f967d897a6e7a95ffba6874c98aa94b450798",
+    "C_base_pretrained": "61a3f541d65b03a2180d08964bf0d55e349463a2706032814d455ae046bc8b59"
+  },
+  "checkpoint_count": 3,
+  "model_weights_modified": false,
+  "official_arc_scores_computed": false,
+  "human_refusal_review_complete": false,
+  "model_release_approved": false,
+  "publication_approved": false,
+  "limitations": [
+    "Static task integrity is not equivalent to executing the standard evaluation",
+    "A benchmark run must use the exact three identity-pinned checkpoints",
+    "Official acc/acc_norm are distinct from previously custom-calculated metrics",
+    "No benchmark alone can establish safety or zero refusal",
+    "Independent human review and adjudication remain incomplete"
+  ]
+}

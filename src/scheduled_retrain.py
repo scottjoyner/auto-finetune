@@ -147,32 +147,35 @@ class ScheduledRetrainer:
         try:
             env = os.environ.copy()
             env["PYTHONPATH"] = self.repo
-            env["TRAIN_ALLOW_UNVERIFIED"] = "1"
-            env["AF_SKIP_UNMANAGED_CHECK"] = "1"
+            # A scheduled job is not authorized to bypass custody, source
+            # verification, or the trainer admission latch. In particular,
+            # do not propagate a test-only bypass inherited from pytest.
+            env.pop("TRAIN_ALLOW_UNVERIFIED", None)
+            env.pop("AF_SKIP_UNMANAGED_CHECK", None)
             env["ROCM_PATH"] = "/opt/rocm"
 
             # Incremental extraction
             subprocess.run(
                 [sys.executable, "-m", "src.cli", "neo4j-traces", "--incremental"],
-                cwd=self.repo, env=env, timeout=300,
+                cwd=self.repo, env=env, timeout=300, check=True,
             )
 
             # Clean
             subprocess.run(
                 [sys.executable, "-m", "src.cli", "clean", "--label=neo4j-traces"],
-                cwd=self.repo, env=env, timeout=300,
+                cwd=self.repo, env=env, timeout=300, check=True,
             )
 
             # Format
             subprocess.run(
                 [sys.executable, "-m", "src.cli", "format", "--label=neo4j-traces"],
-                cwd=self.repo, env=env, timeout=300,
+                cwd=self.repo, env=env, timeout=300, check=True,
             )
 
             # Train (via realtime pipeline for quality gating)
             subprocess.run(
                 [sys.executable, "-m", "src.cli", "realtime-pipeline", "--mode=once"],
-                cwd=self.repo, env=env, timeout=600,
+                cwd=self.repo, env=env, timeout=600, check=True,
             )
 
             self.state.last_run = time.time()

@@ -182,6 +182,15 @@ class DatasetVersioner:
 
         if not os.path.exists(version.source_dir):
             return False
+        # The version table stores source provenance, not an immutable copy.
+        # Never restore changed source bytes under a frozen version identity.
+        if self._hash_directory(version.source_dir)[0] != version.content_hash:
+            return False
+        source = Path(version.source_dir).resolve(strict=True)
+        target = Path(target_dir).resolve()
+        # Restoring inside the source would recursively contaminate it.
+        if target == source or source in target.parents:
+            return False
 
         os.makedirs(target_dir, exist_ok=True)
         for path in Path(version.source_dir).rglob("*"):
@@ -269,7 +278,8 @@ def main(cfg: Config, argv: list[str]) -> int:
             print("[error] dataset-version-restore requires --v2=<id>")
             return 2
 
-        target = os.path.join(dataset_dir, f"restored-{v2_id}")
+        # Keep restored copies outside the live dataset source tree.
+        target = os.path.join(analysis_dir, "restored-datasets", f"restored-{v2_id}")
         if versioner.restore(v2_id, target):
             print(f"[dataset-version] restored {v2_id} to {target}")
             return 0

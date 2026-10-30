@@ -84,6 +84,10 @@ class RealtimePipeline:
             env = os.environ.copy()
             env["PYTHONPATH"] = self.repo
             env.update(extra_env or {})
+            # No realtime execution path may silently opt out of admission
+            # or training-data provenance checks, even via inherited env.
+            env.pop("AF_SKIP_UNMANAGED_CHECK", None)
+            env.pop("TRAIN_ALLOW_UNVERIFIED", None)
             result = subprocess.run(
                 cmd, capture_output=True, text=True,
                 timeout=timeout, cwd=self.repo, env=env,
@@ -138,12 +142,15 @@ class RealtimePipeline:
         self._save_state()
         print("[pipeline] Phase: extraction")
 
-        # Neo4j traces (incremental)
+        # Neo4j traces (incremental). Credentials must be injected by the
+        # operator's secret manager, never committed or fabricated in source.
+        if not os.environ.get("NEO4J_TRACES_PASSWORD"):
+            self.state.last_error = "Neo4j traces credential unavailable"
+            return False
         rc, out = self._run_cmd(
             [sys.executable, "-m", "src.cli", "neo4j-traces", "--incremental"],
             timeout=300,
-            extra_env={"NEO4J_TRACES_PASSWORD": "Pg5EajbfcuPYbhGSO2uBOv30",
-                      "ROCM_PATH": "/opt/rocm"},
+            extra_env={"ROCM_PATH": "/opt/rocm"},
         )
         if rc != 0:
             print(f"[pipeline] Extraction failed: {out[-500:]}")
@@ -253,8 +260,6 @@ class RealtimePipeline:
             "TRAIN_MODEL_NAME": "Qwen/Qwen2.5-0.5B-Instruct",
             "TRAIN_MAX_SEQ_LENGTH": "64",
             "TRAIN_LOAD_4BIT": "0",
-            "TRAIN_ALLOW_UNVERIFIED": "1",
-            "AF_SKIP_UNMANAGED_CHECK": "1",
             "ROCM_PATH": "/opt/rocm",
         }
         rc, out = self._run_cmd(

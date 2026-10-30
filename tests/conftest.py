@@ -12,6 +12,22 @@ import pytest
 # now; the unmanaged-trainer guard is exercised by dedicated tests instead.
 os.environ.setdefault("AF_SKIP_UNMANAGED_CHECK", "1")
 
+
+@pytest.fixture(autouse=True)
+def _admission_gate_tests_disable_unmanaged_bypass(request, monkeypatch):
+    """Safety-regression tests must never inherit the shared test escape hatch.
+
+    Keep the legacy non-admission CLI fixture behavior unchanged; this fixture
+    *removes* bypasses for the dedicated gate tests.  It does not grant
+    admission or change the live trainer policy.
+    """
+    if request.module.__name__.split(".")[-1] in {
+        "test_training_admission",
+        "test_direct_train_admission",
+        "test_xwing_dual_recovery_latch",
+    }:
+        monkeypatch.delenv("AF_SKIP_UNMANAGED_CHECK", raising=False)
+
 # Make `src` importable as a package regardless of cwd. This must add the
 # *repo root* to sys.path, not the src/ directory: with src/ itself on the path,
 # its plain module names shadow part of transformers' import machinery and

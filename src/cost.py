@@ -84,7 +84,9 @@ class CostTracker:
         entries = self.entries
         if label:
             entries = [e for e in entries if e.label == label]
-        return sorted(entries, key=lambda e: -e.timestamp)[-limit:]
+        # Return the newest N runs. A negative slice instead selects the
+        # oldest entries after sorting descending, hiding recent cost spikes.
+        return sorted(entries, key=lambda e: -e.timestamp)[:limit]
 
     def get_summary(self, label: str | None = None) -> dict:
         """Get summary statistics."""

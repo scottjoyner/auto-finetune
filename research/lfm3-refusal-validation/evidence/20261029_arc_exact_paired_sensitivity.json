@@ -1,0 +1,94 @@
+{
+  "evidence_class": "exploratory paired exact conditional tests on custom capability scoring",
+  "benchmark_source_sha256": "62f03257e737aed263f55c6abf87c7bb0028a44a6bdd2a26eb1279eb42c1d1e9",
+  "checkpoint_sha256": {
+    "A_original_posttrained": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+    "B_M1_abliterated_smoke": "be6fa00aa433cdf91fb4d3b3a83f967d897a6e7a95ffba6874c98aa94b450798",
+    "C_base_pretrained": "61a3f541d65b03a2180d08964bf0d55e349463a2706032814d455ae046bc8b59"
+  },
+  "full_questions_per_checkpoint": 1172,
+  "number_of_checkpoints": 3,
+  "scoring_rules_evaluated": [
+    "length_normalized_correct",
+    "raw_correct"
+  ],
+  "familywise_correction": "Holm-Bonferroni across 3 contrasts x 2 scoring conventions",
+  "comparisons": [
+    {
+      "scoring": "length_normalized_correct",
+      "contrast": "B_M1_abliterated_smoke_minus_A_original_posttrained",
+      "n_questions": 1172,
+      "gained_correct": 14,
+      "lost_correct": 28,
+      "discordant_count": 42,
+      "percentage_point_difference": -1.1945,
+      "exact_two_sided_conditional_mcnemar_p": 0.04355852192384191,
+      "holm_adjusted_p_across_six_exploratory_comparisons": 0.08711704384768382
+    },
+    {
+      "scoring": "length_normalized_correct",
+      "contrast": "C_base_pretrained_minus_A_original_posttrained",
+      "n_questions": 1172,
+      "gained_correct": 271,
+      "lost_correct": 93,
+      "discordant_count": 364,
+      "percentage_point_difference": 15.1877,
+      "exact_two_sided_conditional_mcnemar_p": 2.6534482406567587e-21,
+      "holm_adjusted_p_across_six_exploratory_comparisons": 7.960344721970276e-21
+    },
+    {
+      "scoring": "length_normalized_correct",
+      "contrast": "C_base_pretrained_minus_B_M1_abliterated_smoke",
+      "n_questions": 1172,
+      "gained_correct": 282,
+      "lost_correct": 90,
+      "discordant_count": 372,
+      "percentage_point_difference": 16.3823,
+      "exact_two_sided_conditional_mcnemar_p": 3.598794722332066e-24,
+      "holm_adjusted_p_across_six_exploratory_comparisons": 1.799397361166033e-23
+    },
+    {
+      "scoring": "raw_correct",
+      "contrast": "B_M1_abliterated_smoke_minus_A_original_posttrained",
+      "n_questions": 1172,
+      "gained_correct": 17,
+      "lost_correct": 31,
+      "discordant_count": 48,
+      "percentage_point_difference": -1.1945,
+      "exact_two_sided_conditional_mcnemar_p": 0.05946337525377032,
+      "holm_adjusted_p_across_six_exploratory_comparisons": 0.08711704384768382
+    },
+    {
+      "scoring": "raw_correct",
+      "contrast": "C_base_pretrained_minus_A_original_posttrained",
+      "n_questions": 1172,
+      "gained_correct": 268,
+      "lost_correct": 86,
+      "discordant_count": 354,
+      "percentage_point_difference": 15.529,
+      "exact_two_sided_conditional_mcnemar_p": 6.856266737969788e-23,
+      "holm_adjusted_p_across_six_exploratory_comparisons": 2.742506695187915e-22
+    },
+    {
+      "scoring": "raw_correct",
+      "contrast": "C_base_pretrained_minus_B_M1_abliterated_smoke",
+      "n_questions": 1172,
+      "gained_correct": 281,
+      "lost_correct": 85,
+      "discordant_count": 366,
+      "percentage_point_difference": 16.7235,
+      "exact_two_sided_conditional_mcnemar_p": 1.3144784615739705e-25,
+      "holm_adjusted_p_across_six_exploratory_comparisons": 7.886870769443823e-25
+    }
+  ],
+  "safety_validated": false,
+  "official_arc_benchmark": false,
+  "limitations": [
+    "Exploratory exact McNemar p-values assume matched questions and depend on evaluation design",
+    "The two scoring conventions are correlated and strongly format sensitive",
+    "Zero-shot custom answer-text likelihood is not an official ARC leaderboard score",
+    "No equivalence or noninferiority margin was predeclared: failure to reject does not prove preservation",
+    "Human-graded refusal, helpfulness and harmful actionability remain independent and incomplete",
+    "The single edited checkpoint used only two calibration pairs"
+  ]
+}

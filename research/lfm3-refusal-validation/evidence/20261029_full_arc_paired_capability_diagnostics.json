@@ -1,0 +1,180 @@
+{
+  "study": "ARC-Challenge exact same question A/B/C custom likelihood",
+  "evidence_class": "descriptive capability proxy, not official ARC score",
+  "cases_per_model": 1172,
+  "total_scored": 3516,
+  "safety_evidence": false,
+  "metrics": {
+    "length_normalized_correct": {
+      "by_checkpoint": {
+        "A_original_posttrained": {
+          "correct": 315,
+          "total": 1172,
+          "accuracy": 0.268771,
+          "wilson_95pct": [
+            0.244176,
+            0.294878
+          ]
+        },
+        "B_M1_abliterated_smoke": {
+          "correct": 301,
+          "total": 1172,
+          "accuracy": 0.256826,
+          "wilson_95pct": [
+            0.232636,
+            0.282605
+          ]
+        },
+        "C_base_pretrained": {
+          "correct": 493,
+          "total": 1172,
+          "accuracy": 0.420648,
+          "wilson_95pct": [
+            0.392689,
+            0.449126
+          ]
+        }
+      },
+      "paired_comparisons": {
+        "B_M1_abliterated_smoke_minus_A_original_posttrained": {
+          "became_correct": 14,
+          "became_incorrect": 28,
+          "same_chosen_option": 1088,
+          "paired_accuracy_delta": {
+            "n_paired": 1172,
+            "mean_difference": -0.011945,
+            "paired_bootstrap_95pct": [
+              -0.023038,
+              -0.000853
+            ],
+            "resamples": 2000,
+            "seed": 17
+          }
+        },
+        "C_base_pretrained_minus_A_original_posttrained": {
+          "became_correct": 271,
+          "became_incorrect": 93,
+          "same_chosen_option": 618,
+          "paired_accuracy_delta": {
+            "n_paired": 1172,
+            "mean_difference": 0.151877,
+            "paired_bootstrap_95pct": [
+              0.12116,
+              0.183447
+            ],
+            "resamples": 2000,
+            "seed": 17
+          }
+        },
+        "C_base_pretrained_minus_B_M1_abliterated_smoke": {
+          "became_correct": 282,
+          "became_incorrect": 90,
+          "same_chosen_option": 609,
+          "paired_accuracy_delta": {
+            "n_paired": 1172,
+            "mean_difference": 0.163823,
+            "paired_bootstrap_95pct": [
+              0.133106,
+              0.193686
+            ],
+            "resamples": 2000,
+            "seed": 17
+          }
+        }
+      }
+    },
+    "raw_correct": {
+      "by_checkpoint": {
+        "A_original_posttrained": {
+          "correct": 277,
+          "total": 1172,
+          "accuracy": 0.236348,
+          "wilson_95pct": [
+            0.212911,
+            0.261508
+          ]
+        },
+        "B_M1_abliterated_smoke": {
+          "correct": 263,
+          "total": 1172,
+          "accuracy": 0.224403,
+          "wilson_95pct": [
+            0.20144,
+            0.249166
+          ]
+        },
+        "C_base_pretrained": {
+          "correct": 459,
+          "total": 1172,
+          "accuracy": 0.391638,
+          "wilson_95pct": [
+            0.36409,
+            0.419895
+          ]
+        }
+      },
+      "paired_comparisons": {
+        "B_M1_abliterated_smoke_minus_A_original_posttrained": {
+          "became_correct": 17,
+          "became_incorrect": 31,
+          "same_chosen_option": 1082,
+          "paired_accuracy_delta": {
+            "n_paired": 1172,
+            "mean_difference": -0.011945,
+            "paired_bootstrap_95pct": [
+              -0.023038,
+              -0.000853
+            ],
+            "resamples": 2000,
+            "seed": 17
+          }
+        },
+        "C_base_pretrained_minus_A_original_posttrained": {
+          "became_correct": 268,
+          "became_incorrect": 86,
+          "same_chosen_option": 602,
+          "paired_accuracy_delta": {
+            "n_paired": 1172,
+            "mean_difference": 0.15529,
+            "paired_bootstrap_95pct": [
+              0.125427,
+              0.185154
+            ],
+            "resamples": 2000,
+            "seed": 17
+          }
+        },
+        "C_base_pretrained_minus_B_M1_abliterated_smoke": {
+          "became_correct": 281,
+          "became_incorrect": 85,
+          "same_chosen_option": 587,
+          "paired_accuracy_delta": {
+            "n_paired": 1172,
+            "mean_difference": 0.167235,
+            "paired_bootstrap_95pct": [
+              0.138225,
+              0.197952
+            ],
+            "resamples": 2000,
+            "seed": 17
+          }
+        }
+      }
+    }
+  },
+  "limitations": [
+    "This is a custom raw-completion, answer-text conditional-likelihood protocol",
+    "Not official ARC benchmark scoring or an instruction-following evaluation",
+    "Single answer-option ordering and zero-shot prompt format; pretrained model may be favored",
+    "Wilson intervals summarize per-model binomial variation; paired intervals resample matched questions",
+    "Edited model refusal direction fitted from only two calibration pairs",
+    "Model scores cannot establish validated refusal or malicious-action resistance"
+  ],
+  "benchmark_sha256": "62f03257e737aed263f55c6abf87c7bb0028a44a6bdd2a26eb1279eb42c1d1e9",
+  "checkpoint_sha256": {
+    "A_original_posttrained": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+    "B_M1_abliterated_smoke": "be6fa00aa433cdf91fb4d3b3a83f967d897a6e7a95ffba6874c98aa94b450798",
+    "C_base_pretrained": "61a3f541d65b03a2180d08964bf0d55e349463a2706032814d455ae046bc8b59"
+  },
+  "journal_sha256": "02e0974efe9f6f89237bc6423b6405e08030af19fed43447eea0619ad4532c1b"
+}

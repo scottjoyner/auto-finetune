@@ -1,0 +1,33 @@
+{
+  "evidence_class": "non-behavioral structural and heldout activation-direction fidelity",
+  "scope": "pre-existing A original and B M1-abliterated in fixed A/B/C study",
+  "edited_checkpoint": "B_M1_abliterated_smoke",
+  "source_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "edited_sha256": "be6fa00aa433cdf91fb4d3b3a83f967d897a6e7a95ffba6874c98aa94b450798",
+  "direction_sha256": "7f31109d5212b4bb1f0839544935a694b9d4f4475e9c3a36926eebe28bd9437f",
+  "direction_source_layer": 10,
+  "strength_alpha": 1.0,
+  "original_tensor_count": 286,
+  "exactly_edited_residual_writing_matrices": 48,
+  "other_tensors_verified_unchanged": 238,
+  "exact_projection_verified": true,
+  "calibration_pairs": 2,
+  "disjoint_holdout_prompt_pairs": 4,
+  "activation_layers_measured": 23,
+  "heldout_projection_ratio_median": 0.801448,
+  "heldout_projection_ratio_min": 0.224911,
+  "heldout_projection_ratio_max": 1.049562,
+  "measured_layers_with_reduced_projection": 22,
+  "measured_layers_with_increased_projection": 1,
+  "refusal_effectiveness_validated": false,
+  "human_safety_validated": false,
+  "release_approved": false,
+  "limitations": [
+    "Arditi-style rank-one weight projection is present, not a full reproduction of published candidate selection",
+    "The refusal direction was estimated from just two calibration prompt pairs",
+    "No multi-layer direction candidate validation or robust calibration-set uncertainty analysis",
+    "LFM3 sandwich normalization after edited writers can restore components along this direction",
+    "Four heldout prompt pairs constrain projection measurements; not a behavioral efficacy test",
+    "Projection reductions do not imply refusal removal or safe model responses"
+  ]
+}

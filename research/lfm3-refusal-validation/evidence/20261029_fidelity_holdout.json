@@ -1,0 +1,48 @@
+{
+  "experiment": "ABLITERATION-M1-RESIDUAL-FIDELITY",
+  "status": "exploratory-independent-holdout",
+  "source_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "edited_sha256": "be6fa00aa433cdf91fb4d3b3a83f967d897a6e7a95ffba6874c98aa94b450798",
+  "calibration_case_ids": [
+    "p01",
+    "p02"
+  ],
+  "holdout_case_ids": [
+    "p03",
+    "p04",
+    "p05",
+    "p06"
+  ],
+  "direction_type": "two-pair mean adversarial-minus-benign activation at layer 10",
+  "measure": "B/A RMS of projected activations on frozen direction",
+  "ratios_by_layer": {
+    "1": 1.049562,
+    "2": 0.991793,
+    "3": 0.970518,
+    "4": 0.991637,
+    "5": 0.961811,
+    "6": 0.81661,
+    "7": 0.658489,
+    "8": 0.50291,
+    "9": 0.591126,
+    "10": 0.224911,
+    "11": 0.515993,
+    "12": 0.71148,
+    "13": 0.404804,
+    "14": 0.703552,
+    "15": 0.727121,
+    "16": 0.750436,
+    "17": 0.801448,
+    "18": 0.771699,
+    "19": 0.807255,
+    "20": 0.854387,
+    "21": 0.822033,
+    "22": 0.834807,
+    "23": 0.806086
+  },
+  "limitations": [
+    "Activation direction is only a two-pair contrast. Ratios are NOT refusal or safety efficacy.",
+    "post-normalization can regenerate directional component",
+    "ratios of activation are not refusal rates or safety scores"
+  ]
+}
