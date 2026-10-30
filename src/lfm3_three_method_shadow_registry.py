@@ -21,6 +21,7 @@ from pathlib import Path
 
 from src.lfm3_dust_matched_gradient_review import matched_pair
 from src.lfm3_dust_text_transfer_admission import assess
+from src.lfm3_dust_task_shift_admission import assess as assess_novelty
 
 SCHEMA="sensorgraft.lfm3.three-way-shadow-methods.v1"
 METHODS=("adamw","muon","predictive_dust")
@@ -28,6 +29,7 @@ PARAMETER_SCOPE="last_two_attention_vproj_lora_B_only"
 PARAMETER_COUNT=2048
 RESEARCH_SEEDS=(1,2,3)
 TRANSFER_SEEDS=(10,11,12)
+NOVELTY_SEEDS=(13,14,15)
 METHOD_SPEC={
     "adamw":{
         "update_mechanism":"autograd_backward_plus_adamw",
@@ -54,6 +56,7 @@ METHOD_SPEC={
         "external_neural_head_parameters":195,
         "requires_trained_prediction_head":True,
         "head_status":"cross_family_transfer_hold_not_qualified",
+        "additional_novelty_guard":"train_only_attention_context_plus_past_gain_skill",
     },
 }
 MAX_FILE_BYTES=175000
@@ -94,6 +97,10 @@ def evidence_paths():
         paths[f"transfer_seed{s}"]=(
             "research/evidence/lfm3-dust-text-transfer-20261029/"
             f"seed{s}-extraction-to-uppercase-18episodes.json")
+    for s in NOVELTY_SEEDS:
+        paths[f"novelty_seed{s}"]=(
+            "research/evidence/lfm3-dust-task-shift-20261030/"
+            f"seed{s}-sort-two-words-shadow.json")
     return paths
 
 
@@ -132,6 +139,14 @@ def review(root,*,requested_method="all",intent="inspect"):
             # Fail closed on surprising changed evidence (including a future
             # passing report); a new approval design must be reviewed first.
             return blocked("unexpected_or_invalid_neural_head_admission")
+        novelty=assess_novelty([data[f"novelty_seed{s}"] for s in NOVELTY_SEEDS],
+                              repo_root=folder)
+        if (novelty.get("status")!="shadow_guard_validated_not_optimizer_qualified"
+                or novelty.get("candidate_predictions_abstained")!=144
+                or novelty.get("model_update_permitted") is not False
+                or novelty.get("optimizer_switch_permitted") is not False
+                or novelty.get("weight_promotion_permitted") is not False):
+            return blocked("untrusted_train_only_attention_novelty_guard")
         if any(m.get("adamw")!=m.get("muon") or m.get("adamw")!=m.get("dust")
                for m in matched):
             return blocked("inconsistent_three_way_task_score_inventory")
@@ -153,6 +168,7 @@ def review(root,*,requested_method="all",intent="inspect"):
                     for entry in matched
                 },
                 "head_recommendations_enabled":False,
+                "novelty_guard_shadow_status":novelty["status"] if name=="predictive_dust" else None,
                 "reason":"cross_family_predictive_head_failed_zero_gain_baseline"
                          if name=="predictive_dust"
                          else "research_pilot_only_requires_separate_release_review",
@@ -174,6 +190,10 @@ def review(root,*,requested_method="all",intent="inspect"):
                 for x in (transfer["per_seed"][str(s)] for s in TRANSFER_SEEDS)
             },
             "neural_head_transfer_blockers":transfer["blocking_reasons"],
+            "neural_head_task_shift_shadow_admission":novelty["status"],
+            "neural_head_novel_prompts_flagged":novelty["novel_task_contexts_flagged"],
+            "neural_head_novel_prompts_total":novelty["new_task_prompt_count"],
+            "neural_head_new_task_candidates_abstained":novelty["candidate_predictions_abstained"],
             "methods":methods if requested_method=="all" else {
                 requested_method:methods[requested_method]},
             "evidence_sha256":digests,
