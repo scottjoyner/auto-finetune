@@ -1,0 +1,66 @@
+name: LFM3 forward-only predictive Dust variance-gated quality
+
+on:
+  push:
+    branches:
+      - "research/lfm3-dust-variance-guard-*"
+  pull_request:
+    paths:
+      - "src/lfm3_dust_variance_*.py"
+      - "src/lfm3_three_method_shadow_registry.py"
+      - "tests/test_lfm3_dust_variance_*.py"
+      - "tests/test_lfm3_three_method_shadow_registry.py"
+      - "research/evidence/lfm3-dust-variance-20261030/**"
+      - ".github/workflows/lfm3-dust-variance-guard.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  variance-gain-heuristic-is-shadow-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install offline verification-only dependencies
+        run: python -m pip install pytest==9.0.3 pyyaml==6.0.3
+      - name: Compile real model experiment and strict reviewers
+        run: |
+          python -m compileall -q src/lfm3_dust_variance_quality.py src/lfm3_dust_variance_review.py src/lfm3_dust_variance_admission.py src/lfm3_three_method_shadow_registry.py
+      - name: Verify 3 real LFM3 variance-gain receipts and 24-source registry
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m pytest -o addopts= -q tests/test_lfm3_dust_variance_quality.py tests/test_lfm3_dust_variance_review.py tests/test_lfm3_three_method_shadow_registry.py tests/test_lfm3_predictive_dust_shadow_bridge.py
+          python -m src.lfm3_three_method_shadow_registry --research-only --method predictive_dust --intent inspect > /tmp/lfm3-variance-catalog.json
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/lfm3-variance-catalog.json'))
+          assert data['status']=='verified_shadow_only'
+          assert len(data['evidence_sha256'])==24
+          assert data['variance_quality_admission']=='hold_not_qualified'
+          assert data['variance_useful_head_updates_vetoed']==1
+          assert data['variance_real_model_loss_forwards']==83
+          assert data['variance_accepted_neural_updates']==1
+          assert not data['optimizer_switch_permitted']
+          assert not data['model_training_permitted']
+          assert not data['weight_promotion_permitted']
+          PY
+      - name: Confirm training intent is rejected
+        env:
+          PYTHONPATH: .
+        run: |
+          if python -m src.lfm3_three_method_shadow_registry --research-only --method predictive_dust --intent train > /tmp/lfm3-variance-denied.json; then
+            echo "ERROR: unqualified Dust head authorized training"
+            exit 1
+          fi
+          python - <<'PY'
+          import json
+          data=json.load(open('/tmp/lfm3-variance-denied.json'))
+          assert data['status']=='blocked'
+          assert data['model_training_permitted'] is False
+          assert data['weight_promotion_permitted'] is False
+          PY
