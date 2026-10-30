@@ -1,0 +1,90 @@
+{
+  "evidence_class": "REAL local pinned ARC-Challenge 40-item deterministic CPU SMOKE only",
+  "not_full_official_benchmark": true,
+  "task_name": "arc_challenge_local_pinned",
+  "harness": "EleutherAI lm-eval",
+  "harness_version": "0.4.13",
+  "task_transport": "official ARC scoring semantics inherited; local pinned parquet substituted for uncached Hub transport",
+  "adapter_yaml_sha256": "7c4ea9b3b2c6859a9e2dcb57752de512d1f9b34b07e9f388ef519b70da0e181f",
+  "dataset_sha256": "62f03257e737aed263f55c6abf87c7bb0028a44a6bdd2a26eb1279eb42c1d1e9",
+  "checkpoint_sha256": {
+    "A_original_posttrained": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+    "B_M1_abliterated_smoke": "be6fa00aa433cdf91fb4d3b3a83f967d897a6e7a95ffba6874c98aa94b450798",
+    "C_base_pretrained": "61a3f541d65b03a2180d08964bf0d55e349463a2706032814d455ae046bc8b59"
+  },
+  "n_questions_original_split": 1172,
+  "n_questions_scored_per_arm": 40,
+  "selection": "FIRST 40; not randomized and not representative",
+  "device": "cpu",
+  "precision": "bfloat16",
+  "seeds": {
+    "random": 0,
+    "numpy": 1234,
+    "torch": 1234,
+    "fewshot": 1234
+  },
+  "per_arm": {
+    "A_original_posttrained": {
+      "acc": {
+        "observed_correct": 8,
+        "n": 40,
+        "fraction": 0.2,
+        "standard_error": 0.06405126152203486
+      },
+      "acc_norm": {
+        "observed_correct": 10,
+        "n": 40,
+        "fraction": 0.25,
+        "standard_error": 0.06933752452815363
+      }
+    },
+    "B_M1_abliterated_smoke": {
+      "acc": {
+        "observed_correct": 7,
+        "n": 40,
+        "fraction": 0.175,
+        "standard_error": 0.060843430844447585
+      },
+      "acc_norm": {
+        "observed_correct": 10,
+        "n": 40,
+        "fraction": 0.25,
+        "standard_error": 0.06933752452815363
+      }
+    },
+    "C_base_pretrained": {
+      "acc": {
+        "observed_correct": 16,
+        "n": 40,
+        "fraction": 0.4,
+        "standard_error": 0.07844645405527362
+      },
+      "acc_norm": {
+        "observed_correct": 16,
+        "n": 40,
+        "fraction": 0.4,
+        "standard_error": 0.07844645405527362
+      }
+    }
+  },
+  "comparisons_descriptive_only": {
+    "B_minus_A_acc_pp": -2.500000000000002,
+    "B_minus_A_acc_norm_pp": 0.0
+  },
+  "no_matched_item_significance_test": true,
+  "no_human_refusal_grading": true,
+  "full_1172_question_benchmark_completed": false,
+  "model_release_approved": false,
+  "limitations": [
+    "No full benchmark or representative statistical comparison is established by a first-40 smoke test",
+    "Local dataset adapter is not the unmodified canonical Hub task config",
+    "No per-item paired significance tests or independent external replication have been performed",
+    "Model C is not instruction-tuned; direct causal interpretation inappropriate",
+    "Refusal removal and safety claims remain blocked on independent blinded human review"
+  ],
+  "private_result_json_sha256": {
+    "A_original_posttrained": "772cb1899f737e68d3c7f5c33f8843fb3b8fc02bfb9fdbc949268f6a66307262",
+    "B_M1_abliterated_smoke": "33cc520f8255c06d115771cea7a90053911e5b4e000a4bb787fba3bcf2aab6fe",
+    "C_base_pretrained": "b92b2400df494715730aed2d220c0c44a07ce90c5974fa39e6f74dde202fd908"
+  }
+}
