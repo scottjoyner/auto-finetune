@@ -57,3 +57,29 @@ readiness audit.
 
 Sources: EleutherAI lm-evaluation-harness arc_challenge.yaml and
 arc_easy.yaml, at https://github.com/EleutherAI/lm-evaluation-harness
+
+## Strict intake of independently generated official results (2026-10-30)
+
+The research branch also contains `src/official_arc_result_gate.py`.
+After three real *independent* `lm-eval==0.4.13` runs have completed,
+the custodian can pass their private results JSON files to this
+read-only intake tool alongside the existing static readiness record.
+It checks original local model path identity and SHA-256 provenance;
+that the task is exactly `arc_challenge` with zero shots, no `limit`,
+and all 1,172 questions; and that both official accuracy scores and
+their standard errors are present and finite. It will reject an
+incomplete/changed arm rather than silently admitting it to analysis.
+
+The gate **does not execute any model**, authenticate the external
+compute session, verify per-case question-level outcomes, compute paired
+significance, or authorize a release. A JSON file is self-reported;
+separate execution receipts, dataset identity attestations, and
+independent custody review remain mandatory. All test fixtures are
+synthetic and are not benchmark scores. The three actual official
+results have not yet been produced.
+
+Examples of required command arguments (replace only with genuine,
+locally authorized private result paths): `--static-readiness`,
+`--A-original-posttrained`, `--B-M1-abliterated-smoke`,
+`--C-base-pretrained`, and `--output` to a *new* private file.
+No prompts, raw model completions or private result JSON are committed.
