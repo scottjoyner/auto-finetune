@@ -321,6 +321,51 @@ official ARC benchmark or evidence of capability preservation,
 zero-refusal behavior, or safety. The independent full
 1,172-question and human-review gates remain unmet.
 
+\subsection{Complete local-parquet ARC-Challenge test-split scoring}
+We completed actual EleutherAI \texttt{lm-eval} v0.4.13
+zero-shot multiple-choice scoring on all 1,172
+SHA-256--pinned ARC-Challenge test questions for each
+original A/B/C checkpoint. The canonical Hub ARC dataset
+was unavailable in the isolated offline cache, so the
+built-in multiple-choice prompt, answer-choice scoring,
+\texttt{acc}, and \texttt{acc\_norm} metric definitions
+were inherited through an otherwise local-parquet
+task adapter. CPU bfloat16 executed 4,687 likelihood
+requests per model, 14,061 in total. The independent
+per-question audit verified the pinned source documents,
+all individual binary outcome scores, aggregate metrics
+and standard errors, and original model/task hashes.
+
+Raw and normalized accuracy were respectively 23.55\%
+and 26.11\% (A: 276/1172 and 306/1172),
+22.61\% and 25.34\% (B: 265/1172 and 297/1172),
+and 39.16\% and 42.83\% (C: 459/1172 and
+502/1172). In matched comparisons, B had 18 new
+correct versus 29 lost correct cases relative to A
+under raw accuracy (exact two-sided conditional
+McNemar $p=0.143865$), and 14 new versus 23 lost
+under length-normalized accuracy ($p=0.187742$).
+Holm adjustment across six exploratory tests
+(two metrics by three checkpoint contrasts)
+gave adjusted $p=0.287730$ for both A/B
+comparisons. These nonsignificant observations
+cannot establish equivalence or a prospective
+noninferiority claim. The base C model lacks
+A/B instruction post-training, so its higher
+score does not isolate the causal effect of
+the M1 weight edit.
+
+These are full-test-split, \emph{locally adapted
+dataset transport} results, not canonical
+unmodified Hub leaderboard results or
+independent external replication. Neither
+the capability metrics nor the lexical
+refusal proxy establishes behavioral
+zero refusal, harmful actionability, benign
+helpfulness or safe compliance. Blinded
+independent human review is still ungraded
+and release is not approved.
+
 \subsection{Full paired ARC-Challenge likelihood results}
 The complete pinned ARC-Challenge test evaluation comprises
 1,172 questions per checkpoint, totaling 3,516 model-question
