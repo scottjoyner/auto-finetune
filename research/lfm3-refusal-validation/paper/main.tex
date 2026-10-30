@@ -270,6 +270,24 @@ official ARC leaderboard score or as a safety measure;
 confirmation under a standardized independent harness,
 order permutations, and instruction-following tests is required.
 
+\subsection{Independent standardized ARC task-readiness audit}
+We installed a separate pinned EleutherAI lm-eval v0.4.13
+environment and validated its built-in ARC-Challenge
+multiple-choice task rather than treating our custom
+answer-text likelihood protocol as an official score.
+A read-only SHA-256 audit verified the official inherited
+task definition and two distinct acc and acc-norm metrics,
+the pinned 1,172-question corpus, and the three original
+checkpoint identities. The corpus has 1,165 four-choice,
+four three-choice and three five-choice questions.
+
+This static readiness verification is not a scored model
+inference run. The attempted independent model-scoring
+invocation did not execute. We therefore provide no official
+ARC scores or capability-preservation claims from this
+audit. Authorized evaluation on all three frozen arms and
+human response review remain publication gates.
+
 \subsection{Full paired ARC-Challenge likelihood results}
 The complete pinned ARC-Challenge test evaluation comprises
 1,172 questions per checkpoint, totaling 3,516 model-question
