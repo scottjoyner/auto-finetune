@@ -225,6 +225,22 @@ private responses are now available for two independent
 model-blinded human reviewers, but annotation has not begun.
 No safety or capability-effectiveness conclusion follows.
 
+
+\subsection{Exploratory exact matched lexical-proxy inference}
+As a sensitivity analysis, the frozen 450-by-three lexical-proxy
+aggregate also supports exact conditional matched-pair tests.
+For the benign A/B proxy, nine originally keyword-positive
+responses became negative and one originally negative response
+became positive under B. The nominal two-sided conditional
+McNemar $p$ value is $0.021484375$, but a Holm correction across
+all three pairwise arm contrasts in each of the two strata
+gives an adjusted $p=0.12890625$. This does not meet a
+familywise $0.05$ criterion. The earlier paired bootstrap
+interval of $[-6.0,-0.8]$ percentage points was not
+simultaneously corrected for these exploratory comparisons.
+This analysis tests only lexical wording; it cannot establish
+real refusal removal, useful compliance, or safety.
+
 \subsection{M1-style intervention fidelity on independent probes}
 An additional activation-fidelity smoke audit compared models A and B
 on four disjoint paired prompts (eight final-token observations). We
