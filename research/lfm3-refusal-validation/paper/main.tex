@@ -304,6 +304,23 @@ ARC scores or capability-preservation claims from this
 audit. Authorized evaluation on all three frozen arms and
 human response review remain publication gates.
 
+\subsection{Limited real CPU capability-scoring preflight}
+We completed a limited model-scoring preflight on all three
+unchanged checkpoints using EleutherAI lm-eval v0.4.13.
+The canonical Hub ARC dataset was unavailable in the isolated
+offline cache, so a private task adapter inherited the official
+multiple-choice scoring rules while reading the SHA-256-pinned
+local test parquet. An initial Radeon 890M ROCm execution
+failed at the first embedding kernel, whereas CPU bfloat16
+completed the same FIRST 40 questions per checkpoint.
+The raw and length-normalized accuracies were respectively
+20.0\% and 25.0\% for A, 17.5\% and 25.0\% for B,
+and 40.0\% and 40.0\% for C. These small, nonrandom,
+locally adapted preliminary scores do not constitute a full
+official ARC benchmark or evidence of capability preservation,
+zero-refusal behavior, or safety. The independent full
+1,172-question and human-review gates remain unmet.
+
 \subsection{Full paired ARC-Challenge likelihood results}
 The complete pinned ARC-Challenge test evaluation comprises
 1,172 questions per checkpoint, totaling 3,516 model-question
