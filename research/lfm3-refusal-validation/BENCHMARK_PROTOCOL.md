@@ -301,3 +301,19 @@ and 167/200, and C 34/250 and 163/200. This is a weak lexical
 indicator, not a human-rated refusal or architectural causal
 effect. See REFUSAL_ARCHITECTURE_20261030.md and the aggregate-only
 evidence/20261030_refusal_architecture_lexical_ranking.json.
+
+
+## Full built-in canonical ARC-Challenge scoring DONE (2026-10-30)
+
+The exact same three frozen A/B/C models were separately scored on
+all 1,172 questions with the unmodified built-in EleutherAI
+lm-eval 0.4.13 arc_challenge task and original pinned Hugging Face
+dataset. All 3,516 canonical cases and both per-case accuracy
+metrics match the prior full locally adapted evaluation *exactly*.
+A raw/norm 23.55/26.11%; B 22.61/25.34%;
+C 39.16/42.83%. Paired B-vs-A adjusted exploratory
+p=0.287730 on both accuracy metrics, not equivalence evidence.
+See CANONICAL_ARC_RESULTS_20261030.md and
+evidence/20261030_arc_canonical_full1172_cpu_aggregate.json.
+Human refusal judgments, safety, independent external
+reproduction and publication approval are still blocked.
