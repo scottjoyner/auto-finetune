@@ -262,3 +262,16 @@ confidence bounds that would still apply to hypothetical
 zero event observations. See ZERO_REFUSAL_CLAIM.md and
 evidence/20261029_zero_refusal_claim_audit.json.
 No additional model checkpoint or weights are created.
+
+
+## Exploratory exact matched XSTest lexical-proxy audit
+
+Existing paired 2x2 counts now have exact two-sided conditional
+McNemar tests and Holm correction across the 3 contrasts x 2
+safe/unsafe strata. For benign A/B, 9 keyword signals disappear,
+1 appears, net -3.2 percentage points. Raw p=0.021484375,
+six-comparison Holm-adjusted p=0.12890625. The nominal
+finding therefore does not meet the adjusted 0.05 criterion.
+The measure is not human-coded refusal or harmful actionability.
+See XSTEST_PAIRED_EXACT.md and
+evidence/20261030_xstest_proxy_paired_exact.json.
