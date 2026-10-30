@@ -1,0 +1,187 @@
+{
+  "schema": "lfm3.extended-evidence.v1",
+  "warning": "Exploratory runs were not thermally controlled or randomized; no cross-run performance claims.",
+  "results": [
+    {
+      "receipt": "concurrency-20261030T220407086591Z.json",
+      "schema": "lfm3.concurrent.v1",
+      "status": "completed",
+      "cache_type": "f16",
+      "reason": null,
+      "results": [
+        {
+          "concurrency": 1,
+          "median_latency_seconds": 1.417,
+          "p95_latency_seconds": 1.452,
+          "mean_aggregate_decode_tokens_per_second": 33.929
+        },
+        {
+          "concurrency": 2,
+          "median_latency_seconds": 1.592,
+          "p95_latency_seconds": 1.734,
+          "mean_aggregate_decode_tokens_per_second": 57.577
+        },
+        {
+          "concurrency": 4,
+          "median_latency_seconds": 2.302,
+          "p95_latency_seconds": 2.314,
+          "mean_aggregate_decode_tokens_per_second": 83.615
+        }
+      ]
+    },
+    {
+      "receipt": "concurrency-20261030T220749355376Z.json",
+      "schema": "lfm3.concurrent.v1",
+      "status": "completed",
+      "cache_type": "q8_0",
+      "reason": null,
+      "results": [
+        {
+          "concurrency": 1,
+          "median_latency_seconds": 1.164,
+          "p95_latency_seconds": 1.169,
+          "mean_aggregate_decode_tokens_per_second": 42.621
+        },
+        {
+          "concurrency": 2,
+          "median_latency_seconds": 1.181,
+          "p95_latency_seconds": 1.204,
+          "mean_aggregate_decode_tokens_per_second": 78.529
+        },
+        {
+          "concurrency": 4,
+          "median_latency_seconds": 1.565,
+          "p95_latency_seconds": 1.673,
+          "mean_aggregate_decode_tokens_per_second": 118.36
+        }
+      ]
+    },
+    {
+      "receipt": "concurrency-20261030T220833648309Z.json",
+      "schema": "lfm3.concurrent.v1",
+      "status": "failed",
+      "cache_type": "f16",
+      "reason": "[Errno 98] Address already in use"
+    },
+    {
+      "receipt": "concurrency-20261030T220909953215Z.json",
+      "schema": "lfm3.concurrent.v1",
+      "status": "completed",
+      "cache_type": "f16",
+      "reason": null,
+      "results": [
+        {
+          "concurrency": 1,
+          "median_latency_seconds": 0.931,
+          "p95_latency_seconds": 0.938,
+          "mean_aggregate_decode_tokens_per_second": 51.622
+        },
+        {
+          "concurrency": 2,
+          "median_latency_seconds": 1.162,
+          "p95_latency_seconds": 1.176,
+          "mean_aggregate_decode_tokens_per_second": 80.186
+        },
+        {
+          "concurrency": 4,
+          "median_latency_seconds": 1.682,
+          "p95_latency_seconds": 1.699,
+          "mean_aggregate_decode_tokens_per_second": 112.2
+        }
+      ]
+    },
+    {
+      "receipt": "concurrency-20261030T221002616321Z.json",
+      "schema": "lfm3.concurrent.v1",
+      "status": "completed",
+      "cache_type": "q8_0",
+      "reason": null,
+      "results": [
+        {
+          "concurrency": 1,
+          "median_latency_seconds": 0.911,
+          "p95_latency_seconds": 0.915,
+          "mean_aggregate_decode_tokens_per_second": 52.767
+        },
+        {
+          "concurrency": 2,
+          "median_latency_seconds": 1.19,
+          "p95_latency_seconds": 1.99,
+          "mean_aggregate_decode_tokens_per_second": 67.572
+        },
+        {
+          "concurrency": 4,
+          "median_latency_seconds": 1.719,
+          "p95_latency_seconds": 2.177,
+          "mean_aggregate_decode_tokens_per_second": 104.212
+        }
+      ]
+    },
+    {
+      "receipt": "resource-f16-20261030T220449405681Z.json",
+      "schema": "lfm3.mem-profile.v1",
+      "status": "completed",
+      "cache_type": "f16",
+      "reason": null,
+      "throughput_tps": 970.578189,
+      "peak_rss_bytes": 168525824,
+      "gpu_peak_delta_from_baseline_bytes": {
+        "/sys/class/drm/card1/device/mem_info_preempt_used": 0,
+        "/sys/class/drm/card1/device/mem_info_vram_used": 442785792,
+        "/sys/class/drm/card1/device/mem_info_vis_vram_used": 442785792,
+        "/sys/class/drm/card1/device/mem_info_gtt_used": 1365954560
+      }
+    },
+    {
+      "receipt": "resource-q8_0-20261030T220515320118Z.json",
+      "schema": "lfm3.mem-profile.v1",
+      "status": "completed",
+      "cache_type": "q8_0",
+      "reason": null,
+      "throughput_tps": 939.50367,
+      "peak_rss_bytes": 168722432,
+      "gpu_peak_delta_from_baseline_bytes": {
+        "/sys/class/drm/card1/device/mem_info_preempt_used": 0,
+        "/sys/class/drm/card1/device/mem_info_vram_used": 389726208,
+        "/sys/class/drm/card1/device/mem_info_vis_vram_used": 389726208,
+        "/sys/class/drm/card1/device/mem_info_gtt_used": 1357058048
+      }
+    },
+    {
+      "receipt": "quality-f16-20261030T220654117073Z.json",
+      "schema": "lfm3.quality-probe.v1",
+      "status": "completed",
+      "cache_type": "f16",
+      "reason": null,
+      "substring_indicators": [
+        true,
+        true,
+        true
+      ],
+      "exact_indicators": [
+        false,
+        false,
+        false
+      ],
+      "important": "substring indicators are not adjudicated behavioral accuracy"
+    },
+    {
+      "receipt": "quality-q8_0-20261030T220704993731Z.json",
+      "schema": "lfm3.quality-probe.v1",
+      "status": "completed",
+      "cache_type": "q8_0",
+      "reason": null,
+      "substring_indicators": [
+        true,
+        true,
+        true
+      ],
+      "exact_indicators": [
+        false,
+        false,
+        false
+      ],
+      "important": "substring indicators are not adjudicated behavioral accuracy"
+    }
+  ]
+}
