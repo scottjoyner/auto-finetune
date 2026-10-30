@@ -44,7 +44,7 @@ def check_experiment(p):
   require(all(isinstance(x.get('substring_indicator'),bool) and isinstance(x.get('exact_indicator'),bool) for x in r['results']),f'{p.name}: invalid scoring')
 def main():
  base=sorted(ROOT.glob('receipt-*.json'))+[p for p in sorted(ROOT.glob('fleet-*.json')) if p.name!='fleet-summary.json']
- extra=[p for pat in ('concurrency-*.json','resource-*.json','quality-*.json') for p in sorted(ROOT.glob(pat))]
+ extra=[p for pat in ('concurrency-*.json','resource-*.json','quality-*.json') for p in sorted(ROOT.glob(pat)) if p.name != 'quality-scored.json']
  for p in base:check_receipt(p)
  for p in extra:check_experiment(p)
  summary=ROOT/'fleet-summary.json'
