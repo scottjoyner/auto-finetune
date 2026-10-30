@@ -68,7 +68,7 @@ def test_neural_seed_cohort_is_exactly_registered():
         with pytest.raises(ValueError):
             validate(seed=seed,episodes=8,candidates=4,sigma=.05)
     with pytest.raises(ValueError):
-        ForwardOnlyNeuralAttentionHead(seed=10)
+        ForwardOnlyNeuralAttentionHead(seed=13)
 
 
 def test_no_direct_adapter_update_api_or_torch_dependency():
