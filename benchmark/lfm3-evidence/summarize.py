@@ -22,7 +22,7 @@ def parse(p):
    base['status']='invalid_receipt';base['reason']=str(e)
  return base
 def main():
- data=[parse(p) for p in sorted(ROOT.glob('receipt-*.json'))+sorted(ROOT.glob('fleet-*.json'))]
+ data=[parse(p) for p in sorted(ROOT.glob('receipt-*.json'))+sorted(p for p in ROOT.glob('fleet-*.json') if p.name!='fleet-summary.json')]
  out=ROOT/'fleet-summary.json'
  out.write_text(json.dumps({'schema':'lfm3.fleet-evidence.v1','results':data},indent=2)+'\n')
  print('wrote',out,'total',len(data),'completed',sum(x['status']=='completed' for x in data),
