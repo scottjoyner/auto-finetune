@@ -31,7 +31,11 @@ does NOT establish increased harmful compliance or improved helpfulness.
 
 A private, blinded packet of all 1,350 completions has been generated
 for each of two independent human reviewers. Reviews NOT STARTED.
-Official full ARC capability evaluation NOT COMPLETE. No third-party
+Complete built-in canonical ARC-Challenge scoring is now finished
+for A/B/C across all 1,172 questions, with per-case outcomes exactly
+matching the earlier full local-parquet run (October 30, 2026).
+This does NOT establish capability equivalence or behavioral safety.
+Two independent human XSTest reviewers remain ungraded. No third-party
 model judge, external transfer of prompts or public checkpoint weights.
 See BENCHMARK_PROTOCOL.md, HUMAN_REVIEW_GUIDE.md and paper/main.tex.
 
