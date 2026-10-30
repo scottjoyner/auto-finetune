@@ -34,3 +34,23 @@ The fleet runner requires SSH host-key verification, refuses unexpected model ch
 * x1-370 was observed with nearly full swap and a 97%-used system filesystem. Do not schedule unbounded concurrent jobs here.
 * The main benchmarking runner should be used only against a known compatible llama.cpp version. Unsupported KV types and architectures must be recorded as failed, not silently bypassed.
 * Future runs should test workload concurrency, p50/p95 latency, quality validation, GPU power and model-size-normalized memory before making deployment decisions.
+
+## Verified extension results (same-date exploratory runs)
+
+| Node | Backend | Checkpoint | Workload | Measurement |
+| --- | --- | --- | --- | --- |
+| x1-370 | Vulkan | Q4_K_M | 8192 prompt + 64 gen paired / FP16 KV | 1209.91 combined tok/s |
+| x1-370 | Vulkan | Q4_K_M | 8192 prompt + 64 gen paired / Q8 KV | 1217.35 combined tok/s |
+| xwing | CPU | QAD-Q4_0 | 512 prompt / 64 gen, separate | 132.19 prompt; 39.00 decode tok/s |
+| xwing | Vulkan | QAD-Q4_0 | 512 prompt / 64 gen, separate | 3721.45 prompt; 152.16 decode tok/s |
+| xwing | Vulkan | QAD-Q4_0 | 4096 prompt + 64 gen paired / FP16 KV | 2638.92 combined tok/s |
+| xwing | Vulkan | QAD-Q4_0 | 4096 prompt + 64 gen paired / Q8 KV | 2599.33 combined tok/s |
+| Deathstar | Vulkan | Q4_K_M | 512 prompt / 64 gen, separate | 787.49 prompt; 80.38 decode tok/s |
+
+The 8192-token Q8-versus-FP16 result is within 1% and the 4096-token xwing result within 2%; **neither establishes a quantized-KV speed advantage**, and memory/quality measurements are not yet included. Avoid comparing combined throughput directly with separate prompt or decode throughput.
+
+### xwing Vulkan build caveat
+
+The bundled October 16 Vulkan binary rejected LFM3 GGUF. A fresh local build from the existing `llama-cpu-8ca4060-source` source snapshot passed using `-DGGML_VULKAN=ON`, Ninja, two build workers and a local `glslc` wrapper which substitutes `--target-env=vulkan1.3` for `--target-env=vulkan1.2`. The untracked source snapshot reported `build_commit=unknown`; verify source provenance separately before formal publication. **Do not apply the shader workaround globally.**
+
+Future work: long-context output quality, actual KV-memory allocation, multiple concurrent clients with p95 latency, and ROCm HIP backend validation. These are not measured in this batch.
