@@ -19,7 +19,7 @@ def entry(p):
    x['important']='substring indicators are not adjudicated behavioral accuracy'
  return x
 def main():
- paths=[p for pat in ('concurrency-*.json','resource-*.json','quality-*.json') for p in sorted(ROOT.glob(pat))]
+ paths=[p for pat in ('concurrency-*.json','resource-*.json','quality-*.json') for p in sorted(ROOT.glob(pat)) if p.name != 'quality-scored.json']
  records=[entry(p) for p in paths]
  result={'schema':'lfm3.extended-evidence.v1','warning':'Exploratory runs were not thermally controlled or randomized; no cross-run performance claims.',
   'results':records}
