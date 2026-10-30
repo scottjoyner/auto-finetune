@@ -21,6 +21,8 @@ from src.three_checkpoint_eval import ARMS, checked_arm_paths
 
 TASK="arc_challenge_local_pinned"
 N=1172
+# Taken from pinned 20261030_official_arc_static_readiness.json.
+PARENT_ARC_YAML_SHA256="96da1d9efe1df88659481cedc13985cb347dc068554a2eae561303fa39bfab3f"
 KEYS=("acc","acc_norm")
 PAIRS=((ARMS_EXPECTED[0],ARMS_EXPECTED[1]),
        (ARMS_EXPECTED[0],ARMS_EXPECTED[2]),
@@ -54,8 +56,9 @@ def source_contract(task_yaml,source_parquet):
     if set(adapter_file)!={"test"} or Path(adapter_file["test"]).resolve()!=source_parquet.resolve():
         raise ValueError("task adapter must use only the pinned test parquet")
     parent=Path(definition.get("include",""))
-    if not parent.is_file() or parent.name!="arc_easy.yaml":
-        raise ValueError("missing official inherited ARC scoring definition")
+    if (not parent.is_file() or parent.name!="arc_easy.yaml"
+            or sha(parent)!=PARENT_ARC_YAML_SHA256):
+        raise ValueError("missing or changed official inherited ARC scoring YAML")
     if sha(source_parquet)!=SOURCE_SHA256:
         raise ValueError("source test parquet SHA256 changed")
     reference=pq.read_table(source_parquet).to_pylist()
