@@ -24,6 +24,7 @@ from src.lfm3_dust_text_transfer_admission import assess
 from src.lfm3_dust_task_shift_admission import assess as assess_novelty
 from src.lfm3_dust_sandbox_update_admission import assess as assess_actual_quality
 from src.lfm3_dust_multiprompt_admission import assess as assess_multi
+from src.lfm3_dust_variance_admission import assess as assess_variance
 
 SCHEMA="sensorgraft.lfm3.three-way-shadow-methods.v1"
 METHODS=("adamw","muon","predictive_dust")
@@ -34,6 +35,7 @@ TRANSFER_SEEDS=(10,11,12)
 NOVELTY_SEEDS=(13,14,15)
 ONE_STEP_SEEDS=(16,17,18)
 MULTI_SEEDS=(19,20,21)
+VARIANCE_SEEDS=(22,23,24)
 METHOD_SPEC={
     "adamw":{
         "update_mechanism":"autograd_backward_plus_adamw",
@@ -63,6 +65,7 @@ METHOD_SPEC={
         "additional_novelty_guard":"train_only_attention_context_plus_past_gain_skill",
         "actual_one_step_quality_gate":"hold_not_qualified",
         "three_prompt_confirmation_gate":"hold_not_qualified",
+        "variance_proxy_quality_gate":"hold_not_qualified",
     },
 }
 MAX_FILE_BYTES=175000
@@ -115,6 +118,10 @@ def evidence_paths():
         paths[f"three_prompt_seed{s}"]=(
             "research/evidence/lfm3-dust-multiprompt-20261030/"
             f"seed{s}-three-train-prompt-quality.json")
+    for s in VARIANCE_SEEDS:
+        paths[f"variance_seed{s}"]=(
+            "research/evidence/lfm3-dust-variance-20261030/"
+            f"seed{s}-variance-gated-quality.json")
     return paths
 
 
@@ -177,6 +184,14 @@ def review(root,*,requested_method="all",intent="inspect"):
                 or multi.get("model_update_permitted") is not False
                 or multi.get("weight_promotion_permitted") is not False):
             return blocked("three_training_prompt_quality_gate_did_not_validate")
+        variance=assess_variance([data[f"variance_seed{s}"] for s in VARIANCE_SEEDS],
+                                 repo_root=folder)
+        if (variance.get("status")!="hold_not_qualified"
+                or variance.get("persistent_adapter_updates")!=0
+                or variance.get("optimizer_switch_permitted") is not False
+                or variance.get("model_update_permitted") is not False
+                or variance.get("weight_promotion_permitted") is not False):
+            return blocked("unverified_variance_aware_neural_quality_study")
         if any(m.get("adamw")!=m.get("muon") or m.get("adamw")!=m.get("dust")
                for m in matched):
             return blocked("inconsistent_three_way_task_score_inventory")
@@ -201,6 +216,7 @@ def review(root,*,requested_method="all",intent="inspect"):
                 "novelty_guard_shadow_status":novelty["status"] if name=="predictive_dust" else None,
                 "actual_one_step_quality_admission":quality["status"] if name=="predictive_dust" else None,
                 "three_prompt_quality_admission":multi["status"] if name=="predictive_dust" else None,
+                "variance_quality_admission":variance["status"] if name=="predictive_dust" else None,
                 "reason":"cross_family_predictive_head_failed_zero_gain_baseline"
                          if name=="predictive_dust"
                          else "research_pilot_only_requires_separate_release_review",
@@ -233,6 +249,10 @@ def review(root,*,requested_method="all",intent="inspect"):
             "multiprompt_harmful_neural_updates":multi["harmful_multi_prompt_updates"]["neural"],
             "multiprompt_beneficial_greedy_updates_vetoed":multi["beneficial_single_prompt_updates_vetoed"]["greedy"],
             "multiprompt_actual_model_loss_forwards":multi["total_real_model_loss_forwards"],
+            "variance_quality_admission":variance["status"],
+            "variance_useful_head_updates_vetoed":variance["methods"]["neural"]["useful_single_updates_vetoed_by_variance"],
+            "variance_real_model_loss_forwards":variance["real_model_loss_forwards"],
+            "variance_accepted_neural_updates":variance["methods"]["neural"]["variance"]["temporary_steps_applied"],
             "methods":methods if requested_method=="all" else {
                 requested_method:methods[requested_method]},
             "evidence_sha256":digests,

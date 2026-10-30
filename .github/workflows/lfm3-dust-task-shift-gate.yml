@@ -40,7 +40,7 @@ jobs:
           import json
           r=json.load(open("/tmp/lfm3-task-shift-method.json"))
           assert r["status"]=="verified_shadow_only"
-          assert len(r["evidence_sha256"])==21
+          assert len(r["evidence_sha256"])==24
           assert r["neural_head_novel_prompts_flagged"]==17
           assert r["neural_head_novel_prompts_total"]==18
           assert r["neural_head_new_task_candidates_abstained"]==144
