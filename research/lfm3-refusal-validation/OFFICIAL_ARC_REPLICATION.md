@@ -44,7 +44,7 @@ configuration, backend, precision and source revision. It must
 record both official acc and acc_norm, case counts, failure modes,
 and question-matched contrasts. Case-level records stay private.
 No official result can be inferred from earlier custom likelihood
-scores. The attempted model-scoring command did NOT execute.
+scores. The initial canonical-Hub model-scoring command failed before scoring; a separately documented full local-parquet adapted run has now succeeded.
 
 Two independent human reviewers must still grade the 1,350 private
 XSTest response records each, adjudicate disagreement and separate
@@ -87,3 +87,22 @@ No prompts, raw model completions or private result JSON are committed.
 ## Successful real 40-question CPU smoke (2026-10-30)
 
 A private local-parquet ARC adapter inherited canonical choice-likelihood scoring because Hub ARC data was absent in the isolated offline cache. The Radeon 890M run failed at the first HIP embedding kernel, but CPU bfloat16 executed all three immutable original checkpoints (40 same ordered questions and 160 choices each). acc / acc_norm: A 20.0 / 25.0%; B 17.5 / 25.0%; C 40.0 / 40.0%. This was **real** model inference, but a small nonrandom locally adapted subset and NOT the full official ARC benchmark. See ARC_LOCAL_CPU_SMOKE_20261030.md and evidence/20261030_arc_local_first40_cpu_aggregate.json. Official complete ARC scoring and independent human review remain pending; model release remains blocked.
+
+
+## Complete local-parquet ARC test-split scoring (2026-10-30)
+
+Actual CPU inference has NOW completed the entire 1,172-question
+test split for each unchanged A/B/C checkpoint. Official-format
+choice-scoring rules were inherited through a pinned local parquet
+task adapter. Acc/normalized correct counts: A 276/306; B 265/297;
+C 459/502. All 3,516 private per-question outputs and the model
+and source hashes passed the independent strict audit.
+B minus A is -0.94 percentage points raw and -0.77 normalized;
+matched exact and six-test Holm-adjusted A/B p=0.287730 for both.
+This does not establish equivalence or a real reduction in refusal.
+See ARC_LOCAL_FULL_RESULTS_20261030.md and
+evidence/20261030_arc_local_full1172_cpu_aggregate.json.
+
+The unmodified canonical Hub task still has NOT completed; this
+is the entire test split with *adapted data transport*. Human
+review, external replication and release approvals remain blocked.
