@@ -392,6 +392,68 @@
       ]
     },
     {
+      "node": "deathstar-xps-8920",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf",
+      "observed_model_sha256": "3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4",
+      "available_mib": 16010,
+      "repetitions": 3,
+      "elapsed_seconds": 27.866,
+      "backend": [
+        "Vulkan"
+      ],
+      "receipt": "fleet-deathstar-xps-8920-20261030T235424136864Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_K - Medium",
+          "build_commit": "unknown",
+          "backends": "Vulkan",
+          "gpu_info": "AMD Radeon RX 480 Graphics (RADV POLARIS10), Intel(R) HD Graphics 630 (KBL GT2)",
+          "n_gpu_layers": 99,
+          "n_prompt": 4096,
+          "n_gen": 64,
+          "type_k": "f16",
+          "type_v": "f16",
+          "avg_ts": 617.767363,
+          "stddev_ts": 1.995676,
+          "avg_ns": 6733973356,
+          "stddev_ns": 21767385
+        }
+      ]
+    },
+    {
+      "node": "deathstar-xps-8920",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf",
+      "observed_model_sha256": "3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4",
+      "available_mib": 17149,
+      "repetitions": 3,
+      "elapsed_seconds": 26.57,
+      "backend": [
+        "Vulkan"
+      ],
+      "receipt": "fleet-deathstar-xps-8920-20261030T235455556137Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_K - Medium",
+          "build_commit": "unknown",
+          "backends": "Vulkan",
+          "gpu_info": "AMD Radeon RX 480 Graphics (RADV POLARIS10), Intel(R) HD Graphics 630 (KBL GT2)",
+          "n_gpu_layers": 99,
+          "n_prompt": 4096,
+          "n_gen": 64,
+          "type_k": "q8_0",
+          "type_v": "q8_0",
+          "avg_ts": 627.966228,
+          "stddev_ts": 3.578057,
+          "avg_ns": 6624703468,
+          "stddev_ns": 37751103
+        }
+      ]
+    },
+    {
       "node": "joyner",
       "status": "skipped",
       "reason": "remote available RAM below safety limit",
