@@ -55,7 +55,7 @@ def validate(*,seed,steps=1,sigma=SIGMA):
 def examples(seed,source):
     validate(seed=seed)
     rng=random.Random(610162+seed)
-    seen={x["input_key"] for x in source["events"][:0]}
+    seen=set()
     # Reconstruct all 18 historical source IDs, including old transfer data,
     # only to avoid duplicate prompts. We NEVER load transfer gain labels into
     # the head's learning or our direction selection.
@@ -271,6 +271,7 @@ def run(*,seed,repo_root,model_path=MODEL_PATH):
             "trained_head_historical_skill_pass":gate.verified_skill,
             "current_train_prompt_in_envelope":initial_context_gate["in_training_context_envelope"],
             "head_novelty_guard_decision":initial_context_gate,
+            "new_train_prompt_lfm3_context":list(context),
             "train_and_diagnostic_sha256":manifests,
             "diagnostic_example_count":6,"single_train_prompt_count":1,
             "model_probe_directions_measured":8,
