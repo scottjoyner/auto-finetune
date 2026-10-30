@@ -23,6 +23,7 @@ from src.lfm3_dust_matched_gradient_review import matched_pair
 from src.lfm3_dust_text_transfer_admission import assess
 from src.lfm3_dust_task_shift_admission import assess as assess_novelty
 from src.lfm3_dust_sandbox_update_admission import assess as assess_actual_quality
+from src.lfm3_dust_multiprompt_admission import assess as assess_multi
 
 SCHEMA="sensorgraft.lfm3.three-way-shadow-methods.v1"
 METHODS=("adamw","muon","predictive_dust")
@@ -32,6 +33,7 @@ RESEARCH_SEEDS=(1,2,3)
 TRANSFER_SEEDS=(10,11,12)
 NOVELTY_SEEDS=(13,14,15)
 ONE_STEP_SEEDS=(16,17,18)
+MULTI_SEEDS=(19,20,21)
 METHOD_SPEC={
     "adamw":{
         "update_mechanism":"autograd_backward_plus_adamw",
@@ -60,6 +62,7 @@ METHOD_SPEC={
         "head_status":"cross_family_transfer_hold_not_qualified",
         "additional_novelty_guard":"train_only_attention_context_plus_past_gain_skill",
         "actual_one_step_quality_gate":"hold_not_qualified",
+        "three_prompt_confirmation_gate":"hold_not_qualified",
     },
 }
 MAX_FILE_BYTES=175000
@@ -108,6 +111,10 @@ def evidence_paths():
         paths[f"one_step_seed{s}"]=(
             "research/evidence/lfm3-dust-one-step-quality-20261030/"
             f"seed{s}-one-step-diagnostic.json")
+    for s in MULTI_SEEDS:
+        paths[f"three_prompt_seed{s}"]=(
+            "research/evidence/lfm3-dust-multiprompt-20261030/"
+            f"seed{s}-three-train-prompt-quality.json")
     return paths
 
 
@@ -162,6 +169,14 @@ def review(root,*,requested_method="all",intent="inspect"):
                 or quality.get("model_training_permitted") is not False
                 or quality.get("weight_promotion_permitted") is not False):
             return blocked("actual_one_step_post_update_quality_not_independently_verified")
+        multi=assess_multi([data[f"three_prompt_seed{s}"] for s in MULTI_SEEDS],
+                           repo_root=folder)
+        if (multi.get("status")!="hold_not_qualified"
+                or multi.get("persistent_adapter_updates")!=0
+                or multi.get("optimizer_switch_permitted") is not False
+                or multi.get("model_update_permitted") is not False
+                or multi.get("weight_promotion_permitted") is not False):
+            return blocked("three_training_prompt_quality_gate_did_not_validate")
         if any(m.get("adamw")!=m.get("muon") or m.get("adamw")!=m.get("dust")
                for m in matched):
             return blocked("inconsistent_three_way_task_score_inventory")
@@ -185,6 +200,7 @@ def review(root,*,requested_method="all",intent="inspect"):
                 "head_recommendations_enabled":False,
                 "novelty_guard_shadow_status":novelty["status"] if name=="predictive_dust" else None,
                 "actual_one_step_quality_admission":quality["status"] if name=="predictive_dust" else None,
+                "three_prompt_quality_admission":multi["status"] if name=="predictive_dust" else None,
                 "reason":"cross_family_predictive_head_failed_zero_gain_baseline"
                          if name=="predictive_dust"
                          else "research_pilot_only_requires_separate_release_review",
@@ -213,6 +229,10 @@ def review(root,*,requested_method="all",intent="inspect"):
             "neural_head_one_step_quality_admission":quality["status"],
             "neural_head_one_step_diagnostic_loss_deltas":quality["policy_comparison"]["neural_one_probe"]["per_seed_loss_deltas"],
             "one_step_persistent_model_adapter_updates":quality["total_persistent_model_adapter_updates"],
+            "multiprompt_quality_admission":multi["status"],
+            "multiprompt_harmful_neural_updates":multi["harmful_multi_prompt_updates"]["neural"],
+            "multiprompt_beneficial_greedy_updates_vetoed":multi["beneficial_single_prompt_updates_vetoed"]["greedy"],
+            "multiprompt_actual_model_loss_forwards":multi["total_real_model_loss_forwards"],
             "methods":methods if requested_method=="all" else {
                 requested_method:methods[requested_method]},
             "evidence_sha256":digests,
