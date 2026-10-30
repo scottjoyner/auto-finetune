@@ -48,7 +48,7 @@ def test_actual_multi_prompt_guard_blocks_useful_and_admits_harmful():
 
 @pytest.mark.parametrize("modify",[
     lambda d:d["proposals"][0].update({"predicted_gain_before_any_measurement":42.}),
-    lambda d:d["proposals"][1].update({"measured_first_train_gain":-88.}),
+    lambda d:d["proposals"][6].update({"measured_first_train_gain":-88.}),
     lambda d:d["proposals"][3]["direction"].__setitem__(0,.9),
     lambda d:d["candidate_confirmation_gains"]["6"].__setitem__(0,-1.),
     lambda d:d["results"]["neural_multi"].update({"diagnostic_mean_loss_delta":-1.}),
