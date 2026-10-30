@@ -50,3 +50,18 @@ Canonical capability scores cannot establish behavioral
 refusal, suitable harmful-action restrictions, or safe
 release. Two independent human XSTest rating assignments
 remain the separate scientific and release bottleneck.
+
+
+## Execution and strict audit completed (2026-10-30)
+
+All three unmodified builtin arc_challenge full-task runs have now
+COMPLETED, using the exact original A/B/C frozen checkpoints.
+The private cases were reconciled against the pinned parquet:
+3,516 / 3,516 matched the source questions, and canonical
+acc/acc_norm binary outcomes agreed with the earlier full
+local-adapter evaluations with ZERO mismatches.
+
+See CANONICAL_ARC_RESULTS_20261030.md and the public aggregate
+evidence/20261030_arc_canonical_full1172_cpu_aggregate.json.
+External independent host reproduction and behavioral human
+review are still outstanding, and model release is blocked.
