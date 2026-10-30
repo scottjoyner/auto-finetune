@@ -203,3 +203,29 @@ evidence about LFM3, and they never change either real blinded review
 packet. Only real completed independent reviewer work can satisfy the
 publication and release gates. No model generation, new checkpoint,
 or training takes place in these tests.
+
+## Private reviewer handoff integrity check (2026-10-30)
+
+Before distributing any private reviewer assignment, the local custodian
+can verify all 30 restricted files against the immutable original
+sheets. The read-only audit checks 15x90 rows per reviewer, exact
+original prompt/response text, source manifest SHA-256 fingerprints,
+three-checkpoint and question completeness, owner-only file/directory
+permissions, grader independence, and malformed or added batch files.
+It prints only safe aggregate counts, no source text or reviewer identity:
+
+    python -m src.reviewer_handoff_audit \
+      --packet-dir results/xstest_full_review_private \
+      --batches-dir results/xstest_review_batched_private
+
+On October 30, the actual private handoff passed every source-custody
+and file-permission check. Both independent assignments contained
+15 batches of 90 cases; each had zero human grades and began at batch 1.
+This is **readiness**, not evidence of behavioral zero refusal.
+
+After each human session the custodian may rerun this audit to see the
+next incomplete batch without opening or printing any model response.
+Only the assigned reviewer should use the local terminal interface;
+never publish CSV batches or send prompts/responses to an outside
+reviewer without explicit data-handling authorization. All release
+and independent adjudication checks remain unchanged.
