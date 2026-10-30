@@ -1,0 +1,185 @@
+{
+  "evidence_class": "real full canonical EleutherAI arc_challenge 3-arm zero-shot evaluation",
+  "harness_version": "0.4.13",
+  "canonical_builtin_task_used": true,
+  "hub_dataset_revision_content_matches_pinned_source": true,
+  "dataset_content_sha256": "de86c368d3a59701a5114595cefc1869edac18bd558710f930bf6b6a7a753224",
+  "dataset_source_revision": "210d026faf9955653af8916fad021475a3f00453",
+  "task_yaml_checksums": {
+    "challenge": "682621c26ae24b1065a2d732460a55a8ef2b9f2544574431666c9309a9efd7bd",
+    "parent": "96da1d9efe1df88659481cedc13985cb347dc068554a2eae561303fa39bfab3f"
+  },
+  "checkpoint_sha256": {
+    "A_original_posttrained": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+    "B_M1_abliterated_smoke": "be6fa00aa433cdf91fb4d3b3a83f967d897a6e7a95ffba6874c98aa94b450798",
+    "C_base_pretrained": "61a3f541d65b03a2180d08964bf0d55e349463a2706032814d455ae046bc8b59"
+  },
+  "n_questions_per_arm": 1172,
+  "seeds": {
+    "random": 0,
+    "numpy": 1234,
+    "torch": 1234,
+    "fewshot": 1234
+  },
+  "metrics": {
+    "A_original_posttrained": {
+      "acc": {
+        "correct": 276,
+        "n": 1172,
+        "fraction": 0.2354948805460751,
+        "stderr": 0.01239945185500478
+      },
+      "acc_norm": {
+        "correct": 306,
+        "n": 1172,
+        "fraction": 0.26109215017064846,
+        "stderr": 0.012835523909473708
+      }
+    },
+    "B_M1_abliterated_smoke": {
+      "acc": {
+        "correct": 265,
+        "n": 1172,
+        "fraction": 0.22610921501706485,
+        "stderr": 0.012224202097063337
+      },
+      "acc_norm": {
+        "correct": 297,
+        "n": 1172,
+        "fraction": 0.25341296928327645,
+        "stderr": 0.012710896778378677
+      }
+    },
+    "C_base_pretrained": {
+      "acc": {
+        "correct": 459,
+        "n": 1172,
+        "fraction": 0.3916382252559727,
+        "stderr": 0.014264122124938267
+      },
+      "acc_norm": {
+        "correct": 502,
+        "n": 1172,
+        "fraction": 0.4283276450511945,
+        "stderr": 0.01446049636759908
+      }
+    }
+  },
+  "matched_question_comparisons": [
+    {
+      "metric": "acc",
+      "left": "A_original_posttrained",
+      "right": "B_M1_abliterated_smoke",
+      "right_only_correct": 18,
+      "left_only_correct": 29,
+      "right_minus_left_percentage_points": -0.9385665529010239,
+      "exploratory_exact_mcnemar_p": 0.14386508844054902,
+      "holm_adjusted_p_six_comparisons": 0.28773017688109803
+    },
+    {
+      "metric": "acc",
+      "left": "A_original_posttrained",
+      "right": "C_base_pretrained",
+      "right_only_correct": 269,
+      "left_only_correct": 86,
+      "right_minus_left_percentage_points": 15.61433447098976,
+      "exploratory_exact_mcnemar_p": 4.5164269225192737e-23,
+      "holm_adjusted_p_six_comparisons": 1.354928076755782e-22
+    },
+    {
+      "metric": "acc",
+      "left": "B_M1_abliterated_smoke",
+      "right": "C_base_pretrained",
+      "right_only_correct": 278,
+      "left_only_correct": 84,
+      "right_minus_left_percentage_points": 16.552901023890787,
+      "exploratory_exact_mcnemar_p": 2.2220607079712356e-25,
+      "holm_adjusted_p_six_comparisons": 8.888242831884942e-25
+    },
+    {
+      "metric": "acc_norm",
+      "left": "A_original_posttrained",
+      "right": "B_M1_abliterated_smoke",
+      "right_only_correct": 14,
+      "left_only_correct": 23,
+      "right_minus_left_percentage_points": -0.7679180887372014,
+      "exploratory_exact_mcnemar_p": 0.18774155899882317,
+      "holm_adjusted_p_six_comparisons": 0.28773017688109803
+    },
+    {
+      "metric": "acc_norm",
+      "left": "A_original_posttrained",
+      "right": "C_base_pretrained",
+      "right_only_correct": 278,
+      "left_only_correct": 82,
+      "right_minus_left_percentage_points": 16.72354948805461,
+      "exploratory_exact_mcnemar_p": 4.6944477562915196e-26,
+      "holm_adjusted_p_six_comparisons": 2.34722387814576e-25
+    },
+    {
+      "metric": "acc_norm",
+      "left": "B_M1_abliterated_smoke",
+      "right": "C_base_pretrained",
+      "right_only_correct": 282,
+      "left_only_correct": 77,
+      "right_minus_left_percentage_points": 17.49146757679181,
+      "exploratory_exact_mcnemar_p": 1.3386413917171514e-28,
+      "holm_adjusted_p_six_comparisons": 8.031848350302908e-28
+    }
+  ],
+  "canonical_vs_local_adapter_per_case": {
+    "A_original_posttrained": {
+      "identical_question_count": 1172,
+      "different_binary_outcomes": {
+        "acc": 0,
+        "acc_norm": 0
+      },
+      "exact_match": true
+    },
+    "B_M1_abliterated_smoke": {
+      "identical_question_count": 1172,
+      "different_binary_outcomes": {
+        "acc": 0,
+        "acc_norm": 0
+      },
+      "exact_match": true
+    },
+    "C_base_pretrained": {
+      "identical_question_count": 1172,
+      "different_binary_outcomes": {
+        "acc": 0,
+        "acc_norm": 0
+      },
+      "exact_match": true
+    }
+  },
+  "private_result_and_case_sha256": {
+    "A_original_posttrained": {
+      "result_sha256": "bc4a8d25f9e085bcdac713e117987fc8a571fcd2564f9c1b11c369a49ea4e484",
+      "case_sha256": "b8f4714a5e60479be5b3331edf7288f7764e8a263e0c6b9ccb7b16f3aa7625c8",
+      "local_case_sha256": "b8f4714a5e60479be5b3331edf7288f7764e8a263e0c6b9ccb7b16f3aa7625c8"
+    },
+    "B_M1_abliterated_smoke": {
+      "result_sha256": "041e230c958377dacd2a10ea9a2ee49f954b7f36b718489fa0f831cca1e75cea",
+      "case_sha256": "000cb2fee82e67e36005812b7d039e630ae5e54fa5c0331560221ff702edec95",
+      "local_case_sha256": "000cb2fee82e67e36005812b7d039e630ae5e54fa5c0331560221ff702edec95"
+    },
+    "C_base_pretrained": {
+      "result_sha256": "b6180c4313d1a271c392b7390713ef045b4851d3e3f6c37cf7d85201f8a15ad3",
+      "case_sha256": "5db213ac20b7bd4e9e007d9705b312915419baeedb28bab70b591dba4bbaa37a",
+      "local_case_sha256": "5db213ac20b7bd4e9e007d9705b312915419baeedb28bab70b591dba4bbaa37a"
+    }
+  },
+  "case_level_results_private": true,
+  "human_refusal_review_complete": false,
+  "harmful_actionability_review_complete": false,
+  "zero_refusal_proven": false,
+  "model_release_approved": false,
+  "publication_approved": false,
+  "limitations": [
+    "On-line canonical data source current contents were independently checked against the pinned dataset revision before scoring",
+    "Independent hardware replication and blinded human-review judgment remain separate incomplete requirements",
+    "Nonsignificance cannot establish ability equivalence or zero refusal",
+    "Pretrained C is not instruction-tuned and is not a causal control for edit B"
+  ]
+}
