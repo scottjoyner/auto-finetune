@@ -54,3 +54,34 @@ The 8192-token Q8-versus-FP16 result is within 1% and the 4096-token xwing resul
 The bundled October 16 Vulkan binary rejected LFM3 GGUF. A fresh local build from the existing `llama-cpu-8ca4060-source` source snapshot passed using `-DGGML_VULKAN=ON`, Ninja, two build workers and a local `glslc` wrapper which substitutes `--target-env=vulkan1.3` for `--target-env=vulkan1.2`. The untracked source snapshot reported `build_commit=unknown`; verify source provenance separately before formal publication. **Do not apply the shader workaround globally.**
 
 Future work: long-context output quality, actual KV-memory allocation, multiple concurrent clients with p95 latency, and ROCm HIP backend validation. These are not measured in this batch.
+
+## 2026-10-30 extension: concurrency, DRM memory, retrieval probes
+
+The localhost-only `concurrency.py` runner creates its own temporary `llama-server` at 127.0.0.1, warms it, issues short independent fixed-length requests, then terminates only its own server process. It does **not** measure production traffic or alter global services. A failed port preflight is retained as a failed receipt.
+
+At x1-370 (Vulkan Q4_K_M, n_predict=48, three waves per level):
+
+| KV type / run | 1 client | 2 clients | 4 clients |
+| --- | --- | --- | --- |
+| FP16, first run | 33.929 | 57.577 | 83.615 |
+| Q8, first run | 42.621 | 78.529 | 118.360 |
+| FP16, repeat | 51.622 | 80.186 | 112.200 |
+| Q8, repeat | 52.767 | 67.572 | 104.212 |
+
+Values are **aggregate generated tokens divided by full batch wall clock** (including prefill and scheduling), not isolated decode speed. Load and power were not controlled; the apparent KV performance ranking **reversed or narrowed on repetition**. Small-sample p95 values are descriptive only, not population latency guarantees.
+
+`resource_profile.py` samples the child process RSS and systemwide AMD DRM VRAM/GTT counters during an 8192-prompt-plus-64-generation paired run. FP16 measured 970.58 combined tok/s, 422.27 MiB VRAM growth; Q8 measured 939.50 combined tok/s, 371.67 MiB growth. These are device-wide baseline deltas **not attributed KV allocations**. Multiple dedicated A/B repetitions are required.
+
+`quality_probe.py` used deterministic synthetic inventory codes at three positions in a longer prompt. All three codes appeared in generated outputs with FP16 KV and Q8 KV, but neither achieved exact-answer formatting on all fixtures. Substring presence must **not** be reported as accuracy, safety, or output equivalence.
+
+Run:
+
+```bash
+python3 benchmark/lfm3-evidence/concurrency.py --max-parallel 4 --repetitions 3 --tokens 48 --cache f16 --port 29620
+python3 benchmark/lfm3-evidence/resource_profile.py --cache q8_0
+python3 benchmark/lfm3-evidence/quality_probe.py --cache f16 --port 29618
+python3 benchmark/lfm3-evidence/summarize_extended.py
+python3 benchmark/lfm3-evidence/validate.py
+```
+
+These probes use fixed local paths and are intended for the controlled x1-370 lab only. All raw receipts are preserved; server logs are kept locally but intentionally omitted from GitHub evidence because they may contain prompt content. Future hardening should run through a per-device compatibility and exclusive GPU occupancy gate.
