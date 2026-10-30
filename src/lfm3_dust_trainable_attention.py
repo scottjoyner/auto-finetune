@@ -62,7 +62,7 @@ class TrainProbe:
 
 class ForwardOnlyNeuralAttentionHead:
     def __init__(self,*,seed):
-        if type(seed) is not int or seed not in (7,8,9):
+        if type(seed) is not int or seed not in (7,8,9,10,11,12):
             raise ValueError("unregistered_head_seed")
         self.seed=seed
         r=random.Random(718883+seed)
