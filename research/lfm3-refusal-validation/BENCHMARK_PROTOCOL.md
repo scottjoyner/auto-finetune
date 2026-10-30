@@ -290,3 +290,14 @@ is 0.287730 for both metrics. These results do not prove
 capability equivalence, refusal elimination, safety or release
 readiness. See ARC_LOCAL_FULL_RESULTS_20261030.md and
 evidence/20261030_arc_local_full1172_cpu_aggregate.json.
+
+## Architecture-aware refusal keyword ranking (2026-10-30)
+
+The A/B/C model configs are identical 24-layer hybrid LFM3 architecture:
+13 conv, 5 sliding attention, 6 full attention. The frozen lexical XSTest
+dataset shows the highest refusal-keyword incidence in A: benign
+39/250 (15.6%) and unsafe 172/200 (86.0%), compared with B 31/250
+and 167/200, and C 34/250 and 163/200. This is a weak lexical
+indicator, not a human-rated refusal or architectural causal
+effect. See REFUSAL_ARCHITECTURE_20261030.md and the aggregate-only
+evidence/20261030_refusal_architecture_lexical_ranking.json.
