@@ -1,0 +1,66 @@
+name: LFM3 online one-feedback backprop-free QK head
+
+on:
+  push:
+    branches:
+      - "research/lfm3-dust-online-one-feedback-*"
+  pull_request:
+    paths:
+      - "src/lfm3_dust_online_*.py"
+      - "src/lfm3_three_method_shadow_registry.py"
+      - "tests/test_lfm3_dust_online_*.py"
+      - "tests/test_lfm3_three_method_shadow_registry.py"
+      - "research/evidence/lfm3-dust-online-one-feedback-20261030/**"
+      - ".github/workflows/lfm3-dust-online-one-feedback.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  causal-one-label-qk-updates-not-model-promotion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install CPU-only evidence audit dependencies
+        run: python -m pip install pytest==9.0.3 pyyaml==6.0.3
+      - name: Compile actual head controller and replay/admission
+        run: |
+          python -m compileall -q src/lfm3_dust_online_single_feedback.py src/lfm3_dust_online_one_feedback_trial.py src/lfm3_dust_online_one_feedback_review.py src/lfm3_dust_online_one_feedback_admission.py src/lfm3_three_method_shadow_registry.py
+      - name: Reconstruct 9 true LFM3 one-feedback episodes and full 30-receipt registry
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m pytest -o addopts= -q tests/test_lfm3_dust_online_single_feedback.py tests/test_lfm3_dust_online_one_feedback_review.py tests/test_lfm3_three_method_shadow_registry.py tests/test_lfm3_predictive_dust_shadow_bridge.py
+          python -m src.lfm3_three_method_shadow_registry --research-only --method predictive_dust --intent inspect > /tmp/lfm3-online-only-research.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/lfm3-online-only-research.json'))
+          assert r["status"]=="verified_shadow_only"
+          assert len(r["evidence_sha256"])==30
+          assert r["online_one_feedback_admission"]=="hold_not_qualified"
+          assert r["online_one_feedback_head_updates"]==6
+          assert r["online_one_feedback_model_choices_changed"]==0
+          assert r["online_one_feedback_model_loss_forwards"]==252
+          assert not r["model_training_permitted"]
+          assert not r["optimizer_switch_permitted"]
+          assert not r["weight_promotion_permitted"]
+          PY
+      - name: Refuse autonomous QK controlled model training
+        env:
+          PYTHONPATH: .
+        run: |
+          if python -m src.lfm3_three_method_shadow_registry --research-only --method predictive_dust --intent train > /tmp/lfm3-online-denied.json; then
+            echo "ERROR: unqualified adaptive-head training was allowed"
+            exit 1
+          fi
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/lfm3-online-denied.json'))
+          assert r["status"]=="blocked"
+          assert r["model_training_permitted"] is False
+          assert r["weight_promotion_permitted"] is False
+          PY
