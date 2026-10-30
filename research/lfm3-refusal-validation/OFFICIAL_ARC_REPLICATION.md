@@ -83,3 +83,7 @@ locally authorized private result paths): `--static-readiness`,
 `--A-original-posttrained`, `--B-M1-abliterated-smoke`,
 `--C-base-pretrained`, and `--output` to a *new* private file.
 No prompts, raw model completions or private result JSON are committed.
+
+## Successful real 40-question CPU smoke (2026-10-30)
+
+A private local-parquet ARC adapter inherited canonical choice-likelihood scoring because Hub ARC data was absent in the isolated offline cache. The Radeon 890M run failed at the first HIP embedding kernel, but CPU bfloat16 executed all three immutable original checkpoints (40 same ordered questions and 160 choices each). acc / acc_norm: A 20.0 / 25.0%; B 17.5 / 25.0%; C 40.0 / 40.0%. This was **real** model inference, but a small nonrandom locally adapted subset and NOT the full official ARC benchmark. See ARC_LOCAL_CPU_SMOKE_20261030.md and evidence/20261030_arc_local_first40_cpu_aggregate.json. Official complete ARC scoring and independent human review remain pending; model release remains blocked.
