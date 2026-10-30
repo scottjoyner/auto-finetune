@@ -1,0 +1,67 @@
+name: LFM3 Dust equal one-probe predictive head versus random
+
+on:
+  push:
+    branches:
+      - "research/lfm3-dust-equal-probe-*"
+  pull_request:
+    paths:
+      - "src/lfm3_dust_equal_probe_*.py"
+      - "src/lfm3_three_method_shadow_registry.py"
+      - "tests/test_lfm3_dust_equal_probe_*.py"
+      - "tests/test_lfm3_three_method_shadow_registry.py"
+      - "research/evidence/lfm3-dust-equal-probe-20261030/**"
+      - ".github/workflows/lfm3-dust-equal-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  one-real-probe-each-no-head-promotion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install minimal CPU-only evidence dependencies
+        run: python -m pip install pytest==9.0.3 pyyaml==6.0.3
+      - name: Compile strict model-candidate and admission code
+        run: |
+          python -m compileall -q src/lfm3_dust_equal_probe_benchmark.py src/lfm3_dust_equal_probe_review.py src/lfm3_dust_equal_probe_admission.py src/lfm3_three_method_shadow_registry.py
+      - name: Verify neural/random actual one-probe budgets and 27 receipts
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m pytest -o addopts= -q tests/test_lfm3_dust_equal_probe_benchmark.py tests/test_lfm3_dust_equal_probe_review.py tests/test_lfm3_three_method_shadow_registry.py tests/test_lfm3_predictive_dust_shadow_bridge.py
+          python -m src.lfm3_three_method_shadow_registry --research-only --method all --intent inspect > /tmp/lfm3-equal-probe-registry.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/lfm3-equal-probe-registry.json'))
+          assert r["status"]=="verified_shadow_only"
+          assert len(r["evidence_sha256"])==27
+          assert r["equal_one_probe_admission"]=="hold_not_qualified"
+          assert r["equal_probe_model_loss_forwards"]==63
+          assert r["equal_probe_neural_diagnostic_losses"]["26"]<0
+          assert r["equal_probe_neural_diagnostic_losses"]["27"]>0
+          assert r["equal_probe_neural_transfer_losses"]["27"]>0
+          assert not r["model_training_permitted"]
+          assert not r["optimizer_switch_permitted"]
+          assert not r["weight_promotion_permitted"]
+          PY
+      - name: Explicitly reject unqualified automatic training requests
+        env:
+          PYTHONPATH: .
+        run: |
+          if python -m src.lfm3_three_method_shadow_registry --research-only --method predictive_dust --intent train > /tmp/lfm3-denied.json; then
+            echo "FAILURE: unqualified forward-only Dust runner allowed training"
+            exit 1
+          fi
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/lfm3-denied.json'))
+          assert r["status"]=="blocked"
+          assert not r["model_training_permitted"]
+          assert not r["weight_promotion_permitted"]
+          PY
