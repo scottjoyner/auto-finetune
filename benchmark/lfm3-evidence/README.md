@@ -85,3 +85,16 @@ python3 benchmark/lfm3-evidence/validate.py
 ```
 
 These probes use fixed local paths and are intended for the controlled x1-370 lab only. All raw receipts are preserved; server logs are kept locally but intentionally omitted from GitHub evidence because they may contain prompt content. Future hardening should run through a per-device compatibility and exclusive GPU occupancy gate.
+
+## ROCm gfx1151 compatibility smoke test
+
+An isolated xwing ROCm HIP test compiled and executed a 4096-element SAXPY GPU kernel with 0 mismatches on the Radeon 8050S (gfx1151), using HIP 7.14 / clang 23. The exact source and executable return status are retained in `rocm_gfx1151_smoke.cpp` and `rocm-gfx1151-smoke-20261030.json`.
+
+This confirms **HIP compiler + basic GPU kernel execution only**. It is **not an LFM3 native HIP inference benchmark**. The longer llama.cpp HIP build (with GPU target gfx1151 and flash-attention compilation disabled) was intentionally stopped at 111/267 incremental build steps to avoid leaving an unsupervised build running. The build cache remains on xwing; no production binaries were overwritten. x1-370 currently has an invalid HIP compiler path pointing into missing ROCm 7.2 files, and no HIP model benchmark was attempted there. The next ROCm milestone requires a complete source-provenance-checked llama.cpp HIP build and a verified model load.
+
+Compile the smoke test on a gfx1151 node with a functioning ROCm installation:
+
+```bash
+hipcc -O2 --offload-arch=gfx1151 benchmark/lfm3-evidence/rocm_gfx1151_smoke.cpp -o /tmp/rocm-gfx1151-smoke
+/tmp/rocm-gfx1151-smoke
+```
