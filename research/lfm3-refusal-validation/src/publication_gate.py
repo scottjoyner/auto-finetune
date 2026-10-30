@@ -4,6 +4,7 @@ Never authorizes model publication, deployment, or scientific claims itself.
 """
 import argparse
 import json
+import math
 from pathlib import Path
 
 from src.three_checkpoint_eval import ARMS, checked_arm_paths
@@ -43,6 +44,55 @@ def capability_evidence_valid(report, hashes):
         return False
     return True
 
+
+
+def local_full_arc_check(path, hashes):
+    """Recognize full *locally adapted* ARC scores without releasing model gates."""
+    path=Path(path) if path is not None else ROOT/"evidence/20261030_arc_local_full1172_cpu_aggregate.json"
+    if not path.is_file():
+        return {"status":"pending",
+                "reason":"complete local-parquet ARC three-arm aggregate not present"}
+    try:
+        report=json.loads(path.read_text())
+        if (report.get("evidence_class") !=
+                "actual full 1172-case locally pinned ARC-Challenge multiple-choice likelihood scoring"
+                or report.get("n_questions_per_arm")!=EXPECTED_ARC_TEST_COUNT
+                or report.get("checkpoint_count")!=3
+                or report.get("checkpoint_sha256")!=hashes
+                or report.get("dataset_sha256")!=ARC_SHA256
+                or report.get("local_parquet_adapter_used") is not True
+                or report.get("canonical_unmodified_hub_task_used") is not False
+                or report.get("source_documents_verified_against_pinned_parquet") is not True
+                or report.get("human_refusal_review_complete") is not False
+                or report.get("model_release_approved") is not False
+                or len(report.get("matched_question_comparisons",[]))!=6):
+            raise ValueError("full local ARC aggregate contract mismatch")
+        scores=report["metrics"]
+        if set(scores)!=set(ARMS):
+            raise ValueError("full local ARC arm identities incomplete")
+        counts={}
+        for arm in ARMS:
+            counts[arm]={}
+            for metric in ("acc","acc_norm"):
+                val=scores[arm][metric]
+                correct=val["correct"]
+                fraction=val.get("fraction")
+                if (type(correct) is not int or not 0<=correct<=EXPECTED_ARC_TEST_COUNT
+                        or val.get("n")!=EXPECTED_ARC_TEST_COUNT
+                        or type(fraction) not in (float,int)
+                        or not math.isfinite(fraction)
+                        or abs(fraction-correct/EXPECTED_ARC_TEST_COUNT)>1e-10):
+                    raise ValueError("inconsistent full local ARC denominators")
+                counts[arm][metric]=correct
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, ZeroDivisionError):
+        return {"status":"blocked","reason":"invalid or inconsistent local full ARC aggregate"}
+    return {"status":"complete","questions_per_checkpoint":EXPECTED_ARC_TEST_COUNT,
+            "n_checkpoints":3,"correct_case_counts":counts,
+            "canonical_official_benchmark":False,
+            "independent_external_replication":False,
+            "human_safety_review":False,
+            "release_approved":False,
+            "reason":"full source-pinned local-parquet ARC scoring, not canonical Hub-task validation"}
 
 def human_review_check(review_dir, benchmark):
     review_dir = Path(review_dir)
@@ -88,7 +138,7 @@ def custom_arc_check(results_dir, hashes):
     }
 
 
-def readiness_status(full_results_dir, review_dir, capability_report, hashes, benchmark, custom_arc_dir=None):
+def readiness_status(full_results_dir, review_dir, capability_report, hashes, benchmark, custom_arc_dir=None, local_arc_report=None):
     progress = audit(full_results_dir)
     model_match = (progress.get("checkpoint_sha256") == hashes and len(hashes) == 3)
     full = (model_match and
@@ -129,6 +179,8 @@ def readiness_status(full_results_dir, review_dir, capability_report, hashes, be
             results["capability_validation"]={"status":"blocked",
                 "reason":"capability evidence cannot be parsed"}
     results["arc_custom_likelihood"] = custom_arc_check(custom_arc_dir, hashes)
+    results["arc_full_local_pinned"] = local_full_arc_check(
+        local_arc_report,hashes)
     results["publication_approved"] = False
     results["release_approved"] = False
     results["model_count_frozen"] = 3
@@ -146,11 +198,14 @@ def main():
                    default=ROOT/"results/arc_official_full_private.json")
     p.add_argument("--arc-custom-dir",type=Path,
                    default=ROOT/"results/arc_choice_likelihood_full_private")
+    p.add_argument("--arc-local-full-report",type=Path,
+                   default=ROOT/"evidence/20261030_arc_local_full1172_cpu_aggregate.json")
     args = p.parse_args()
     hashes=checked_arm_paths(ARMS)
     benchmark={r["id"]:r for r in read_verified_dataset()}
     summary=readiness_status(args.full_results_dir,args.review_dir,
-                             args.capability_report,hashes,benchmark,args.arc_custom_dir)
+                             args.capability_report,hashes,benchmark,
+                             args.arc_custom_dir,args.arc_local_full_report)
     print(json.dumps(summary,indent=2))
 
 
