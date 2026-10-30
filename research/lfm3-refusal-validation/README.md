@@ -44,6 +44,20 @@ Run from the study root:
     python -m src.xstest_progress_audit --results-dir results/xstest_full_20261029_v1
     python -m src.publication_gate
 
+## Reversible alpha-direction controls (October 30, 2026)
+
+The original A checkpoint was tested in an additional **72-generation
+six-holdout-pair CPU BF16 smoke** with reversible layer-10 alpha values
+0, 0.25, 0.5, and 1, a random orthogonal control, and no-hook baseline.
+All conditions had zero of six benign and six of six unsafe lexical
+refusal indicators. At alpha 1, exact response text changed in four
+benign and all six unsafe generations; matched alpha 0 replicated A
+exactly. These are **lexical and text-divergence observations only**,
+not verified refusal, safe compliance, or altered-checkpoint efficacy.
+No model weights were modified. See
+[REVERSIBLE_ALPHA_CONTROLS_20261030.md](REVERSIBLE_ALPHA_CONTROLS_20261030.md).
+Two real human XSTest reviews remain the primary publication blocker.
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
