@@ -106,3 +106,21 @@ evidence/20261030_arc_local_full1172_cpu_aggregate.json.
 The unmodified canonical Hub task still has NOT completed; this
 is the entire test split with *adapted data transport*. Human
 review, external replication and release approvals remain blocked.
+
+
+## Complete canonical built-in ARC-Challenge A/B/C evaluation (2026-10-30)
+
+The unmodified lm-eval v0.4.13 builtin arc_challenge task has NOW
+run successfully on the pinned Hugging Face ARC-Challenge
+test split, for all 1,172 questions x three unchanged checkpoints.
+Exact row-level comparison to the original pinned local parquet
+established identical question text, IDs, answer options and
+ground truth. All 3,516 per-case binary acc and acc_norm results
+also exactly matched the separate local-parquet task results.
+Acc/acc_norm percent: A 23.55/26.11, B 22.61/25.34,
+C 39.16/42.83. Full private logs were independently audited,
+and aggregate-only receipts were published. This closes the
+canonical task execution and dataset-equivalence blocker,
+NOT the human review, external independent reproduction,
+zero-refusal, or release/publication gates. See
+CANONICAL_ARC_RESULTS_20261030.md.
