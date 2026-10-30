@@ -21,7 +21,7 @@ def test_train_only_loo_threshold_accepts_all_training_contexts_and_detects_uppe
     gate=FrozenTaskShiftGate(source=raw)
     assert gate.train_feedback_sample_count==80
     assert gate.calibration_sample_count==12
-    assert gate.training_loo_min_nearest-gate.threshold==pytest.approx(.02)
+    assert gate.min_prior_train_nearest-gate.threshold==pytest.approx(.02)
     assert gate.verified_skill is False
     assert gate.summary()["source_transfer_episodes_used_to_fit_gate"]==0
     for index,event in enumerate(raw["events"][:12]):
