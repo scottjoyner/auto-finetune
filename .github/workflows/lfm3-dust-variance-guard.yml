@@ -40,7 +40,7 @@ jobs:
           import json
           data=json.load(open('/tmp/lfm3-variance-catalog.json'))
           assert data['status']=='verified_shadow_only'
-          assert len(data['evidence_sha256'])==27
+          assert len(data['evidence_sha256'])==30
           assert data['variance_quality_admission']=='hold_not_qualified'
           assert data['variance_useful_head_updates_vetoed']==1
           assert data['variance_real_model_loss_forwards']==83
