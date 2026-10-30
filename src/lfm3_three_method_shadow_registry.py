@@ -26,6 +26,7 @@ from src.lfm3_dust_sandbox_update_admission import assess as assess_actual_quali
 from src.lfm3_dust_multiprompt_admission import assess as assess_multi
 from src.lfm3_dust_variance_admission import assess as assess_variance
 from src.lfm3_dust_equal_probe_admission import assess as assess_equal_probe
+from src.lfm3_dust_online_one_feedback_admission import assess as assess_online_head
 
 SCHEMA="sensorgraft.lfm3.three-way-shadow-methods.v1"
 METHODS=("adamw","muon","predictive_dust")
@@ -38,6 +39,7 @@ ONE_STEP_SEEDS=(16,17,18)
 MULTI_SEEDS=(19,20,21)
 VARIANCE_SEEDS=(22,23,24)
 EQUAL_PROBE_SEEDS=(25,26,27)
+ONLINE_HEAD_SEEDS=(28,29,30)
 METHOD_SPEC={
     "adamw":{
         "update_mechanism":"autograd_backward_plus_adamw",
@@ -69,6 +71,7 @@ METHOD_SPEC={
         "three_prompt_confirmation_gate":"hold_not_qualified",
         "variance_proxy_quality_gate":"hold_not_qualified",
         "actual_equal_probe_budget_quality":"hold_not_qualified",
+        "online_one_label_head_model_quality_gate":"hold_not_qualified",
     },
 }
 MAX_FILE_BYTES=175000
@@ -129,6 +132,10 @@ def evidence_paths():
         paths[f"equal_probe_seed{s}"]=(
             "research/evidence/lfm3-dust-equal-probe-20261030/"
             f"seed{s}-matched-one-probe.json")
+    for s in ONLINE_HEAD_SEEDS:
+        paths[f"online_head_seed{s}"]=(
+            "research/evidence/lfm3-dust-online-one-feedback-20261030/"
+            f"seed{s}-three-episodes.json")
     return paths
 
 
@@ -208,6 +215,16 @@ def review(root,*,requested_method="all",intent="inspect"):
                 or equal_probe.get("optimizer_switch_permitted") is not False
                 or equal_probe.get("weight_promotion_permitted") is not False):
             return blocked("actual_equal_probe_neural_diagnostic_evidence_not_verified")
+        online_head=assess_online_head(
+            [data[f"online_head_seed{s}"] for s in ONLINE_HEAD_SEEDS],repo_root=folder)
+        if (online_head.get("status")!="hold_not_qualified"
+                or online_head.get("actual_accepted_online_qk_head_updates")!=6
+                or online_head.get("episode_choices_changed_by_online_learning")!=0
+                or online_head.get("persistent_model_adapter_updates")!=0
+                or online_head.get("model_training_permitted") is not False
+                or online_head.get("optimizer_switch_permitted") is not False
+                or online_head.get("weight_promotion_permitted") is not False):
+            return blocked("unverified_one_feedback_online_head_training_or_negative_admission")
         if any(m.get("adamw")!=m.get("muon") or m.get("adamw")!=m.get("dust")
                for m in matched):
             return blocked("inconsistent_three_way_task_score_inventory")
@@ -234,6 +251,8 @@ def review(root,*,requested_method="all",intent="inspect"):
                 "three_prompt_quality_admission":multi["status"] if name=="predictive_dust" else None,
                 "variance_quality_admission":variance["status"] if name=="predictive_dust" else None,
                 "equal_one_probe_admission":equal_probe["status"] if name=="predictive_dust" else None,
+                "online_one_feedback_admission":online_head["status"] if name=="predictive_dust" else None,
+                "online_qk_updates_without_model_backprop":online_head["actual_accepted_online_qk_head_updates"] if name=="predictive_dust" else None,
                 "reason":"cross_family_predictive_head_failed_zero_gain_baseline"
                          if name=="predictive_dust"
                          else "research_pilot_only_requires_separate_release_review",
@@ -274,6 +293,10 @@ def review(root,*,requested_method="all",intent="inspect"):
             "equal_probe_neural_diagnostic_losses":equal_probe["policy_outcomes"]["neural_one_probe"]["per_seed_diagnostic_loss_delta"],
             "equal_probe_neural_transfer_losses":equal_probe["policy_outcomes"]["neural_one_probe"]["per_seed_transfer_loss_delta"],
             "equal_probe_model_loss_forwards":equal_probe["total_actual_model_completion_loss_forwards"],
+            "online_one_feedback_admission":online_head["status"],
+            "online_one_feedback_head_updates":online_head["actual_accepted_online_qk_head_updates"],
+            "online_one_feedback_model_choices_changed":online_head["episode_choices_changed_by_online_learning"],
+            "online_one_feedback_model_loss_forwards":online_head["actual_model_loss_forwards"],
             "methods":methods if requested_method=="all" else {
                 requested_method:methods[requested_method]},
             "evidence_sha256":digests,
