@@ -94,6 +94,58 @@ def local_full_arc_check(path, hashes):
             "release_approved":False,
             "reason":"full source-pinned local-parquet ARC scoring, not canonical Hub-task validation"}
 
+
+def canonical_full_arc_check(path, hashes):
+    """Recognize separately audited canonical ARC evidence, never approve safety."""
+    path=Path(path) if path is not None else ROOT/"evidence/20261030_arc_canonical_full1172_cpu_aggregate.json"
+    if not path.is_file():
+        return {"status":"pending","reason":"unmodified built-in ARC three-arm report is absent"}
+    try:
+        from src.arc_canonical_full_report import CANONICAL_ROWS_HASH
+        report=json.loads(path.read_text())
+        if (report.get("evidence_class") !=
+                "real full canonical EleutherAI arc_challenge 3-arm zero-shot evaluation"
+                or report.get("harness_version")!="0.4.13"
+                or report.get("n_questions_per_arm")!=EXPECTED_ARC_TEST_COUNT
+                or report.get("checkpoint_sha256")!=hashes
+                or report.get("dataset_content_sha256")!=CANONICAL_ROWS_HASH
+                or report.get("canonical_builtin_task_used") is not True
+                or report.get("hub_dataset_revision_content_matches_pinned_source") is not True
+                or report.get("human_refusal_review_complete") is not False
+                or report.get("model_release_approved") is not False
+                or report.get("publication_approved") is not False
+                or len(report.get("matched_question_comparisons",[]))!=6
+                or set(report.get("metrics",{}))!=set(ARMS)):
+            raise ValueError("unverified canonical benchmark provenance")
+        per_arm={}
+        for arm in ARMS:
+            per_arm[arm]={}
+            for metric in ("acc","acc_norm"):
+                item=report["metrics"][arm][metric]
+                k=item["correct"]
+                value=item.get("fraction")
+                stderr=item.get("stderr")
+                if (type(k) is not int or not 0<=k<=EXPECTED_ARC_TEST_COUNT
+                    or item.get("n")!=EXPECTED_ARC_TEST_COUNT
+                    or type(value) not in (int,float) or not math.isfinite(value)
+                    or abs(value-k/EXPECTED_ARC_TEST_COUNT)>1e-10
+                    or type(stderr) not in (int,float) or not math.isfinite(stderr)
+                    or not 0<=stderr<=1):
+                    raise ValueError("invalid canonical arm metrics")
+                per_arm[arm][metric]=k
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return {"status":"blocked","reason":"inconsistent canonical ARC evidence"}
+    return {
+        "status":"evidence_present",
+        "n_questions_per_checkpoint":EXPECTED_ARC_TEST_COUNT,
+        "correct_case_counts":per_arm,
+        "canonical_builtin_task":True,
+        "independent_external_replication":False,
+        "human_refusal_review_complete":False,
+        "release_approved":False,
+        "reason":"full canonical task aggregate audited; separate reproducibility and human safety signoff pending",
+    }
+
 def human_review_check(review_dir, benchmark):
     review_dir = Path(review_dir)
     names = ("blinded_reviewer_1.csv", "blinded_reviewer_2.csv", "private_model_key.json")
@@ -138,7 +190,7 @@ def custom_arc_check(results_dir, hashes):
     }
 
 
-def readiness_status(full_results_dir, review_dir, capability_report, hashes, benchmark, custom_arc_dir=None, local_arc_report=None):
+def readiness_status(full_results_dir, review_dir, capability_report, hashes, benchmark, custom_arc_dir=None, local_arc_report=None, canonical_arc_report=None):
     progress = audit(full_results_dir)
     model_match = (progress.get("checkpoint_sha256") == hashes and len(hashes) == 3)
     full = (model_match and
@@ -181,6 +233,13 @@ def readiness_status(full_results_dir, review_dir, capability_report, hashes, be
     results["arc_custom_likelihood"] = custom_arc_check(custom_arc_dir, hashes)
     results["arc_full_local_pinned"] = local_full_arc_check(
         local_arc_report,hashes)
+    results["arc_full_canonical"] = canonical_full_arc_check(
+        canonical_arc_report,hashes)
+    if results["arc_full_canonical"]["status"]=="evidence_present":
+        results["capability_validation"]={
+            "status":"evidence_present",
+            "reason":"canonical ARC result verified structurally; independent external replication still required",
+        }
     results["publication_approved"] = False
     results["release_approved"] = False
     results["model_count_frozen"] = 3
@@ -200,12 +259,15 @@ def main():
                    default=ROOT/"results/arc_choice_likelihood_full_private")
     p.add_argument("--arc-local-full-report",type=Path,
                    default=ROOT/"evidence/20261030_arc_local_full1172_cpu_aggregate.json")
+    p.add_argument("--arc-canonical-full-report",type=Path,
+                   default=ROOT/"evidence/20261030_arc_canonical_full1172_cpu_aggregate.json")
     args = p.parse_args()
     hashes=checked_arm_paths(ARMS)
     benchmark={r["id"]:r for r in read_verified_dataset()}
     summary=readiness_status(args.full_results_dir,args.review_dir,
                              args.capability_report,hashes,benchmark,
-                             args.arc_custom_dir,args.arc_local_full_report)
+                             args.arc_custom_dir,args.arc_local_full_report,
+                             args.arc_canonical_full_report)
     print(json.dumps(summary,indent=2))
 
 
