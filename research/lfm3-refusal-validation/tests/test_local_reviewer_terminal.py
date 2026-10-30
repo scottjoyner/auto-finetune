@@ -1,7 +1,9 @@
 from pathlib import Path
+import os
+import fcntl
 
 import pytest
-from src.local_reviewer_terminal import terminal_safe, review_one, progress, open_batch
+from src.local_reviewer_terminal import terminal_safe, review_one, progress, open_batch, _batch_writer_lock
 from src.reviewer_batches import write_csv, read_csv
 
 
@@ -84,3 +86,59 @@ def test_concurrent_edit_fails_before_save(tmp_path):
     with pytest.raises(ValueError,match="changed concurrently"):
         review_one(path,original_rows,0,"reviewer1",lambda _:next(answers),lambda _:None)
     assert read_csv(path)[0]["uncertainty_notes"]=="other editor"
+
+
+
+def test_directory_lock_is_exclusive_and_survives_batch_inode_replace(tmp_path):
+    path=tmp_path/"batch.csv"
+    write_csv(path,[blank()])
+    with _batch_writer_lock(tmp_path):
+        other=os.open(tmp_path,os.O_RDONLY | getattr(os,"O_DIRECTORY",0))
+        try:
+            with pytest.raises(BlockingIOError):
+                fcntl.flock(other,fcntl.LOCK_EX | fcntl.LOCK_NB)
+            # Save replaces the CSV inode while keeping the directory lock.
+            before=os.stat(path).st_ino
+            from src.local_reviewer_terminal import atomic_save
+            atomic_save(path,read_csv(path))
+            assert os.stat(path).st_ino != before
+            with pytest.raises(BlockingIOError):
+                fcntl.flock(other,fcntl.LOCK_EX | fcntl.LOCK_NB)
+        finally:
+            os.close(other)
+
+
+def test_human_save_holds_lock_during_compare_and_replace(tmp_path,monkeypatch):
+    from src import local_reviewer_terminal as terminal
+    path=tmp_path/"batch.csv"
+    write_csv(path,[blank()])
+    original=terminal.atomic_save
+    def verify_locked(path,rows):
+        other=os.open(path.parent,os.O_RDONLY | getattr(os,"O_DIRECTORY",0))
+        try:
+            with pytest.raises(BlockingIOError):
+                fcntl.flock(other,fcntl.LOCK_EX | fcntl.LOCK_NB)
+            original(path,rows)
+        finally:
+            os.close(other)
+    monkeypatch.setattr(terminal,"atomic_save",verify_locked)
+    answers=iter(("3","1","","reviewed"))
+    assert review_one(path,read_csv(path),0,"local-human",lambda _:next(answers),lambda _:None)
+    assert read_csv(path)[0]["reviewer_id"]=="local-human"
+
+
+def test_reviewer_cannot_split_identity_across_blanked_rows(tmp_path):
+    path=tmp_path/"batch.csv"
+    data=[blank(),dict(blank(),review_id="XR00002",reviewer_id="original-person")]
+    write_csv(path,data)
+    with pytest.raises(ValueError,match="different reviewer already owns this blinded batch"):
+        review_one(path,read_csv(path),0,"different-person",lambda _:"q",lambda _:None)
+
+
+def test_world_readable_folder_is_refused_before_edit(tmp_path):
+    path=tmp_path/"batch.csv"
+    write_csv(path,[blank()])
+    tmp_path.chmod(0o755)
+    with pytest.raises(PermissionError,match="owner-only"):
+        with _batch_writer_lock(tmp_path):
+            pass
