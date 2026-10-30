@@ -51,7 +51,7 @@ def main():
  if summary.is_file():
   names={x['receipt'] for x in json.loads(summary.read_text())['results']}
   require(names=={p.name for p in base},'fleet-summary.json missing or duplicating receipts')
- smokes=list(ROOT.glob('rocm-*.json'))
+ smokes=list(ROOT.glob('rocm-gfx*-smoke-*.json'))
  for p in smokes:
   r=json.loads(p.read_text())
   require(r.get('schema')=='lfm3.rocm-compatibility.v1',f'{p.name}: invalid ROCm receipt schema')
@@ -61,7 +61,16 @@ def main():
   source=ROOT/'rocm_gfx1151_smoke.cpp'
   require(source.is_file() and hashlib.sha256(source.read_bytes()).hexdigest()==x.get('smoke_source_sha256'),f'{p.name}: missing or mismatched HIP source')
   require('NO LFM3 HIP inference result' in x.get('llama_hip_build',''),f'{p.name}: model benchmark status not explicit')
- print('PASS',len(base),'core receipts +',len(extra),'extended experiment receipts +',len(smokes),'ROCm compatibility receipt')
+ toolchains=sorted(ROOT.glob('rocm-*-toolchain-*.json'))
+ for p in toolchains:
+  r=json.loads(p.read_text())
+  require(r.get('schema')=='lfm3.rocm-toolchain-audit.v1',f'{p.name}: invalid toolchain audit')
+  require(r.get('installed_packages',{}).get('exit_code')==0,f'{p.name}: package listing failed')
+  require('hipcc 5.7' in r['installed_packages']['stdout'] and 'hip-runtime-amd 7.2' in r['installed_packages']['stdout'],
+          f'{p.name}: expected observed mixed toolchain versions')
+  require(r.get('toolchain_path_exists',{}).get('hipcc_implicit_clang17') is False,
+          f'{p.name}: missing-clang-17 observation changed')
+ print('PASS',len(base),'core receipts +',len(extra),'extended experiment receipts +',len(smokes),'ROCm smoke +',len(toolchains),'toolchain audit')
  return 0
 if __name__=='__main__':
  try:sys.exit(main())
