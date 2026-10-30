@@ -132,6 +132,64 @@ def progress(rows):
             "model_identity_unblinded":False}
 
 
+
+def assignment_status(batches_dir, reviewer, requested_identity=None):
+    """Private aggregate progress over the entire 15-batch assignment.
+
+    Can only see initial field presence, not source ground-truth class.
+    Never assert that a row is fully graded or consensus validated.
+    """
+    if requested_identity is not None and (
+        not requested_identity.strip() or
+            any(ord(c) < 32 for c in requested_identity)
+    ):
+        raise ValueError("invalid human reviewer ID")
+    statuses=[]
+    owners=set()
+    next_batch=None
+    for batch in range(1,16):
+        _path,rows=open_batch(batches_dir,reviewer,batch)
+        for row in rows:
+            identity=row["reviewer_id"].strip()
+            if identity:
+                owners.add(identity)
+        if len(owners)>1:
+            raise ValueError("multiple human reviewer IDs across private assignment")
+        if requested_identity is not None and owners and owners!={requested_identity}:
+            raise ValueError("this private assignment is already owned by another reviewer")
+        incomplete=sum(not (
+            row["reviewer_id"].strip()
+            and row["response_category"] in RESPONSE_OPTIONS.values()
+            and row["actionable_harmful_content"] in ACTION_OPTIONS.values()
+        ) for row in rows)
+        uncertain=sum(
+            row["response_category"]=="unclear" or
+            row["actionable_harmful_content"]=="uncertain"
+            for row in rows
+        )
+        if next_batch is None and incomplete:
+            next_batch=batch
+        statuses.append({
+            "batch":batch,
+            "initial_fields_entered":len(rows)-incomplete,
+            "initial_fields_remaining":incomplete,
+            "marked_uncertain":uncertain,
+        })
+    return {
+        "assigned_reviewer_number":reviewer,
+        "total_blinded_responses":1350,
+        "initial_fields_entered":sum(x["initial_fields_entered"] for x in statuses),
+        "initial_fields_remaining":sum(x["initial_fields_remaining"] for x in statuses),
+        "marked_uncertain":sum(x["marked_uncertain"] for x in statuses),
+        "next_batch_with_missing_initial_fields":next_batch,
+        "human_identity_present":bool(owners),
+        "full_human_review_validated":False,
+        "benign_helpfulness_verified":False,
+        "independent_consensus_verified":False,
+        "model_identity_unblinded":False,
+        "batches":statuses,
+    }
+
 def atomic_save(path, rows):
     """Never create world-readable CSV; preserve source fields unchanged."""
     _file_is_safe(path)
@@ -217,11 +275,38 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--batches-dir",type=Path,required=True)
     p.add_argument("--reviewer",type=int,choices=(1,2),required=True)
-    p.add_argument("--batch",type=int,required=True)
+    p.add_argument("--batch",type=int,choices=range(1,16))
+    p.add_argument("--next-batch",action="store_true",
+                   help="resume at first batch with missing initial ratings")
+    p.add_argument("--list-batches",action="store_true",
+                   help="print only private assignment-wide aggregate status")
     p.add_argument("--reviewer-id",type=str)
     p.add_argument("--status",action="store_true")
     p.add_argument("--index",type=int,help="1-based index of an individual row to review")
     args=p.parse_args()
+    if args.list_batches and (args.next_batch or args.batch is not None or args.index is not None):
+        p.error("--list-batches cannot be combined with a batch or row selection")
+    if args.next_batch and (args.batch is not None or args.index is not None):
+        p.error("--next-batch cannot be combined with --batch or --index")
+    if args.index is not None and not 1<=args.index<=90:
+        p.error("--index must be 1..90")
+    if args.list_batches or args.next_batch:
+        status=assignment_status(args.batches_dir,args.reviewer,args.reviewer_id)
+        if args.list_batches:
+            print(json.dumps(status,indent=2))
+            return
+        selected=status["next_batch_with_missing_initial_fields"]
+        if selected is None:
+            print(json.dumps({
+                "initial_annotation_fields_filled":True,
+                "human_review_validation_required":True,
+                "next_action":"run private reviewer_handoff_audit; resolve helpfulness and uncertain judgments",
+                "automatic_grading_performed":False,
+            },indent=2))
+            return
+        args.batch=selected
+    if args.batch is None:
+        p.error("--batch, --next-batch or --list-batches required")
     path,rows=open_batch(args.batches_dir,args.reviewer,args.batch)
     if args.status:
         print(json.dumps(progress(rows),indent=2))
@@ -230,7 +315,11 @@ def main():
         p.error("interactive review requires --reviewer-id")
     if not os.isatty(0) or not os.isatty(1):
         p.error("interactive review requires a local TTY; never pipe prompt text")
-    indices=([args.index-1] if args.index else
+    if not args.next_batch:
+        # Do not allow a different person to take over a partially rated
+        # assignment simply because their chosen batch is still blank.
+        assignment_status(args.batches_dir,args.reviewer,args.reviewer_id)
+    indices=([args.index-1] if args.index is not None else
              [i for i,r in enumerate(rows) if not (
                  r["reviewer_id"].strip() and r["response_category"] and
                  r["actionable_harmful_content"])])
