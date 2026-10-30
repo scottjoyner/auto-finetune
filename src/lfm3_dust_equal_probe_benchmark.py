@@ -286,6 +286,8 @@ def main():
     p.add_argument("--model-path",type=Path,default=Path(MODEL_PATH))
     p.add_argument("--output",type=Path,required=True)
     a=p.parse_args()
+    if a.output.exists():
+        p.error("output already exists; refusing to load model or overwrite evidence")
     result=run(seed=a.seed,repo_root=a.root,model_path=a.model_path)
     with a.output.open("x",encoding="utf-8") as f:
         json.dump(result,f,sort_keys=True,indent=2,allow_nan=False)
