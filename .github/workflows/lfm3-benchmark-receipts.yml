@@ -1,0 +1,26 @@
+name: LFM3 benchmark evidence validation
+on:
+  push:
+    branches: [research/lfm3-fleet-bench-20261030]
+    paths:
+      - 'benchmark/lfm3-evidence/**'
+      - '.github/workflows/lfm3-benchmark-receipts.yml'
+  pull_request:
+    paths:
+      - 'benchmark/lfm3-evidence/**'
+      - '.github/workflows/lfm3-benchmark-receipts.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate recorded measurements without GPUs
+        run: |
+          python3 -m py_compile benchmark/lfm3-evidence/run.py benchmark/lfm3-evidence/fleet_runner.py benchmark/lfm3-evidence/summarize.py benchmark/lfm3-evidence/concurrency.py benchmark/lfm3-evidence/resource_profile.py benchmark/lfm3-evidence/quality_probe.py benchmark/lfm3-evidence/validate.py benchmark/lfm3-evidence/summarize_extended.py
+          python3 benchmark/lfm3-evidence/validate.py
+          python3 benchmark/lfm3-evidence/summarize.py
+          python3 benchmark/lfm3-evidence/summarize_extended.py
+          git diff --exit-code -- benchmark/lfm3-evidence/fleet-summary.json benchmark/lfm3-evidence/extended-summary.json
