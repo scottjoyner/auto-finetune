@@ -144,3 +144,61 @@ def test_model_hash_alias_rejected(fixture_data):
     hashes[ARMS_EXPECTED[1]]=hashes[ARMS_EXPECTED[0]]
     with pytest.raises(ValueError,match="hash"):
         run(fixture_data)
+
+
+def test_source_contract_verifies_real_content_and_parent_sha(tmp_path,monkeypatch):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    import yaml
+    parquet=tmp_path/"mock.parquet"
+    docs=[{"id":f"id-{i}","question":"fake"} for i in range(3)]
+    pq.write_table(pa.Table.from_pylist(docs),parquet)
+    parent=tmp_path/"arc_easy.yaml"
+    parent.write_text("source: immutable test config\n")
+    source_yaml=tmp_path/"adapter.yaml"
+    source_yaml.write_text(yaml.safe_dump({
+        "task":full.TASK,
+        "include":str(parent),
+        "dataset_path":"parquet",
+        "dataset_name":None,
+        "dataset_kwargs":{"data_files":{"test":str(parquet)}},
+        "test_split":"test",
+        "training_split":None,
+        "validation_split":None,
+    }))
+    monkeypatch.setattr(full,"N",3)
+    monkeypatch.setattr(full,"SOURCE_SHA256",full.sha(parquet))
+    monkeypatch.setattr(full,"PARENT_ARC_YAML_SHA256",full.sha(parent))
+    y,rows,hashes=full.source_contract(source_yaml,parquet)
+    assert rows==docs
+    assert hashes["official_parent_yaml_sha256"]==full.sha(parent)
+    parent.write_text("tampered: yes\n")
+    with pytest.raises(ValueError,match="changed official"):
+        full.source_contract(source_yaml,parquet)
+
+
+def test_source_contract_rejects_changed_parquet_and_symlink(tmp_path,monkeypatch):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    import yaml
+    data=tmp_path/"data.parquet"
+    pq.write_table(pa.Table.from_pylist([{"id":"one"}]),data)
+    parent=tmp_path/"arc_easy.yaml"
+    parent.write_text("actual: local mock\n")
+    task=tmp_path/"adapter.yaml"
+    task.write_text(yaml.safe_dump({
+        "include":str(parent),"task":full.TASK,
+        "dataset_path":"parquet","dataset_name":None,
+        "dataset_kwargs":{"data_files":{"test":str(data)}},
+        "training_split":None,"validation_split":None,"test_split":"test",
+    }))
+    monkeypatch.setattr(full,"N",1)
+    monkeypatch.setattr(full,"SOURCE_SHA256",full.sha(data))
+    monkeypatch.setattr(full,"PARENT_ARC_YAML_SHA256",full.sha(parent))
+    data.write_bytes(b"tampered source")
+    with pytest.raises(ValueError,match="SHA256 changed"):
+        full.source_contract(task,data)
+    link=tmp_path/"adapter-link.yaml"
+    link.symlink_to(task)
+    with pytest.raises(ValueError,match="symlink"):
+        full.source_contract(link,data)
