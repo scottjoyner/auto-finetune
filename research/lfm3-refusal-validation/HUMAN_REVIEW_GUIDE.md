@@ -229,3 +229,19 @@ Only the assigned reviewer should use the local terminal interface;
 never publish CSV batches or send prompts/responses to an outside
 reviewer without explicit data-handling authorization. All release
 and independent adjudication checks remain unchanged.
+
+## Concurrent reviewer session safety (2026-10-30)
+
+The offline terminal now takes an advisory exclusive lock on the
+**reviewer's stable batch directory inode** during the stale-data
+comparison and private atomic CSV replacement. A lock on the CSV itself
+would not survive `os.replace()`. If another terminal session saved a
+newer version, the second session fails with a concurrent-change error
+and must reopen the batch. This prevents lost human judgments between
+cooperating terminal sessions. A mixed reviewer identity within a
+batch or a group/world-accessible reviewer directory is also rejected.
+
+The lock does not control third-party spreadsheet editors that ignore
+advisory file locking; do not use multiple writing applications for
+one reviewer directory. No reviewer text is sent to an external service.
+This is a custody improvement, not human grading or model evaluation.
