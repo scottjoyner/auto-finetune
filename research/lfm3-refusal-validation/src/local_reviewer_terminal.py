@@ -6,6 +6,8 @@ unblinding. One response is saved atomically after explicit human input.
 """
 import argparse
 import csv
+import fcntl
+from contextlib import contextmanager
 import json
 import os
 import stat
@@ -40,6 +42,38 @@ def terminal_safe(text):
     return "".join(pieces)
 
 
+
+def _private_review_directory(path):
+    """Reject unsafe reviewer directory endpoints, including symlinks."""
+    path=Path(path)
+    if path.is_symlink():
+        raise ValueError("symbolic-link reviewer directory is prohibited")
+    meta=path.stat()
+    if not stat.S_ISDIR(meta.st_mode) or meta.st_mode & 0o077:
+        raise PermissionError("reviewer directories must be owner-only")
+
+
+@contextmanager
+def _batch_writer_lock(folder):
+    """Serialize terminal saves using a stable directory inode.
+
+    Unlike a lock on the CSV inode, this survives the atomic os.replace
+    used for saving. This is advisory: unrelated spreadsheet editors do
+    not participate, so custody audits still matter.
+    """
+    folder=Path(folder)
+    _private_review_directory(folder)
+    flags=os.O_RDONLY | getattr(os,"O_DIRECTORY",0) | getattr(os,"O_NOFOLLOW",0)
+    fd=os.open(folder,flags)
+    try:
+        fcntl.flock(fd,fcntl.LOCK_EX)
+        yield
+    finally:
+        try:
+            fcntl.flock(fd,fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+
 def _file_is_safe(path):
     if path.is_symlink():
         raise ValueError("symbolic-link reviewer batch is prohibited")
@@ -53,6 +87,7 @@ def _file_is_safe(path):
 def open_batch(batches_dir, reviewer, batch):
     if reviewer not in (1, 2) or not 1 <= batch <= 15:
         raise ValueError("reviewer must be 1 or 2 and batch must be 1 through 15")
+    _private_review_directory(batches_dir)
     root = Path(batches_dir).resolve(strict=True)
     manifest_path = root / "private_batch_manifest.json"
     _file_is_safe(manifest_path)
@@ -67,6 +102,7 @@ def open_batch(batches_dir, reviewer, batch):
     if names[batch-1] != name:
         raise ValueError("unexpected batch filename or ordering")
     folder = root / f"reviewer_{reviewer}"
+    _private_review_directory(folder)
     path = folder / name
     _file_is_safe(path)
     rows = read_csv(path)
@@ -135,8 +171,8 @@ def review_one(path, rows, idx, reviewer_id, input_fn=input, output_fn=print):
     if not reviewer_id.strip() or any(c in reviewer_id for c in "\n\r\t"):
         raise ValueError("single nonempty local reviewer ID required")
     row=rows[idx]
-    if row["reviewer_id"] and row["reviewer_id"] != reviewer_id:
-        raise ValueError("a different reviewer already owns this blinded row")
+    if any(r["reviewer_id"] and r["reviewer_id"] != reviewer_id for r in rows):
+        raise ValueError("a different reviewer already owns this blinded batch")
     output_fn(f"\nREVIEW {idx+1} of {len(rows)}; press q at a rating prompt to skip without saving.")
     output_fn("PROMPT:\n"+terminal_safe(row["prompt"]))
     output_fn("MODEL RESPONSE:\n"+terminal_safe(row["model_response"]))
@@ -163,13 +199,15 @@ def review_one(path, rows, idx, reviewer_id, input_fn=input, output_fn=print):
     # Ensure model text and prompt are copied, not regenerated or normalized.
     if any(updated[k]!=row[k] for k in ("review_id","prompt","model_response")):
         raise AssertionError("original review context changed")
-    # Prevent silently overwriting another editor's changes since the batch
-    # was opened. The reviewer must reopen and inspect the latest version.
-    if read_csv(path) != rows:
-        raise ValueError("review batch changed concurrently; reopen before saving")
-    replacement=list(rows)
-    replacement[idx]=updated
-    atomic_save(path,replacement)
+    # Hold a stable *directory* lock across the freshness comparison AND
+    # atomic replacement. Locking the CSV inode would not survive replace().
+    # A second terminal writer must wait, re-read, and reject stale state.
+    with _batch_writer_lock(Path(path).parent):
+        if read_csv(path) != rows:
+            raise ValueError("review batch changed concurrently; reopen before saving")
+        replacement=list(rows)
+        replacement[idx]=updated
+        atomic_save(path,replacement)
     rows[idx]=updated
     output_fn("Saved local human-entered annotation; NOT validated consensus.")
     return True
