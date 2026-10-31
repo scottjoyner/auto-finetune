@@ -124,6 +124,24 @@ def main():
            f'{p.name}: invalid runtime executable hash')
    expected=r.get('expected_binary_sha256')
    require(not expected or digest.lower()==expected.lower(), f'{p.name}: executable hash mismatch')
+ attestation_paths=sorted(ROOT.glob('hip-fa-build-*.json'))
+ require(len(attestation_paths)<=1,'ambiguous HIP FA candidate attestations')
+ if attestation_paths:
+  attest=json.loads(attestation_paths[0].read_text())
+  require(attest.get('schema')=='lfm3.hip-fa-build-provenance.v1' and attest.get('status')=='completed',
+          'candidate binary not attested')
+  require(len(attest.get('selected_source_sha256',{}))==6,'incomplete FA build source selection')
+  digests=attest.get('sha256',{})
+  require(digests.get('model')=='43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452',
+          'candidate attested wrong model')
+  require(digests.get('hip_fa_q8') and digests.get('hip_no_fa') and digests['hip_fa_q8']!=digests['hip_no_fa'],
+          'baseline and FA executables not distinct')
+  require('gfx1151' in attest.get('runtime_version_output','') and 'ROCm' in attest.get('runtime_version_output',''),
+          'not a functioning gfx1151 ROCm binary')
+  require(any('GGML_CUDA_FA:BOOL=ON' in x for x in attest.get('candidate_cmake_flags',[])),
+          'HIP FA not compiled in')
+  require(any('q8_0-q8_0' in x for x in attest.get('candidate_cmake_flags',[])),
+          'Q8 FA compile config absent')
  candidate_paths=sorted(ROOT.glob('hip-fa-compare-*.json'))
  if candidate_paths:
   candidate_summary=ROOT/'hip-fa-summary.json'
@@ -131,12 +149,17 @@ def main():
   # Validation stays independent of the binary; summary comparison is deterministic.
   summary=json.loads(candidate_summary.read_text())
   require(summary.get('schema')=='lfm3.hip-fa-summary.v1','invalid HIP FA summary')
+  require(len(attestation_paths)==1,'no attested candidate for HIP FA result')
   reported={x['comparison_receipt'] for x in summary.get('comparisons',[])}
   failed={x['receipt'] for x in summary.get('failed_comparisons',[])}
   require(not reported.intersection(failed) and reported.union(failed)=={p.name for p in candidate_paths},
           'HIP FA comparison missing or duplicated')
   for p in candidate_paths:
    r=json.loads(p.read_text())
+   if r.get('status')=='completed':
+    require(r.get('runtime_binary_sha256',{}).get('HIP-noFA')==attest['sha256']['hip_no_fa'] and
+            r.get('runtime_binary_sha256',{}).get('HIP-FA')==attest['sha256']['hip_fa_q8'],
+            f'{p.name}: candidate binary not attested')
    require(r.get('schema')=='lfm3.hip-fa-abba.v1' and r.get('order')==['HIP-noFA','HIP-FA','HIP-FA','HIP-noFA'],
            f'{p.name}: invalid HIP FA comparison')
    require(r.get('status') in ('completed','failed'),f'{p.name}: invalid status')

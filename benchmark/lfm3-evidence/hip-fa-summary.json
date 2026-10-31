@@ -1,0 +1,48 @@
+{
+  "schema": "lfm3.hip-fa-summary.v1",
+  "warnings": [
+    "No production cutover or tuning applied",
+    "Four sequential runs per comparison; not clock/temperature controlled",
+    "Candidate build flag alone does not establish kernel selection",
+    "llama-bench timings do not establish output equivalence"
+  ],
+  "comparisons": [
+    {
+      "comparison_receipt": "hip-fa-compare-20261031T004722859499Z.json",
+      "prompt_tokens": 512,
+      "generation_tokens": 64,
+      "cache": "q8_0",
+      "baseline_combined_tps": 463.536,
+      "candidate_combined_tps": 760.213,
+      "candidate_divided_by_baseline": 1.64,
+      "sha256_baseline": "614e279d6766d76115d25b4509c542585c01a48f82b062145e065aa6b48e8255",
+      "sha256_candidate": "4be79e2718bac9275e54361ce33e07d332422e0b9bf029e658b7c577e0be24e4",
+      "source_receipts": [
+        "fleet-xwing-20261031T004723322326Z.json",
+        "fleet-xwing-20261031T004731023893Z.json",
+        "fleet-xwing-20261031T004736945661Z.json",
+        "fleet-xwing-20261031T004742396992Z.json"
+      ],
+      "repetitions_per_execution": 3
+    },
+    {
+      "comparison_receipt": "hip-fa-compare-20261031T004826685335Z.json",
+      "prompt_tokens": 4096,
+      "generation_tokens": 64,
+      "cache": "q8_0",
+      "baseline_combined_tps": 210.86,
+      "candidate_combined_tps": 2412.613,
+      "candidate_divided_by_baseline": 11.4418,
+      "sha256_baseline": "614e279d6766d76115d25b4509c542585c01a48f82b062145e065aa6b48e8255",
+      "sha256_candidate": "4be79e2718bac9275e54361ce33e07d332422e0b9bf029e658b7c577e0be24e4",
+      "source_receipts": [
+        "fleet-xwing-20261031T004827151949Z.json",
+        "fleet-xwing-20261031T004928076858Z.json",
+        "fleet-xwing-20261031T004936031390Z.json",
+        "fleet-xwing-20261031T004944043671Z.json"
+      ],
+      "repetitions_per_execution": 2
+    }
+  ],
+  "failed_comparisons": []
+}

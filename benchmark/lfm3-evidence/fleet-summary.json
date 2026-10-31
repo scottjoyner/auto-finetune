@@ -1378,6 +1378,347 @@
           "stddev_ns": 0
         }
       ]
+    },
+    {
+      "node": "xwing",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+      "observed_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "available_mib": 8345,
+      "repetitions": 1,
+      "elapsed_seconds": 3.152,
+      "backend": [
+        "ROCm"
+      ],
+      "receipt": "fleet-xwing-20261031T004430502527Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_0",
+          "build_commit": "unknown",
+          "backends": "ROCm",
+          "gpu_info": "AMD Radeon 8050S Graphics",
+          "n_gpu_layers": 99,
+          "n_prompt": 512,
+          "n_gen": 64,
+          "type_k": "q8_0",
+          "type_v": "q8_0",
+          "avg_ts": 504.358847,
+          "stddev_ts": 0.0,
+          "avg_ns": 1142044010,
+          "stddev_ns": 0
+        }
+      ]
+    },
+    {
+      "node": "xwing",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+      "observed_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "available_mib": 8829,
+      "repetitions": 3,
+      "elapsed_seconds": 3.776,
+      "backend": [
+        "ROCm"
+      ],
+      "receipt": "fleet-xwing-20261031T004702150302Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_0",
+          "build_commit": "unknown",
+          "backends": "ROCm",
+          "gpu_info": "AMD Radeon 8050S Graphics",
+          "n_gpu_layers": 99,
+          "n_prompt": 512,
+          "n_gen": 64,
+          "type_k": "q8_0",
+          "type_v": "q8_0",
+          "avg_ts": 776.244719,
+          "stddev_ts": 43.447379,
+          "avg_ns": 743556958,
+          "stddev_ns": 40826983
+        }
+      ]
+    },
+    {
+      "node": "xwing",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+      "observed_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "available_mib": 8931,
+      "repetitions": 3,
+      "elapsed_seconds": 5.74,
+      "backend": [
+        "ROCm"
+      ],
+      "receipt": "fleet-xwing-20261031T004723322326Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_0",
+          "build_commit": "unknown",
+          "backends": "ROCm",
+          "gpu_info": "AMD Radeon 8050S Graphics",
+          "n_gpu_layers": 99,
+          "n_prompt": 512,
+          "n_gen": 64,
+          "type_k": "q8_0",
+          "type_v": "q8_0",
+          "avg_ts": 455.265814,
+          "stddev_ts": 14.792009,
+          "avg_ns": 1266074043,
+          "stddev_ns": 40589095
+        }
+      ]
+    },
+    {
+      "node": "xwing",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+      "observed_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "available_mib": 8847,
+      "repetitions": 3,
+      "elapsed_seconds": 3.895,
+      "backend": [
+        "ROCm"
+      ],
+      "receipt": "fleet-xwing-20261031T004731023893Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_0",
+          "build_commit": "unknown",
+          "backends": "ROCm",
+          "gpu_info": "AMD Radeon 8050S Graphics",
+          "n_gpu_layers": 99,
+          "n_prompt": 512,
+          "n_gen": 64,
+          "type_k": "q8_0",
+          "type_v": "q8_0",
+          "avg_ts": 770.657363,
+          "stddev_ts": 38.757338,
+          "avg_ns": 748653506,
+          "stddev_ns": 36983200
+        }
+      ]
+    },
+    {
+      "node": "xwing",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+      "observed_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "available_mib": 8477,
+      "repetitions": 3,
+      "elapsed_seconds": 3.544,
+      "backend": [
+        "ROCm"
+      ],
+      "receipt": "fleet-xwing-20261031T004736945661Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_0",
+          "build_commit": "unknown",
+          "backends": "ROCm",
+          "gpu_info": "AMD Radeon 8050S Graphics",
+          "n_gpu_layers": 99,
+          "n_prompt": 512,
+          "n_gen": 64,
+          "type_k": "q8_0",
+          "type_v": "q8_0",
+          "avg_ts": 749.767845,
+          "stddev_ts": 28.406362,
+          "avg_ns": 768982822,
+          "stddev_ns": 29501400
+        }
+      ]
+    },
+    {
+      "node": "xwing",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+      "observed_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "available_mib": 8475,
+      "repetitions": 3,
+      "elapsed_seconds": 5.223,
+      "backend": [
+        "ROCm"
+      ],
+      "receipt": "fleet-xwing-20261031T004742396992Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_0",
+          "build_commit": "unknown",
+          "backends": "ROCm",
+          "gpu_info": "AMD Radeon 8050S Graphics",
+          "n_gpu_layers": 99,
+          "n_prompt": 512,
+          "n_gen": 64,
+          "type_k": "q8_0",
+          "type_v": "q8_0",
+          "avg_ts": 471.806225,
+          "stddev_ts": 17.547791,
+          "avg_ns": 1221989017,
+          "stddev_ns": 46335112
+        }
+      ]
+    },
+    {
+      "node": "xwing",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+      "observed_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "available_mib": 8560,
+      "repetitions": 2,
+      "elapsed_seconds": 5.825,
+      "backend": [
+        "ROCm"
+      ],
+      "receipt": "fleet-xwing-20261031T004807315046Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_0",
+          "build_commit": "unknown",
+          "backends": "ROCm",
+          "gpu_info": "AMD Radeon 8050S Graphics",
+          "n_gpu_layers": 99,
+          "n_prompt": 4096,
+          "n_gen": 64,
+          "type_k": "q8_0",
+          "type_v": "q8_0",
+          "avg_ts": 2426.619351,
+          "stddev_ts": 36.025139,
+          "avg_ns": 1714508078,
+          "stddev_ns": 25453267
+        }
+      ]
+    },
+    {
+      "node": "xwing",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+      "observed_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "available_mib": 8454,
+      "repetitions": 2,
+      "elapsed_seconds": 59.038,
+      "backend": [
+        "ROCm"
+      ],
+      "receipt": "fleet-xwing-20261031T004827151949Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_0",
+          "build_commit": "unknown",
+          "backends": "ROCm",
+          "gpu_info": "AMD Radeon 8050S Graphics",
+          "n_gpu_layers": 99,
+          "n_prompt": 4096,
+          "n_gen": 64,
+          "type_k": "q8_0",
+          "type_v": "q8_0",
+          "avg_ts": 212.185067,
+          "stddev_ts": 0.172919,
+          "avg_ns": 19605533222,
+          "stddev_ns": 15978599
+        }
+      ]
+    },
+    {
+      "node": "xwing",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+      "observed_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "available_mib": 8481,
+      "repetitions": 2,
+      "elapsed_seconds": 5.892,
+      "backend": [
+        "ROCm"
+      ],
+      "receipt": "fleet-xwing-20261031T004928076858Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_0",
+          "build_commit": "unknown",
+          "backends": "ROCm",
+          "gpu_info": "AMD Radeon 8050S Graphics",
+          "n_gpu_layers": 99,
+          "n_prompt": 4096,
+          "n_gen": 64,
+          "type_k": "q8_0",
+          "type_v": "q8_0",
+          "avg_ts": 2427.999347,
+          "stddev_ts": 73.195303,
+          "avg_ns": 1714123677,
+          "stddev_ns": 51674561
+        }
+      ]
+    },
+    {
+      "node": "xwing",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+      "observed_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "available_mib": 8512,
+      "repetitions": 2,
+      "elapsed_seconds": 5.947,
+      "backend": [
+        "ROCm"
+      ],
+      "receipt": "fleet-xwing-20261031T004936031390Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_0",
+          "build_commit": "unknown",
+          "backends": "ROCm",
+          "gpu_info": "AMD Radeon 8050S Graphics",
+          "n_gpu_layers": 99,
+          "n_prompt": 4096,
+          "n_gen": 64,
+          "type_k": "q8_0",
+          "type_v": "q8_0",
+          "avg_ts": 2397.226592,
+          "stddev_ts": 38.332538,
+          "avg_ns": 1735560552,
+          "stddev_ns": 27752254
+        }
+      ]
+    },
+    {
+      "node": "xwing",
+      "status": "completed",
+      "reason": null,
+      "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+      "observed_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "available_mib": 8501,
+      "repetitions": 2,
+      "elapsed_seconds": 59.728,
+      "backend": [
+        "ROCm"
+      ],
+      "receipt": "fleet-xwing-20261031T004944043671Z.json",
+      "measurements": [
+        {
+          "model_type": "lfm3 1.7B Q4_0",
+          "build_commit": "unknown",
+          "backends": "ROCm",
+          "gpu_info": "AMD Radeon 8050S Graphics",
+          "n_gpu_layers": 99,
+          "n_prompt": 4096,
+          "n_gen": 64,
+          "type_k": "q8_0",
+          "type_v": "q8_0",
+          "avg_ts": 209.534716,
+          "stddev_ts": 0.323912,
+          "avg_ns": 19853535738,
+          "stddev_ns": 30690861
+        }
+      ]
     }
   ]
 }

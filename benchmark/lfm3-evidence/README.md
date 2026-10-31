@@ -212,3 +212,20 @@ python3 benchmark/lfm3-evidence/validate.py
 ```
 
 The summary (once experiments exist) keeps *failed candidate comparisons* separate from completed measurements. Comparing two HIP variants does not by itself establish superiority over Vulkan; include a new matched Vulkan run for deployment recommendations. No modifications to production inference services are included.
+
+## Confirmed native HIP Flash Attention recovery on gfx1151
+
+The isolated candidate compiled with `GGML_CUDA_FA=ON`, `GGML_CUDA_FA_ALL_QUANTS=OFF`, `GGML_CUDA_FA_QUANTS=f16-f16;q8_0-q8_0`, and `CMAKE_HIP_ARCHITECTURES=gfx1151`. Its runtime, SHA-256 and selected source-file hashes are recorded in `hip-fa-build-20261031T004650045799Z.json`. The model SHA is `43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452`.
+
+Two **complete** A/B/B/A experiments on xwing compared the native HIP baseline (no FA kernels compiled, but runtime `-fa on`) against the isolated FA-compiled candidate (also runtime `-fa on`), both using Q8 K/V and 99 GPU layers:
+
+| Paired request, Q8 KV | HIP-noFA mean combined tok/s | HIP-FA mean combined tok/s | FA / noFA |
+| --- | ---: | ---: | ---: |
+| 512 prompt + 64 generation, 3 in-process repetitions | 463.54 | 760.21 | **1.640x** |
+| 4096 prompt + 64 generation, 2 in-process repetitions | 210.86 | 2412.61 | **11.442x** |
+
+Each mean is across two independent executions per binary, in A/B/B/A order. Every underlying receipt includes matching model SHA, separate **executable SHA-256**, ROCm backend identity, confirmed requested GPU layers, and the same runtime `-fa on` setting. Regenerate `hip-fa-summary.json` with `summarize_hip_fa.py`.
+
+This substantially resolves the **measured** HIP Q8 regression on xwing, but does not conclusively identify the exact slow old-kernel dispatch. The source contains a possible quantized K/V fallback path, which was not observed as a warning in this baseline run. Background service loads and clocks were not standardized; results are exploratory.
+
+**Release gates still open:** matched Vulkan-vs-FA A/B/B/A on the latest runtime, output correctness / instruction-following equivalence and long-duration p95 latency / memory validation. Do not replace the existing inference deployment solely on these speed measurements.
