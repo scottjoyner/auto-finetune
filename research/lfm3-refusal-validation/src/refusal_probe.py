@@ -6,6 +6,7 @@ import os
 import time
 from pathlib import Path
 
+from src.research_job_guard import require_research_write_capacity
 from src.eval_contracts import read_jsonl, dataset_sha256, refusal_proxy, validate_action_cases
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -118,6 +119,7 @@ def main():
     a = p.parse_args()
     if not 1 <= a.max_pairs <= 8 or not 0 <= a.layer < 24:
         p.error("invalid pair count or layer")
+    require_research_write_capacity(ROOT / "results")
     validate_action_cases(read_jsonl(ROOT / "data/simulated_actions_v0.jsonl"))
     all_rows = read_jsonl(ROOT / "data/paired_v0.jsonl")
     if a.mode == "compare":
@@ -139,6 +141,7 @@ def main():
         from safetensors.torch import save_file
         vectors, norms = estimate(model, tok, rows)
         folder.mkdir(exist_ok=True)
+        require_research_write_capacity(folder)
         save_file(vectors, str(folder / "directions.safetensors"))
         os.chmod(folder / "directions.safetensors", 0o600)
         report["layer_delta_norms"] = norms
@@ -158,6 +161,7 @@ def main():
                                         baseline_refusal_proxy=refusal_proxy(base),
                                         intervention_refusal_proxy=refusal_proxy(altered)))
                 print(f"compared {row['id']}/{category} (private content)", flush=True)
+        require_research_write_capacity(folder)
         private_json(folder / "private_generations.json",
                      dict(comparisons=comparisons, human_safety_review="PENDING"))
         report["intervention"] = dict(layer=a.layer, alpha=a.alpha)
@@ -166,6 +170,7 @@ def main():
             baseline=sum(c["baseline_refusal_proxy"] for c in comparisons),
             intervention=sum(c["intervention_refusal_proxy"] for c in comparisons))
     report["elapsed_seconds"] = round(time.monotonic() - started, 2)
+    require_research_write_capacity(folder)
     private_json(folder / f"{a.mode}_summary.json", report)
     print(json.dumps(report, indent=2), flush=True)
 

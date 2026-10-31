@@ -14,6 +14,7 @@ import time
 
 from src.eval_contracts import dataset_sha256, read_jsonl, refusal_proxy
 from src.refusal_probe import MODEL, encode, generate, load_local_model, projection
+from src.research_job_guard import require_research_write_capacity
 
 ROOT = Path(__file__).resolve().parents[1]
 PRIVATE_ROOT = Path("/home/scott/git/lfm3-refusal-study-20261029")
@@ -154,6 +155,8 @@ def main():
     a = p.parse_args()
     if not 8 <= a.max_new_tokens <= 128 or a.layer != 10:
         p.error("smoke requires 8..128 tokens and pinned layer=10")
+    require_research_write_capacity(a.results_dir)
+    require_research_write_capacity(a.public_out)
     os.umask(0o077)
     for path, expected in ((MODEL / "model.safetensors", EXPECTED_MODEL),
                            (DIRECTIONS, EXPECTED_VECTOR),
@@ -191,6 +194,7 @@ def main():
     torch.manual_seed(17)
     vec = load_file(str(DIRECTIONS), device="cpu")[f"layer_{a.layer}"]
     sham = random_orthogonal_unit(vec)
+    require_research_write_capacity(folder)
     model, tok = load_local_model(MODEL)
     start = time.monotonic()
     for row in pairs:
@@ -210,6 +214,7 @@ def main():
                     "pair": row["id"], "category": category, "condition": condition,
                     "response": response, "keyword_positive": refusal_proxy(response),
                 }
+                require_research_write_capacity(folder)
                 with journal.open("a", encoding="utf-8") as f:
                     f.write(json.dumps(record, ensure_ascii=False) + "\n")
                     f.flush()
@@ -221,6 +226,7 @@ def main():
     digest = sha256(journal)
     result = summary(records, manifest["holdout_ids"], manifest, digest)
     result["elapsed_seconds_this_invocation"] = round(time.monotonic() - start, 2)
+    require_research_write_capacity(a.public_out)
     write_exclusive(a.public_out, result)
     print(json.dumps({"generations": len(records),
                       "keyword_positive_counts": result["keyword_positive_counts"],

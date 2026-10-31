@@ -169,6 +169,22 @@ x1-370 XSTest attempt correctly stopped at 6.007 GiB free. This cannot
 prevent external fleet jobs consuming disk or reserve filesystem space.
 See [DISK_GUARD_INTEGRATION_20261031.md](DISK_GUARD_INTEGRATION_20261031.md).
 
+## Expanded experimental-run and checkpoint-write disk safeguards (October 31, 2026)
+
+Five additional LFM3 research paths now use the same local storage
+preflight: refusal probe, M1 activation fidelity, reversible residual
+projection, orthogonal-sham repeats, and the direct experimental
+checkpoint **build()** API. Together with XSTest and the existing ARC
+and three-checkpoint evaluation runners, nine entry points are guarded.
+The shared output-path validation now refuses intermediate symlinks,
+parent traversal and invalid/nonfinite capacity limits. Live attempts
+to run the reversible probe and write a new model checkpoint stopped
+**before any outputs or model inference** at ~5.8 GiB free versus a
+20 GiB local minimum. No cleanup, model changes, or claims of human
+behavioral refusal followed; issue #106 remains open. Full synthetic
+regression suite: **368/368 tests passing**. Details in
+[RESEARCH_DISK_GUARD_COVERAGE_20261031.md](RESEARCH_DISK_GUARD_COVERAGE_20261031.md).
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf

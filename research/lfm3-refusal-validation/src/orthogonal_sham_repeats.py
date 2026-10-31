@@ -13,6 +13,7 @@ import time
 
 from src.eval_contracts import refusal_proxy
 from src.refusal_probe import MODEL, generate, load_local_model, projection
+from src.research_job_guard import require_research_write_capacity
 from src.reversible_alpha_controls import (
     DIRECTIONS, EXPECTED_MODEL, EXPECTED_VECTOR, PAIRS, EXPECTED_PAIRS,
     read_journal, random_orthogonal_unit, sha256, write_exclusive,
@@ -149,6 +150,8 @@ def main():
     parser.add_argument("--private-out", type=Path, required=True)
     parser.add_argument("--public-out", type=Path, required=True)
     args = parser.parse_args()
+    require_research_write_capacity(args.private_out)
+    require_research_write_capacity(args.public_out)
     os.umask(0o077)
     if args.public_out.exists():
         raise FileExistsError("immutable public aggregate, select a new path")
@@ -189,6 +192,7 @@ def main():
         vectors = load_file(str(DIRECTIONS), device="cpu")
         direction = vectors["layer_10"]
         shams = {seed: random_orthogonal_unit(direction, seed) for seed in SHAM_SEEDS}
+        require_research_write_capacity(args.private_out)
         model, tokenizer = load_local_model(MODEL)
         for pid in ids:
             for category in CATEGORIES:
@@ -202,6 +206,7 @@ def main():
                         "pair": pid, "category": category, "seed": seed,
                         "response": output, "keyword_positive": refusal_proxy(output),
                     }
+                    require_research_write_capacity(args.private_out)
                     with journal.open("a", encoding="utf-8") as f:
                         f.write(json.dumps(record, ensure_ascii=False) + "\n")
                         f.flush()
@@ -212,6 +217,7 @@ def main():
     digest = sha256(journal)
     result = summarize(original, done, ids, original_manifest,
                        report["private_journal_sha256"], digest)
+    require_research_write_capacity(args.public_out)
     write_exclusive(args.public_out, result)
     print(json.dumps({
         "n_new_generations": result["n_new_generations"],
