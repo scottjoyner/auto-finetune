@@ -1,0 +1,174 @@
+{
+  "schema": "lfm3.hip-output-smoke.v1",
+  "created_utc": "20261031T005924654400Z",
+  "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+  "model_sha256_expected": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+  "comparison": [
+    "HIP-noFA",
+    "HIP-FA"
+  ],
+  "cache_type": "q8_0",
+  "flash_attention": "on",
+  "max_prediction_tokens": 64,
+  "status": "completed",
+  "cases": [
+    {
+      "fixture": "arithmetic-17x19",
+      "expected": "323",
+      "chat_template_sha256": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
+      "prompt_sha256": "19dfc93c7840888530e5957fcc8f2338409e494395d219533b247c4eb5885320",
+      "variants": {
+        "HIP-noFA": {
+          "generated": "17 \u00d7 19 = 323\n\n323",
+          "strict_expected": false,
+          "contains_expected": true,
+          "elapsed_wall_seconds": 1.458,
+          "backend_confirmed": true
+        },
+        "HIP-FA": {
+          "generated": "17 \u00d7 19 = 323\n\n323",
+          "strict_expected": false,
+          "contains_expected": true,
+          "elapsed_wall_seconds": 1.217,
+          "backend_confirmed": true
+        }
+      },
+      "exact_output_match": true
+    },
+    {
+      "fixture": "token-ready",
+      "expected": "READY",
+      "chat_template_sha256": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
+      "prompt_sha256": "2914336626a35e499d1ba8ffa38db7371b42b9865040010e519b6327f3cd8743",
+      "variants": {
+        "HIP-noFA": {
+          "generated": "READY",
+          "strict_expected": true,
+          "contains_expected": true,
+          "elapsed_wall_seconds": 1.222,
+          "backend_confirmed": true
+        },
+        "HIP-FA": {
+          "generated": "READY",
+          "strict_expected": true,
+          "contains_expected": true,
+          "elapsed_wall_seconds": 1.212,
+          "backend_confirmed": true
+        }
+      },
+      "exact_output_match": true
+    },
+    {
+      "fixture": "inventory-code",
+      "expected": "ZN6P-4021",
+      "chat_template_sha256": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
+      "prompt_sha256": "3b5b00acc846ef6767e5c90d4fc64fff3cd2769457c7a8214c595961de3ffebe",
+      "variants": {
+        "HIP-noFA": {
+          "generated": "ZN6P-4021",
+          "strict_expected": true,
+          "contains_expected": true,
+          "elapsed_wall_seconds": 1.35,
+          "backend_confirmed": true
+        },
+        "HIP-FA": {
+          "generated": "ZN6P-4021",
+          "strict_expected": true,
+          "contains_expected": true,
+          "elapsed_wall_seconds": 1.356,
+          "backend_confirmed": true
+        }
+      },
+      "exact_output_match": true
+    },
+    {
+      "fixture": "sequence",
+      "expected": "64",
+      "chat_template_sha256": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
+      "prompt_sha256": "d9f86714e5a234f46ef9317ad324850e5f0b9809ea0ebb6d7bc03f4e4300b2a7",
+      "variants": {
+        "HIP-noFA": {
+          "generated": "<think>We need to find the next number in the sequence: 4, 8, 16, 32. This is a clear geometric progression where each term is multiplied by 2. \n- 4 * 2 = 8\n- 8 * 2 = 16\n- 16 *",
+          "strict_expected": false,
+          "contains_expected": false,
+          "elapsed_wall_seconds": 1.979,
+          "backend_confirmed": true
+        },
+        "HIP-FA": {
+          "generated": "<think>We need to find the next number in the sequence: 4, 8, 16, 32. This is a clear geometric progression where each term is multiplied by 2. \n- 4 * 2 = 8\n- 8 * 2 = 16\n- 16 *",
+          "strict_expected": false,
+          "contains_expected": false,
+          "elapsed_wall_seconds": 1.711,
+          "backend_confirmed": true
+        }
+      },
+      "exact_output_match": true
+    },
+    {
+      "fixture": "literal",
+      "expected": "BETA-17",
+      "chat_template_sha256": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
+      "prompt_sha256": "c7629028efe63191dea632614a20cb2e79539a29e58a0a53d4cf9cd143beeae2",
+      "variants": {
+        "HIP-noFA": {
+          "generated": "BETA-17",
+          "strict_expected": true,
+          "contains_expected": true,
+          "elapsed_wall_seconds": 1.355,
+          "backend_confirmed": true
+        },
+        "HIP-FA": {
+          "generated": "BETA-17",
+          "strict_expected": true,
+          "contains_expected": true,
+          "elapsed_wall_seconds": 1.283,
+          "backend_confirmed": true
+        }
+      },
+      "exact_output_match": true
+    },
+    {
+      "fixture": "long-context-retrieval",
+      "expected": "VQ8P-6142",
+      "chat_template_sha256": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
+      "prompt_sha256": "930a0937e7fcce9d8963001afbd42d0837c6ecbc670dc8e80019c884beb5bd50",
+      "variants": {
+        "HIP-noFA": {
+          "generated": "<think>We need to find the verification code for inventory row 043. The inventory list is given. Let's scan the lines.\n\nThe list starts with:\n\nInventory row 000: component classification standard, inspection complete, custody status stable.\n...\nInventory row 043: verification code VQ8P-6142, inspection",
+          "strict_expected": false,
+          "contains_expected": true,
+          "elapsed_wall_seconds": 5.695,
+          "backend_confirmed": true
+        },
+        "HIP-FA": {
+          "generated": "<think>We need to find the verification code for inventory row 043. Looking at the inventory list:\n\n- Row 000 to 042: all have \"component classification standard, inspection complete, custody status stable.\"\n- Row 043: \"Inventory row 043: verification code VQ8P-6142, inspection",
+          "strict_expected": false,
+          "contains_expected": true,
+          "elapsed_wall_seconds": 2.206,
+          "backend_confirmed": true
+        }
+      },
+      "exact_output_match": false
+    }
+  ],
+  "warning": "Synthetic greedy-output agreement is NOT a general quality, safety, or correctness guarantee.",
+  "sha256": {
+    "model": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+    "test_executable": "9a9881f4927b6230dd66c6a8e51f82999c0b30494684ef3e88704b6e9c744a90",
+    "embedded_template": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
+    "hip_no_fa_backend": "de7d3b0c5a6c745a54182f95675310311c9b404efcb1711f38440f7e3860cc9a",
+    "hip_fa_backend": "0a8573c81efa6a3383ac97112d73564e0b4d4b468ada32025c230584c8354ea3"
+  },
+  "summary": {
+    "fixtures": 6,
+    "exact_output_agreement_count": 5,
+    "strict_correct_count": {
+      "HIP-noFA": 3,
+      "HIP-FA": 3
+    },
+    "contains_expected_count": {
+      "HIP-noFA": 5,
+      "HIP-FA": 5
+    }
+  }
+}

@@ -194,8 +194,67 @@ def main():
              f'{p.name}: wrong runtime test')
      require(source.get('observed_binary_sha256')==r.get('runtime_binary_sha256',{}).get(row['expected_variant']),
              f'{p.name}: binary mismatch')
+ output_receipts=sorted(ROOT.glob('hip-output-compare-*.json'))
+ if output_receipts:
+  summary_path=ROOT/'hip-output-summary.json'
+  require(summary_path.is_file(),'HIP output summary missing')
+  output_summary=json.loads(summary_path.read_text())
+  require(output_summary.get('schema')=='lfm3.hip-output-summary.v1','HIP output summary wrong schema')
+  require({x['receipt'] for x in output_summary['results']}=={p.name for p in output_receipts},
+          'HIP output receipts omitted from summary')
+  for p in output_receipts:
+   r=json.loads(p.read_text())
+   require(r.get('schema')=='lfm3.hip-output-smoke.v1',f'{p.name}: invalid output receipt schema')
+   require(r.get('status') in ('completed','failed'),f'{p.name}: status')
+   require(r.get('model_sha256_expected')=='43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452',
+           f'{p.name}: unexpected model hash')
+   digests=r.get('sha256',{})
+   if r.get('status')=='completed':
+    require(r.get('comparison')==['HIP-noFA','HIP-FA'],f'{p.name}: variant order')
+    require(r.get('cache_type')=='q8_0' and r.get('flash_attention')=='on',f'{p.name}: wrong runtime')
+    require(r.get('max_prediction_tokens') in [32,64,128],f'{p.name}: unexpected prediction budget')
+    require(len(r.get('cases',[])) in [2,3,4,5,6],f'{p.name}: invalid test size')
+    require(len(digests.get('test_executable',''))==64 and len(digests.get('embedded_template',''))==64,
+            f'{p.name}: incomplete synthetic-harness provenance')
+    require(digests.get('hip_no_fa_backend') and digests.get('hip_fa_backend') and
+            digests['hip_no_fa_backend']!=digests['hip_fa_backend'],
+            f'{p.name}: identical HIP backend libraries')
+    case_matches=0
+    strict={'HIP-noFA':0,'HIP-FA':0}
+    contains={'HIP-noFA':0,'HIP-FA':0}
+    for case in r['cases']:
+     require(case.get('chat_template_sha256')==digests['embedded_template'],
+             f'{p.name}: inconsistent chat template')
+     require(len(case.get('prompt_sha256',''))==64,f'{p.name}: missing prompt hash')
+     variants=case.get('variants',{})
+     require(set(variants)==set(strict),f'{p.name}: missing variants')
+     a=variants['HIP-noFA']['generated']
+     b=variants['HIP-FA']['generated']
+     same=a==b
+     require(case.get('exact_output_match') is same, f'{p.name}: incorrect agreement indicator')
+     case_matches+=same
+     expected=case['expected']
+     for variant in strict:
+      row=variants[variant]
+      require(row.get('backend_confirmed') is True,f'{p.name}: no ROCm identity')
+      generated=row['generated']
+      require(isinstance(generated,str) and generated,f'{p.name}: missing generation')
+      correct=generated==expected
+      present=expected in generated
+      require(row.get('strict_expected') is correct and row.get('contains_expected') is present,
+              f'{p.name}: fabricated output accuracy indicator')
+      strict[variant]+=correct
+      contains[variant]+=present
+    stats=r.get('summary',{})
+    require(stats.get('fixtures')==len(r['cases']) and
+            stats.get('exact_output_agreement_count')==case_matches and
+            stats.get('strict_correct_count')==strict and
+            stats.get('contains_expected_count')==contains,
+            f'{p.name}: output score aggregation mismatch')
+ else:
+  require(not (ROOT/'hip-output-summary.json').exists(),'orphan HIP output summary')
  print('PASS',len(base),'core receipts +',len(extra),'extended experiment receipts +',
-       len(smokes),'ROCm smoke +',len(toolchains),'toolchain audit +',len(comparisons),'matched comparisons +',len(fingerprints),'source fingerprint +',len(candidate_paths),'HIP FA comparisons')
+       len(smokes),'ROCm smoke +',len(toolchains),'toolchain audit +',len(comparisons),'matched comparisons +',len(fingerprints),'source fingerprint +',len(candidate_paths),'HIP FA comparisons +',len(output_receipts),'synthetic output receipts')
  return 0
 if __name__=='__main__':
  try:sys.exit(main())

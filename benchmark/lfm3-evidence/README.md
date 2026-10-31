@@ -244,3 +244,33 @@ There were two independent executions per backend with three in-process benchmar
 Evidence is in `backend-comparison-summary.json`, the corresponding `backend-compare-20261031T005237169571Z.json` and its four `fleet-xwing` source receipts.
 
 **Disposition:** kernel-level performance regression is substantially mitigated, but the candidate is not approved for production substitution until output correctness and concurrent serving latency are validated, thermal/load repeatability is established, and rollback is rehearsed. No production service was changed.
+
+## Synthetic generated-output equivalence: native HIP no-FA versus HIP FA
+
+A locally compiled `lfm3-quality-simple` test program was derived deterministically from the pinned llama.cpp `examples/simple/simple.cpp`, with Q8 K/V caches, Flash Attention `on`, 4096 context, greedy sampling, and 99 requested GPU layers. `build_quality_probe.sh` reproduces **the same binary SHA-256** on xwing and verifies that dynamic library resolution switches correctly between the isolated HIP no-FA and HIP FA library directories. It does not touch the serving process. The binary SHA, the two different `libggml-hip` hashes, model hash, and embedded model chat-template SHA are pinned in every evidence receipt. Jinja2 3.1.6 renders synthetic user prompts; generation-span annotations are dropped as formatting markers. Prompt hashes bind the comparison to identical formatted inputs.
+
+Four completed deterministic synthetic suites were recorded:
+
+| Fixtures, generation limit | Exact text agreement | Strict final-answer matches (no-FA / FA) | Expected string present (no-FA / FA) |
+| --- | ---: | ---: | ---: |
+| First 3 prompts, 64 tokens | 3/3 | 2/3 / 2/3 | 3/3 / 3/3 |
+| First 5 prompts, 64 tokens | 5/5 | 3/5 / 3/5 | 4/5 / 4/5 |
+| 6 prompts incl. long-context retrieval, 64 tokens | 5/6 | 3/6 / 3/6 | 5/6 / 5/6 |
+| Same 6 prompts, 128 tokens | 5/6 | 3/6 / 3/6 | 6/6 / 6/6 |
+
+The **only observed generated-text difference** in the six-prompt suites is the long-context retrieval response: both HIP binaries mention the correct synthetic code `VQ8P-6142`, but their explanations differ. With 128 tokens, the shorter reasoning case also includes the expected next sequence value in both outputs. However, the models often continue reasoning or add explanations rather than outputting only the requested literal, which is why **strict-answer compliance is lower than code presence**. This distinction is deliberate: **substring inclusion is not a validated exact answer**.
+
+These tiny synthetic cases do **not** prove equivalent behavior over general natural language, hallucination rates, reasoning accuracy, safety, or production concurrency. FA-on performance optimization remains gated from production until broader quality/correctness and sustained-load evaluation.
+
+To re-run from x1-370 against the two isolated xwing HIP libraries:
+
+```bash
+# On xwing only:
+bash /home/scott/lfm3-research/build_quality_probe.sh
+# On x1-370 in this repository; requires Jinja2:
+python3 benchmark/lfm3-evidence/compare_hip_outputs.py --max-cases 6 --predict 128
+python3 benchmark/lfm3-evidence/summarize_hip_outputs.py
+python3 benchmark/lfm3-evidence/validate.py
+```
+
+The raw synthetic generated text is contained in `hip-output-compare-*.json`. The deterministic summary is `hip-output-summary.json`. No customer prompts, personal traces, or production traffic are used or uploaded.

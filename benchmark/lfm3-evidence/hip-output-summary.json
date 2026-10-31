@@ -1,0 +1,98 @@
+{
+  "schema": "lfm3.hip-output-summary.v1",
+  "warning": "Tiny deterministic synthetic suite; identical outputs do not prove general behavioral equivalence. A substring match is not strict correctness.",
+  "results": [
+    {
+      "receipt": "hip-output-compare-20261031T005812405624Z.json",
+      "status": "completed",
+      "fixtures": 3,
+      "exact_agreement": 3,
+      "strict_final_answer": {
+        "HIP-noFA": 2,
+        "HIP-FA": 2
+      },
+      "contains_expected": {
+        "HIP-noFA": 3,
+        "HIP-FA": 3
+      },
+      "divergent_fixtures": [],
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "test_executable_sha256": "9a9881f4927b6230dd66c6a8e51f82999c0b30494684ef3e88704b6e9c744a90",
+      "template_sha256": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
+      "hip_backend_lib_sha256": {
+        "HIP-noFA": "de7d3b0c5a6c745a54182f95675310311c9b404efcb1711f38440f7e3860cc9a",
+        "HIP-FA": "0a8573c81efa6a3383ac97112d73564e0b4d4b468ada32025c230584c8354ea3"
+      }
+    },
+    {
+      "receipt": "hip-output-compare-20261031T005829634892Z.json",
+      "status": "completed",
+      "fixtures": 5,
+      "exact_agreement": 5,
+      "strict_final_answer": {
+        "HIP-noFA": 3,
+        "HIP-FA": 3
+      },
+      "contains_expected": {
+        "HIP-noFA": 4,
+        "HIP-FA": 4
+      },
+      "divergent_fixtures": [],
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "test_executable_sha256": "9a9881f4927b6230dd66c6a8e51f82999c0b30494684ef3e88704b6e9c744a90",
+      "template_sha256": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
+      "hip_backend_lib_sha256": {
+        "HIP-noFA": "de7d3b0c5a6c745a54182f95675310311c9b404efcb1711f38440f7e3860cc9a",
+        "HIP-FA": "0a8573c81efa6a3383ac97112d73564e0b4d4b468ada32025c230584c8354ea3"
+      }
+    },
+    {
+      "receipt": "hip-output-compare-20261031T005924654400Z.json",
+      "status": "completed",
+      "fixtures": 6,
+      "exact_agreement": 5,
+      "strict_final_answer": {
+        "HIP-noFA": 3,
+        "HIP-FA": 3
+      },
+      "contains_expected": {
+        "HIP-noFA": 5,
+        "HIP-FA": 5
+      },
+      "divergent_fixtures": [
+        "long-context-retrieval"
+      ],
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "test_executable_sha256": "9a9881f4927b6230dd66c6a8e51f82999c0b30494684ef3e88704b6e9c744a90",
+      "template_sha256": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
+      "hip_backend_lib_sha256": {
+        "HIP-noFA": "de7d3b0c5a6c745a54182f95675310311c9b404efcb1711f38440f7e3860cc9a",
+        "HIP-FA": "0a8573c81efa6a3383ac97112d73564e0b4d4b468ada32025c230584c8354ea3"
+      }
+    },
+    {
+      "receipt": "hip-output-compare-20261031T010204271133Z.json",
+      "status": "completed",
+      "fixtures": 6,
+      "exact_agreement": 5,
+      "strict_final_answer": {
+        "HIP-noFA": 3,
+        "HIP-FA": 3
+      },
+      "contains_expected": {
+        "HIP-noFA": 6,
+        "HIP-FA": 6
+      },
+      "divergent_fixtures": [
+        "long-context-retrieval"
+      ],
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "test_executable_sha256": "9a9881f4927b6230dd66c6a8e51f82999c0b30494684ef3e88704b6e9c744a90",
+      "template_sha256": "f45005c50cd2a97329722bf3a2dee9f16c04cdf825a589b280fb7e99e6827818",
+      "hip_backend_lib_sha256": {
+        "HIP-noFA": "de7d3b0c5a6c745a54182f95675310311c9b404efcb1711f38440f7e3860cc9a",
+        "HIP-FA": "0a8573c81efa6a3383ac97112d73564e0b4d4b468ada32025c230584c8354ea3"
+      }
+    }
+  ]
+}
