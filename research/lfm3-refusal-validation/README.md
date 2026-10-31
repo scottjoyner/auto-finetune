@@ -158,6 +158,17 @@ There are **no tokenizer token counts, prefill/decode splits or finish
 reasons** in the frozen response journal. See
 [XSTEST_LATENCY_REPETITION_20261031.md](XSTEST_LATENCY_REPETITION_20261031.md).
 
+## Fail-closed disk checks integrated with evaluation runners (October 31, 2026)
+
+The XSTest, ARC quick, ARC full-likelihood and three-checkpoint smoke
+entry points now check local root free space **before loading models or
+writing output**. XSTest and ARC full also recheck per checkpoint and
+journal append. The policy requires 20 GiB free and checks a different
+output filesystem independently, even when an NAS is mounted. The live
+x1-370 XSTest attempt correctly stopped at 6.007 GiB free. This cannot
+prevent external fleet jobs consuming disk or reserve filesystem space.
+See [DISK_GUARD_INTEGRATION_20261031.md](DISK_GUARD_INTEGRATION_20261031.md).
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
