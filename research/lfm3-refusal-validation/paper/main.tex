@@ -225,6 +225,35 @@ private responses are now available for two independent
 model-blinded human reviewers, but annotation has not begun.
 No safety or capability-effectiveness conclusion follows.
 
+\subsection{Exact-response diversity and short-output confounding}
+A post-hoc, full-journal diagnostic finds substantial variation in
+response diversity across the three checkpoints. The table counts
+\emph{exact strings}, not behavioral refusal events:
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+Arm & Distinct /450 & Max repeat & Shared across strata
+    & Unique unsafe kw. \\
+\midrule
+A & 441 & 10 & 10 & 168 \\
+B & 450 & 1 & 0 & 167 \\
+C & 295 & 156 & 156 & 37 \\
+\bottomrule
+\end{tabular}
+\end{center}
+The single most common response from C is a short,
+keyword-positive string repeated 156 times: 29 benign and
+127 unsafe prompts. Thus 127 of C's 163 unsafe keyword-positive
+answers share identical text. Among unsafe prompts, median
+whitespace-word counts were 67 for A, 93 for B, and 8 for C.
+These findings suggest substantial response-formula repetition for
+the pretrained base under a post-training chat template. They
+do not establish why it occurs, nor whether an individual refusal
+is appropriate. Counting distinct keyword-positive strings is
+a \emph{diversity diagnostic}, not a replacement behavioral
+refusal rate. Raw text and per-response hashes remain private.
+Both post-hoc audits leave the original 1,350 generations and
+all A/B/C weights unchanged. Independent human scoring is required.
 
 \subsection{Exploratory exact matched lexical-proxy inference}
 As a sensitivity analysis, the frozen 450-by-three lexical-proxy
