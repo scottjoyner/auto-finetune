@@ -56,8 +56,11 @@ def validate_routing_order(entries, expected, manifest_ids):
             raise ValueError("pilot route differs from deterministic source selection")
 
 
-def attest_route(results_dir, packet_dir, batches_dir, route_path):
-    """Read-only verification; never emits case IDs, arm or reviewer identity."""
+def attest_route_with_entries(results_dir, packet_dir, batches_dir, route_path):
+    """Return aggregate attestation and its private, verified route snapshot.
+
+    The entries stay in-process and must never be logged or published.
+    """
     from src.reviewer_handoff_audit import audit as custody_audit
     results_dir, packet_dir, batches_dir = map(
         Path, (results_dir, packet_dir, batches_dir))
@@ -65,7 +68,8 @@ def attest_route(results_dir, packet_dir, batches_dir, route_path):
     if (not custody["original_source_columns_intact"] or
             not custody["reviewer_batch_privacy_permissions_verified"]):
         raise ValueError("original reviewer packet custody failed")
-    entries = load_route(route_path, packet_dir, batches_dir)
+    entries, private_route = load_route(
+        route_path, packet_dir, batches_dir, include_manifest=True)
     progress = audit(results_dir)
     if (progress["recorded_generations"] != 1350 or
             progress["journal_integrity"] != "passed" or
@@ -81,7 +85,6 @@ def attest_route(results_dir, packet_dir, batches_dir, route_path):
             evidence["checkpoint_sha256"] != progress["checkpoint_sha256"] or
             evidence["benchmark_sha256"] != progress["benchmark_sha256"]):
         raise ValueError("response diversity audit and source do not agree")
-    private_route = json.loads(Path(route_path).read_text(encoding="utf-8"))
     if (set(private_route) != {
             "study", "n_prompts", "entries_per_reviewer", "source_journal_sha256",
             "review_batch_manifest_sha256", "private_model_key_sha256", "route",
@@ -95,7 +98,7 @@ def attest_route(results_dir, packet_dir, batches_dir, route_path):
     expected = expected_route_ids(chosen, mapping)
     manifest = json.loads((batches_dir / "private_batch_manifest.json").read_text())
     validate_routing_order(entries, expected, manifest["review_ids"])
-    return {
+    report = {
         "evidence_class": "private-source-blind route attestation only",
         "pilot_route_reconstructed_exactly": True,
         "n_balanced_source_buckets": len(BUCKETS),
@@ -107,6 +110,14 @@ def attest_route(results_dir, packet_dir, batches_dir, route_path):
         "behavioral_safety_validated": False,
         "model_release_approved": False,
     }
+    return report, entries
+
+
+def attest_route(results_dir, packet_dir, batches_dir, route_path):
+    """Public, aggregate-only attestation: never publish the private route."""
+    report, _ = attest_route_with_entries(
+        results_dir, packet_dir, batches_dir, route_path)
+    return report
 
 
 def main():

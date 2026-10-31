@@ -215,6 +215,19 @@ overlap retained **48/73** (C faster 21, slower 27). The report is
 `evidence/20261031_xstest_length_overlap_sensitivity.json`.
 See [XSTEST_LENGTH_OVERLAP_SENSITIVITY_20261031.md](XSTEST_LENGTH_OVERLAP_SENSITIVITY_20261031.md).
 
+## Single-snapshot private pilot review integrity (October 31, 2026)
+
+The original 32-prompt / 96-response-per-reviewer pilot route is
+now opened once during source-bound attestation; both interactive
+human review and the post-review agreement gate consume **that exact
+verified in-memory snapshot** rather than reopening the route.
+Private-route reads use `O_NOFOLLOW` / `fstat` and reject
+nested symlinks and multiply-linked route files. Real source
+checks passed for both pilot reviewers, each still **0/96 graded**;
+the agreement gate correctly refused to create an output from
+incomplete human reviews. The suite passed **391/391 tests**.
+See [PRIVATE_PILOT_VERIFIED_ROUTE_SNAPSHOT_20261031.md](PRIVATE_PILOT_VERIFIED_ROUTE_SNAPSHOT_20261031.md).
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
