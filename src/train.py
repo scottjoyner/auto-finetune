@@ -24,14 +24,6 @@ import transformers.configuration_utils  # noqa: F401
 
 from src.lfm3_support import patch_transformers_for_lfm3, is_lfm3_model, LFM3_MODEL_LOCAL_PATH
 
-# Debug: patch PreTrainedModel.__init__ to trace calls
-import transformers.modeling_utils as _mu
-_orig_ptm_init = _mu.PreTrainedModel.__init__
-def _patched_ptm_init(self, config, *args, **kwargs):
-    print(f"[DEBUG] PreTrainedModel.__init__ called with config type: {type(config).__name__}", file=__import__('sys').stderr)
-    return _orig_ptm_init(self, config, *args, **kwargs)
-_mu.PreTrainedModel.__init__ = _patched_ptm_init
-
 from src.config import Config
 
 
@@ -229,19 +221,16 @@ def _train_peft(cfg: Config, data: list[dict],
 
     # Load model with LFM3 support (transformers patches applied in train.main())
     if is_lfm3_model(model_name):
-        # Direct load of LFM3 model from local files
-        import importlib.util
-        import transformers.configuration_utils  # Ensure PreTrainedConfig is available
-        model_dir = LFM3_MODEL_LOCAL_PATH
-        sys.path.insert(0, model_dir)
-
-        from configuration_lfm3 import Lfm3Config
-        config = Lfm3Config()
-
-        from modeling_lfm3 import Lfm3ForCausalLM
-        model = Lfm3ForCausalLM(config)
-        model = model.to(dtype=torch.bfloat16 if _detect_rocm() else torch.float16)
-        model.config._name_or_path = model_dir  # Point to local path for tokenizer loading
+        # LFM3 is a hybrid (conv + attention) architecture shipped as
+        # trust_remote_code. Load it through AutoModel so transformers handles
+        # the dynamic module package instead of importing files by hand.
+        model_dir = model_name if os.path.isdir(model_name) else LFM3_MODEL_LOCAL_PATH
+        model = AutoModelForCausalLM.from_pretrained(
+            model_dir,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16,
+            device_map=None,
+        )
     elif load_4bit or load_8bit:
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
@@ -437,7 +426,7 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
     # Direct callers of src.train.main bypass the src.cli dispatcher.
     # Admission MUST run before dataset scanning, tokenization or GPU load.
     # A read failure denies the work, rather than assuming free GPU capacity.
-    if not dry_run and os.environ.get("AF_SKIP_UNMANAGED_CHECK") != "1":
+    if not dry_run:
         try:
             from src.training_admission import read_live
             decision = read_live()
@@ -447,8 +436,6 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
         if not decision.allowed:
             print(f"[train-admission] HOLD: {decision.reason}", flush=True)
             return 78
-    elif not dry_run:
-        print("[train-admission] HOLD: skipped (AF_SKIP_UNMANAGED_CHECK=1)", flush=True)
 
     # Apply LFM3 transformers patches if using LFM3 model
     model_name = os.environ.get("TRAIN_MODEL_NAME")
