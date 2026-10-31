@@ -241,6 +241,20 @@ still **0/96 graded**; the agreement gate continues to refuse an
 incomplete pilot. **395/395 tests passed.** See
 [PRIVATE_REVIEWER_BATCH_FD_SOURCE_PINNING_20261031.md](PRIVATE_REVIEWER_BATCH_FD_SOURCE_PINNING_20261031.md).
 
+## Mount-aware read-only storage recovery inventory (October 31, 2026)
+
+The research storage incident uncovered multiple backing filesystems
+under similar /home/scott paths. A 21 GiB old compiler cache was
+reclaimed on the separate 4 TB SSD, **not on root**, and therefore
+did not resolve the root exhaustion. The new
+`src.mount_aware_recovery_audit` compares actual filesystem device
+IDs and reports root's unprivileged free-space shortfall without
+deleting or moving files or claiming that candidate bytes are safe
+to reclaim. Root was **14.763 GiB below the 20 GiB floor**
+during the verified live inventory. See
+[MOUNT_AWARE_STORAGE_RECOVERY_20261031.md](MOUNT_AWARE_STORAGE_RECOVERY_20261031.md)
+and unresolved incident #106.
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
