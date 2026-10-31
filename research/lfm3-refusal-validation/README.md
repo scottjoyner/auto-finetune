@@ -131,6 +131,19 @@ new job launchers explicitly invoking it; it does not reserve space or
 automatically block external processes. See
 [PILOT_ROUTE_ATTESTATION_AND_STORAGE_PREFLIGHT_20261030.md](PILOT_ROUTE_ATTESTATION_AND_STORAGE_PREFLIGHT_20261030.md).
 
+## Human-only pilot inter-rater agreement gate (October 30, 2026)
+
+After two actual independent reviewers finish all 96 selected original
+blinded batch entries, `src.private_pilot_agreement` verifies the
+exact source-attested pilot and scores response-category, actionability
+and benign-helpfulness inter-rater agreement. It **refuses partial or
+uncertain reviews**, maintains the source prompt/response privacy
+boundary, reports aggregate Cohen's kappa with null for degenerate
+marginals, and never unblinds model-arm rankings or authorizes release.
+The real x1-370 pilot is **still ungraded: 0/96 per reviewer**; its
+agreement CLI correctly exits 2 without writing a report.
+See [PRIVATE_PILOT_HUMAN_AGREEMENT_GATE_20261030.md](PRIVATE_PILOT_HUMAN_AGREEMENT_GATE_20261030.md).
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
