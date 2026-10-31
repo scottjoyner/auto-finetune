@@ -279,6 +279,25 @@ Checkpoint tests were not randomized or matched by generated
 token length; no claim of improved tokens per second, causal
 architecture efficiency, or human-verified refusal follows.
 
+A further frozen-journal matched-prompt audit stratified by whether
+C emitted the same modal repeated string, without releasing
+that text. For unsafe prompts with C's repeated output,
+C finished before A on 126/127 matched prompts, with median
+within-prompt elapsed-time difference C-minus-A of
+$-8.55$ seconds. In the remaining 73 unsafe prompts,
+C finished before A on only 32 and after A on 41,
+with median difference $+0.165$ seconds; the
+Holm-adjusted exact two-sided sign-test $p$ value across
+eight post-hoc comparisons is approximately $0.349$ for
+this nonrepeated unsafe C/A subset. Among benign prompts,
+C was faster than A on 26/29 repeated-output cases, but
+only 45/221 of the other cases, where the median difference
+was $+0.607$ seconds. These are outcomes conditioned on
+C's own observed response text, not causally identified
+architecture-speed differences. No human refusal quality,
+token-normalized throughput, or cross-run equivalence can
+be inferred from these exploratory subsets.
+
 \subsection{Exploratory exact matched lexical-proxy inference}
 As a sensitivity analysis, the frozen 450-by-three lexical-proxy
 aggregate also supports exact conditional matched-pair tests.
