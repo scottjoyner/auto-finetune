@@ -206,7 +206,8 @@ def pilot_progress(entries, batches_dir, reviewer, packet_dir):
     for entry in entries:
         batch=entry["batch"]
         if batch not in cache:
-            cache[batch] = open_batch(batches_dir,reviewer,batch)[1]
+            cache[batch] = open_batch(
+                batches_dir, reviewer, batch, packet_dir=packet_dir)[1]
         row = cache[batch][entry["index"]-1]
         if row["review_id"] != entry["review_id"]:
             raise ValueError("reviewer batch identity no longer matches route")
@@ -232,7 +233,7 @@ def interactive_review(entries, batches_dir, reviewer, reviewer_id, packet_dir):
     cases = {x["id"]:x for x in read_verified_dataset()}
     for entry in entries:
         batch=entry["batch"]
-        path,rows=open_batch(batches_dir,reviewer,batch)
+        path,rows=open_batch(batches_dir,reviewer,batch,packet_dir=packet_dir)
         target=rows[entry["index"]-1]
         cls=cases[mapping[entry["review_id"]]["source_id"]]["class"]
         if classify_row(target,cls=="safe")=="graded":

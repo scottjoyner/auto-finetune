@@ -228,6 +228,19 @@ the agreement gate correctly refused to create an output from
 incomplete human reviews. The suite passed **391/391 tests**.
 See [PRIVATE_PILOT_VERIFIED_ROUTE_SNAPSHOT_20261031.md](PRIVATE_PILOT_VERIFIED_ROUTE_SNAPSHOT_20261031.md).
 
+## Descriptor-bound, source-pinned private pilot batches (October 31, 2026)
+
+The human pilot now reads its batch manifest and selected 90-row
+reviewer CSVs through security-checked **open file descriptors**,
+not by reopening a pathname after checking it. Each pilot batch's
+original ID, prompt, and model response must still match the
+immutable 1,350-row blinded source sheet, whose bytes are checked
+against the pinned original SHA-256. Human-entered annotation fields
+remain untouched. Both real pilot reviewers pass attestation, each
+still **0/96 graded**; the agreement gate continues to refuse an
+incomplete pilot. **395/395 tests passed.** See
+[PRIVATE_REVIEWER_BATCH_FD_SOURCE_PINNING_20261031.md](PRIVATE_REVIEWER_BATCH_FD_SOURCE_PINNING_20261031.md).
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
