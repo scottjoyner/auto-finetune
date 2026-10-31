@@ -70,7 +70,31 @@ def main():
           f'{p.name}: expected observed mixed toolchain versions')
   require(r.get('toolchain_path_exists',{}).get('hipcc_implicit_clang17') is False,
           f'{p.name}: missing-clang-17 observation changed')
- print('PASS',len(base),'core receipts +',len(extra),'extended experiment receipts +',len(smokes),'ROCm smoke +',len(toolchains),'toolchain audit')
+ comparisons=sorted(ROOT.glob('backend-compare-*.json'))
+ for p in comparisons:
+  r=json.loads(p.read_text())
+  require(r.get('schema')=='lfm3.xwing-matched-backends.v1',f'{p.name}: invalid matched-ABBA schema')
+  require(r.get('order')==['Vulkan','HIP','HIP','Vulkan'],f'{p.name}: invalid comparison order')
+  require(r.get('status') in ('completed','failed'),f'{p.name}: invalid comparison status')
+  runs=r.get('runs',[])
+  require(len(runs)<=4,f'{p.name}: too many benchmark runs')
+  for row in runs:
+   receipt=ROOT/row.get('receipt','')
+   require(receipt.is_file() and receipt.name.startswith('fleet-xwing-'),f'{p.name}: missing source receipt')
+   source=json.loads(receipt.read_text())
+   require(source.get('observed_model_sha256')==r.get('expected_model_sha256'),f'{p.name}: incompatible model hashes')
+   require(row.get('status')==source.get('status'),f'{p.name}: mismatch source status')
+  if r['status']=='completed':
+   require(len(runs)==4 and all(x.get('status')=='completed' for x in runs),f'{p.name}: incomplete success')
+   require(all(r['order'][i]==x['backend_expected'] for i,x in enumerate(runs)),f'{p.name}: mismatched backend sequence')
+   for row in runs:
+    expected=row['backend_expected'].upper()
+    observed=[b.upper() for b in row.get('backend_observed',[])]
+    require(observed and all((expected in b if expected=='VULKAN' else 'HIP' in b or 'ROCM' in b) for b in observed),
+            f'{p.name}: wrong backend')
+    require(all(m.get('avg_ts',0)>0 for m in row.get('measurements',[])),f'{p.name}: invalid throughput')
+ print('PASS',len(base),'core receipts +',len(extra),'extended experiment receipts +',
+       len(smokes),'ROCm smoke +',len(toolchains),'toolchain audit +',len(comparisons),'matched comparisons')
  return 0
 if __name__=='__main__':
  try:sys.exit(main())
