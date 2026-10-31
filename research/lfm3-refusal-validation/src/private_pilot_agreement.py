@@ -9,8 +9,7 @@ import json
 import os
 from pathlib import Path
 
-from src.private_review_pilot import load_route
-from src.private_review_pilot_attestation import attest_route
+from src.private_review_pilot_attestation import attest_route_with_entries
 from src.local_reviewer_terminal import open_batch
 from src.reviewer_agreement import cohen_kappa
 from src.reviewer_progress_audit import classify_row
@@ -130,8 +129,8 @@ def read_paired_batches(entries, batches_dir):
 
 def assess_private(results_dir, packet_dir, batches_dir, route_path):
     # Recompute exact, frozen selection before loading reviewer ratings.
-    attest_route(results_dir, packet_dir, batches_dir, route_path)
-    entries = load_route(route_path, packet_dir, batches_dir)
+    _, entries = attest_route_with_entries(
+        results_dir, packet_dir, batches_dir, route_path)
     identities = [entry["review_id"] for entry in entries]
     first, second = read_paired_batches(entries, batches_dir)
     private_key = json.loads((Path(packet_dir) / "private_model_key.json").read_text())

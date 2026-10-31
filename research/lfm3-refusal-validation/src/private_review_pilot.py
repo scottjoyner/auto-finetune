@@ -32,8 +32,8 @@ N_PROMPTS = 32
 N_PER_REVIEWER = 96
 def _regular_private(path):
     p = Path(path)
-    if p.is_symlink() or p.parent.is_symlink():
-        raise ValueError("private route or its directory cannot be symlinked")
+    if any(part.is_symlink() for part in (p, *p.parents)):
+        raise ValueError("private route or any ancestor cannot be symlinked")
     directory = p.parent.stat()
     if not stat.S_ISDIR(directory.st_mode) or directory.st_mode & 0o077:
         raise PermissionError("private route directory must be owner-only")
@@ -158,8 +158,18 @@ def create_route(results_dir, packet_dir, batches_dir, out):
         "original_blinded_review_csvs_modified":False,
         "actual_human_grades_added":0, "safety_approval":False,
     }
-def load_route(route_path, packet_dir, batches_dir):
-    route = json.loads(_regular_private(route_path).read_text(encoding="utf-8"))
+def load_route(route_path, packet_dir, batches_dir, *, include_manifest=False):
+    # Open once: subsequent consumers must use the exact verified snapshot,
+    # not reopen a mutable path after source attestation.
+    path = _regular_private(route_path)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags)
+    with os.fdopen(fd, "r", encoding="utf-8") as stream:
+        opened = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1
+                or opened.st_mode & 0o077):
+            raise PermissionError("opened private route is not owner-only regular file")
+        route = json.load(stream)
     if (route.get("study") != PILOT_NAME
             or route.get("n_prompts") != N_PROMPTS
             or route.get("entries_per_reviewer") != N_PER_REVIEWER
@@ -186,7 +196,7 @@ def load_route(route_path, packet_dir, batches_dir):
                 or identities[(batch-1)*90+row-1] != blinded or blinded in seen):
             raise ValueError("tampered route position or duplicate")
         seen.add(blinded)
-    return entries
+    return (entries, route) if include_manifest else entries
 def pilot_progress(entries, batches_dir, reviewer, packet_dir):
     custody_audit(packet_dir,batches_dir)
     mapping = json.loads((packet_dir/"private_model_key.json").read_text())
@@ -255,9 +265,9 @@ def main():
     else:
         # Validate exact source-derived selection before inspecting or rating.
         # Valid ID/row offsets alone do not prove a pilot remains balanced.
-        from src.private_review_pilot_attestation import attest_route
-        attest_route(args.results_dir,args.packet_dir,args.batches_dir,args.route)
-        entries=load_route(args.route,args.packet_dir,args.batches_dir)
+        from src.private_review_pilot_attestation import attest_route_with_entries
+        _, entries = attest_route_with_entries(
+            args.results_dir, args.packet_dir, args.batches_dir, args.route)
         if args.mode=="status":
             result=pilot_progress(entries,args.batches_dir,args.reviewer,args.packet_dir)
         else:

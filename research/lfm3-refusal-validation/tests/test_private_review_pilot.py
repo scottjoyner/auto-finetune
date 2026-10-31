@@ -72,6 +72,10 @@ def test_private_route_validation_and_tampering(tmp_path):
     private.write_text(json.dumps(payload))
     private.chmod(0o600)
     assert len(load_route(private,packet,batch))==N_PER_REVIEWER
+    verified_entries, verified_manifest = load_route(
+        private, packet, batch, include_manifest=True)
+    assert verified_entries is verified_manifest["route"]
+    assert len(verified_entries) == N_PER_REVIEWER
     payload["route"][0]["index"]=90
     private.write_text(json.dumps(payload))
     with pytest.raises(ValueError,match="tampered"):
@@ -92,3 +96,24 @@ def test_review_requires_interactive_tty(monkeypatch):
     monkeypatch.setattr(os,"isatty",lambda _:False)
     with pytest.raises(PermissionError,match="interactive"):
         interactive_review([],None,1,"r1",None)
+
+
+def test_private_route_path_rejects_nested_symlink_and_hardlink(tmp_path):
+    from src.private_review_pilot import _regular_private
+    parent = tmp_path / "private"
+    parent.mkdir(mode=0o700)
+    nested = parent / "nested"
+    nested.mkdir(mode=0o700)
+    route = nested / "route.json"
+    route.write_text("{}")
+    route.chmod(0o600)
+    assert _regular_private(route) == route
+    (tmp_path / "alias").symlink_to(parent, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink"):
+        _regular_private(tmp_path / "alias" / "nested" / "route.json")
+    hardlink = nested / "second.json"
+    os.link(route, hardlink)
+    with pytest.raises(PermissionError, match="regular file"):
+        _regular_private(route)
+    hardlink.unlink()
+    assert _regular_private(route) == route

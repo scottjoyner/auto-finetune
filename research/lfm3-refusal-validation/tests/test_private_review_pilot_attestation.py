@@ -80,3 +80,75 @@ def test_roster_duplicates_and_missing_entries_fail():
         validate_routing_order(route, selected,roster[:-1])
     with pytest.raises(ValueError):
         validate_routing_order(route, selected,roster[:-1]+[roster[0]])
+
+def test_status_uses_attested_snapshot_without_reopening(monkeypatch, capsys):
+    """A route swap after attestation cannot change the consumed IDs."""
+    import sys
+    from src import private_review_pilot as pilot
+    from src import private_review_pilot_attestation as checker
+
+    frozen = [{"review_id": "SYNTH_PRIVATE_1", "batch": 1, "index": 1}]
+    seen = []
+    monkeypatch.setattr(checker, "attest_route_with_entries",
+                        lambda *args: ({"pilot_route_reconstructed_exactly": True},
+                                      frozen))
+    monkeypatch.setattr(pilot, "load_route",
+                        lambda *args, **kwargs: (_ for _ in ()).throw(
+                            AssertionError("route must not be reopened")))
+    def progress(entries, *args):
+        seen.append(entries)
+        return {"graded": 0, "pilot_human_complete": False,
+                "safety_claim_permitted": False}
+    monkeypatch.setattr(pilot, "pilot_progress", progress)
+    monkeypatch.setattr(sys, "argv", [
+        "private_review_pilot", "status",
+        "--results-dir", "/private/results",
+        "--packet-dir", "/private/packet",
+        "--batches-dir", "/private/batches",
+        "--route", "/private/route.json",
+        "--reviewer", "1",
+    ])
+    pilot.main()
+    assert seen == [frozen]
+    output = capsys.readouterr().out
+    assert "SYNTH_PRIVATE_1" not in output
+    assert '"pilot_human_complete": false' in output
+
+
+def test_agreement_uses_attested_snapshot_not_second_route_read(
+        monkeypatch, tmp_path):
+    from src import private_pilot_agreement as agreement
+    from src import private_review_pilot_attestation as checker
+    import src.private_review_pilot as pilot
+
+    frozen = [{"review_id": "SYNTH_PRIVATE_1", "batch": 1, "index": 1}]
+    packet = tmp_path / "packet"
+    packet.mkdir(mode=0o700)
+    (packet / "private_model_key.json").write_text(json.dumps({
+        "SYNTH_PRIVATE_1": {
+            "source_id": "synthetic-case", "arm": ARM_ORDER[0],
+        },
+    }))
+    monkeypatch.setattr(checker, "attest_route_with_entries",
+                        lambda *args: ({"pilot_route_reconstructed_exactly": True},
+                                      frozen))
+    monkeypatch.setattr(agreement, "attest_route_with_entries",
+                        checker.attest_route_with_entries)
+    monkeypatch.setattr(pilot, "load_route",
+                        lambda *args, **kwargs: (_ for _ in ()).throw(
+                            AssertionError("route must not be reopened")))
+    monkeypatch.setattr(agreement, "read_paired_batches",
+                        lambda entries, batches: ({"SYNTH_PRIVATE_1": {}},
+                                                   {"SYNTH_PRIVATE_1": {}}))
+    monkeypatch.setattr(agreement, "read_verified_dataset",
+                        lambda: [{"id": "synthetic-case", "class": "safe"}])
+    received = []
+    def collect(ids, first, second, mapping, benchmark):
+        received.append(ids)
+        return {"paired_human_ratings": 1,
+                "full_1350_review_complete": False}
+    monkeypatch.setattr(agreement, "assess_pilot", collect)
+    result = agreement.assess_private(
+        tmp_path / "results", packet, tmp_path / "batches", tmp_path / "route")
+    assert received == [["SYNTH_PRIVATE_1"]]
+    assert result["full_1350_review_complete"] is False
