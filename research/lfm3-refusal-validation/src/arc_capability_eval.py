@@ -16,6 +16,7 @@ import pyarrow.parquet as pq
 
 from src.three_checkpoint_eval import ARMS, checked_arm_paths
 from src.refusal_probe import load_local_model
+from src.research_job_guard import require_research_write_capacity
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = Path("/home/scott/lfm3-research/refusal-checkpoints/arc-benchmark/ARC-Challenge/test-00000-of-00001.parquet")
@@ -85,6 +86,7 @@ def main():
     a=p.parse_args()
     if not 1<=a.sample_size<=1172:
         p.error("sample-size 1..1172")
+    require_research_write_capacity(a.output)
     os.umask(0o077)
     source=read_arc()
     chosen=random.Random(a.seed).sample(source,a.sample_size)

@@ -1,0 +1,45 @@
+{
+  "sampled_at_host_local": "2026-10-30T20:40:30-04:00",
+  "route_attestation": {
+    "evidence_class": "private-source-blind route attestation only",
+    "pilot_route_reconstructed_exactly": true,
+    "n_balanced_source_buckets": 4,
+    "source_prompts": 32,
+    "blinded_response_targets": 96,
+    "source_journal_integrity": "passed",
+    "reviewer_batch_custody": "passed",
+    "human_labels_added": false,
+    "behavioral_safety_validated": false,
+    "model_release_approved": false
+  },
+  "pilot_reviewer_1": {
+    "graded": 0,
+    "ungraded": 96
+  },
+  "pilot_reviewer_2": {
+    "graded": 0,
+    "ungraded": 96
+  },
+  "storage_preflight": {
+    "available_gib": 7.488,
+    "planned_write_gib": 5.0,
+    "reserve_gib": 8.0,
+    "minimum_floor_gib": 20.0,
+    "required_available_gib": 20.0,
+    "large_write_allowed": false,
+    "evidence_class": "read-only filesystem capacity preflight",
+    "target": "/home/scott/git",
+    "filesystem_measurement": "statvfs.f_bavail times f_frsize",
+    "writes_or_deletions_performed": false,
+    "space_reserved": false,
+    "nas_mounted_on_different_device": true,
+    "nas_available_gib": 36252.873,
+    "nas_migration_performed": false
+  },
+  "raw_model_outputs_present": false,
+  "blinded_review_ids_present": false,
+  "human_behavioral_refusal_verified": false,
+  "original_model_weights_changed_by_this_audit": false,
+  "original_review_assignments_changed_by_this_audit": false,
+  "release_approved": false
+}

@@ -14,6 +14,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 from src.eval_contracts import refusal_proxy
+from src.research_job_guard import require_research_write_capacity
 from src.three_checkpoint_eval import ARMS, checked_arm_paths
 from src.refusal_probe import load_local_model, generate
 
@@ -133,6 +134,7 @@ def main():
     args = p.parse_args()
     if args.max_new_tokens < 8 or args.max_new_tokens > 384:
         p.error("--max-new-tokens must be in 8..384")
+    require_research_write_capacity(args.results_dir)
     os.umask(0o077)
     dataset = read_verified_dataset()
     selected = stratified_selection(dataset, args.per_category, args.seed)
@@ -163,6 +165,7 @@ def main():
         outstanding = [r for r in selected if (arm, r["id"]) not in keys]
         if not outstanding:
             continue
+        require_research_write_capacity(folder)
         print(f"Loading {arm}; remaining={len(outstanding)}", flush=True)
         torch.manual_seed(args.seed)
         model, tokenizer = load_local_model(ARMS[arm])
@@ -175,6 +178,7 @@ def main():
                 "refusal_proxy": refusal_proxy(text),
                 "elapsed_seconds": round(time.monotonic() - started, 3),
             }
+            require_research_write_capacity(folder)
             with output_file.open("a", encoding="utf-8") as fd:
                 fd.write(json.dumps(result, ensure_ascii=False) + "\n")
                 fd.flush()

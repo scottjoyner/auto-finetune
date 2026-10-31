@@ -15,6 +15,7 @@ from pathlib import Path
 import torch
 from src.arc_capability_eval import read_arc, SOURCE_SHA256, SOURCE_REVISION
 from src.refusal_probe import load_local_model
+from src.research_job_guard import require_research_write_capacity
 from src.three_checkpoint_eval import ARMS, checked_arm_paths
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -131,6 +132,7 @@ def main():
     a=p.parse_args()
     if not 0<=a.sample_size<=1172:
         p.error("sample-size must be between 0 and 1172")
+    require_research_write_capacity(a.results_dir)
     os.umask(0o077)
     source=read_arc()
     selected=source if a.sample_size==0 else random.Random(17).sample(source,a.sample_size)
@@ -155,6 +157,7 @@ def main():
         pending=[c for c in cases if (arm,c["id"]) not in seen]
         if not pending:
             continue
+        require_research_write_capacity(a.results_dir)
         print(f"Loading {arm}: {len(pending)} cases remaining",flush=True)
         model,tokenizer=load_local_model(path)
         for j,case in enumerate(pending,1):
@@ -162,6 +165,7 @@ def main():
             r=score_case(model,tokenizer,case)
             r["arm"]=arm
             r["elapsed_seconds"]=round(time.monotonic()-started,3)
+            require_research_write_capacity(a.results_dir)
             with journal.open("a") as f:
                 f.write(json.dumps(r)+"\n")
                 f.flush()
