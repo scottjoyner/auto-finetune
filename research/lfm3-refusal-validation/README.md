@@ -71,6 +71,19 @@ These are *response-string* findings, not behavioral safety grades.
 See [ORTHOGONAL_SHAM_REPEATS_20261030.md](ORTHOGONAL_SHAM_REPEATS_20261030.md).
 All A/B/C model weights and the frozen XSTest journal remain unchanged.
 
+## Full XSTest response-length bias diagnostic (October 30, 2026)
+
+The existing 1,350 frozen XSTest generations were analyzed without
+new inference or private-text publication. Median unsafe-prompt
+response length was A 67 whitespace words, B 93, and pretrained C 8.
+Of C's 200 unsafe responses, **127 were shorter than 50 characters
+and every one of those 127 triggered the weak refusal-keyword regex**.
+This makes the original keyword-count ranking inadequate as a
+behavioral refusal comparison. Paired word-length differences were
+also tested with six Holm-adjusted exploratory exact sign tests.
+No behavioral safety, justified refusal, or helpfulness was verified.
+Details: [XSTEST_LENGTH_CONFOUNDING_20261030.md](XSTEST_LENGTH_CONFOUNDING_20261030.md).
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
