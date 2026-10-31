@@ -199,6 +199,18 @@ confounding diagnosis; they **do not** prove causal model efficiency,
 valid behavioral refusal, or tokenizer-token throughput.
 See [XSTEST_MODAL_CONDITIONED_PAIRED_LATENCY_20261031.md](XSTEST_MODAL_CONDITIONED_PAIRED_LATENCY_20261031.md).
 
+## Whitespace-word overlap sensitivity (October 31, 2026)
+
+`src.xstest_length_overlap_sensitivity` is a synthetic-test-validated
+method for checking the **coverage loss** when frozen C/A and C/B
+responses differ by at most 0, 5, 10 or 20 whitespace words on
+matched prompts. It separates C's repeated short answer from other
+outputs, reports sample retention and paired elapsed timing, and
+makes **no tokenizer-throughput or behavioral refusal claim**. Real
+private-journal execution was blocked in this pass, so there is
+**no newly validated public aggregate** from the analyzer.
+See [XSTEST_LENGTH_OVERLAP_SENSITIVITY_20261031.md](XSTEST_LENGTH_OVERLAP_SENSITIVITY_20261031.md).
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
