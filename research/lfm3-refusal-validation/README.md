@@ -267,6 +267,19 @@ these caches; live writers may consume the recovered space. Storage
 incident #106 remains under observation, not permanently resolved.
 See [ROOT_CACHE_RECOVERY_EVIDENCE_20261031.md](ROOT_CACHE_RECOVERY_EVIDENCE_20261031.md).
 
+## Opt-in separate-SSD Cargo build target (October 31, 2026)
+
+A new `src.ssd_cargo_runner` plans **read-only** by default,
+checks root and the separate SSD, and lets an explicitly invoked
+Cargo child use a deterministic per-worktree build target and
+temporary directory on `/media/scott/SSD_4TB`. It sets
+`CARGO_INCREMENTAL=0` and the actual installed Rust compiler
+path; an end-to-end dependency-free `cargo check --locked --offline`
+produced a Rust metadata artifact **on the SSD, not root**.
+Existing running builds and root targets are not changed, and the
+wrapper does not relocate Cargo home or arbitrary benchmark outputs.
+See [SSD_CARGO_TARGET_POLICY_20261031.md](SSD_CARGO_TARGET_POLICY_20261031.md).
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
