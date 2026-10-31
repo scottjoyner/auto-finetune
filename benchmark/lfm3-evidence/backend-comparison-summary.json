@@ -70,6 +70,32 @@
           "hip_relative_to_vulkan_percent": 65.88
         }
       ]
+    },
+    {
+      "comparison_receipt": "backend-compare-20261031T001313616787Z.json",
+      "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "prompt_tokens": 4096,
+      "generation_tokens": 64,
+      "cache_type": "q8_0",
+      "repetitions_per_run": 3,
+      "executions_per_backend": 2,
+      "source_receipts": [
+        "fleet-xwing-20261031T001313637453Z.json",
+        "fleet-xwing-20261031T001322846400Z.json",
+        "fleet-xwing-20261031T001445632239Z.json",
+        "fleet-xwing-20261031T001604522632Z.json"
+      ],
+      "metrics": [
+        {
+          "metric": "paired_combined_tps",
+          "vulkan_tps": 2675.106,
+          "hip_tps": 217.898,
+          "vulkan_divided_by_hip": 12.2769,
+          "hip_relative_to_vulkan_percent": 8.15
+        }
+      ]
     }
-  ]
+  ],
+  "failed_comparisons": []
 }

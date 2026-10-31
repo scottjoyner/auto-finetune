@@ -112,7 +112,10 @@ def main():
           'comparison summary or source provenance is missing')
   summary=json.loads((ROOT/'backend-comparison-summary.json').read_text())
   require(summary.get('schema')=='lfm3.xwing-backend-comparison-summary.v1', 'invalid comparison summary')
-  require({x['comparison_receipt'] for x in summary['comparisons']}=={p.name for p in comparisons}, 'comparison summary missing evidence')
+  reported={x['comparison_receipt'] for x in summary['comparisons']}
+  blocked={x['comparison_receipt'] for x in summary.get('failed_comparisons',[])}
+  require(not reported.intersection(blocked) and reported.union(blocked)=={p.name for p in comparisons},
+          'comparison summary missing or double-counting evidence')
  print('PASS',len(base),'core receipts +',len(extra),'extended experiment receipts +',
        len(smokes),'ROCm smoke +',len(toolchains),'toolchain audit +',len(comparisons),'matched comparisons +',len(fingerprints),'source fingerprint')
  return 0

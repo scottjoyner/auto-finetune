@@ -23,10 +23,17 @@ def main():
     if not all(item.get("match") for item in fp["source_files"]):
         fail("source hash mismatch")
     summaries = []
+    failed = []
     for path in paths:
         r = json.loads(path.read_text())
         if r.get("status") != "completed":
-            fail("incomplete comparison " + path.name)
+            failed.append({
+                "comparison_receipt": path.name,
+                "status": r.get("status"),
+                "reason": r.get("reason", "no reason supplied"),
+                "completed_runs_before_failure": len(r.get("runs", [])),
+            })
+            continue
         if r.get("order") != ["Vulkan", "HIP", "HIP", "Vulkan"]:
             fail("ABBA order mismatch " + path.name)
         if len(r.get("runs", [])) != 4:
@@ -84,7 +91,8 @@ def main():
             "No broad model accuracy or correctness equivalence verified.",
             "Only six source snapshot files matched a pinned git commit, not a complete tree attestation.",
         ],
-        "comparisons": sorted(summaries, key=lambda x: x["prompt_tokens"]),
+        "comparisons": sorted(summaries, key=lambda x: (x["prompt_tokens"], x["cache_type"])),
+        "failed_comparisons": failed,
     }
     dest = ROOT / "backend-comparison-summary.json"
     dest.write_text(json.dumps(output, indent=2) + "\n")

@@ -148,3 +148,20 @@ Regenerate independently without GPUs:
 python3 benchmark/lfm3-evidence/summarize_backends.py
 python3 benchmark/lfm3-evidence/validate.py
 ```
+
+The comparison summarizer retains failed A/B/B/A test records separately under `failed_comparisons`; it never assigns a speedup to an incomplete test. A failed raw bench or runner preflight remains available for follow-up and must not be silently omitted from evidence custody.
+
+## Q8 KV regression reproduced on xwing HIP (4096+64 paired)
+
+Using the same xwing QAD-Q4_0 model and matched ABBA harness, **Q8 KV** produced:
+
+| Backend, two independent executions | Combined throughput |
+| --- | ---: |
+| Vulkan Q8 KV | 2686.80 and 2663.41 tok/s (mean 2675.11) |
+| ROCm HIP Q8 KV | 216.39 and 219.41 tok/s (mean 217.90) |
+
+Vulkan/HIP = **12.277x** for this paired 4096-prompt + 64-generation workload. Both HIP receipts reported backend `ROCm`, 99 requested GPU layers, model SHA-256 identity, and successful process completion. Per-run time for HIP was approximately 19 seconds versus 1.55 seconds on Vulkan.
+
+For comparison, **FP16 KV** in the same ABBA protocol yielded Vulkan 2676.24 vs HIP 1763.00 *combined tok/s*. This suggests the HIP q8_0 K/V code path is disproportionately expensive in the current binary; the exact reason is **not verified**. HIP was built with `GGML_CUDA_FA=OFF`; attention kernels, VRAM residency, bandwidth, possible dequantization fallbacks, and device counters need targeted profiling. No production runtime defaults were changed. This evidence argues **against enabling HIP Q8 KV by default on xwing** before investigating.
+
+Full files: `backend-compare-20261031T001313616787Z.json`, its four referenced `fleet-xwing-*.json` source receipts, and the deterministic `backend-comparison-summary.json`. All records remain reproducible and hash-linked to the same checkpoint.
