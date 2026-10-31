@@ -93,8 +93,28 @@ def main():
     require(observed and all((expected in b if expected=='VULKAN' else 'HIP' in b or 'ROCM' in b) for b in observed),
             f'{p.name}: wrong backend')
     require(all(m.get('avg_ts',0)>0 for m in row.get('measurements',[])),f'{p.name}: invalid throughput')
+ fingerprints=sorted(ROOT.glob('backend-fingerprint-*.json'))
+ require(len(fingerprints)<=1, 'ambiguous environment fingerprints')
+ for p in fingerprints:
+  r=json.loads(p.read_text())
+  require(r.get('schema')=='lfm3.xwing-backend-fingerprint.v1' and r.get('status')=='completed',f'{p.name}: invalid fingerprint')
+  require(r.get('source_commit')=='8ca4060b7e30e76baaa5670ee1ec1b760b7f8552',f'{p.name}: unexpected source commit')
+  items=r.get('source_files',[])
+  require(len(items)==6 and all(x.get('match') and x.get('git_tree_file_sha256')==x.get('xwing_snapshot_sha256') for x in items),
+          f'{p.name}: source file mismatch')
+  for k in ['Vulkan','HIP']:
+   binary=r.get('runtime_binaries',{}).get(k,{})
+   require(len(binary.get('binary_sha256',''))==64,f'{p.name}: missing {k} binary SHA')
+  require(any('GGML_HIP:BOOL=ON' in x for x in r['runtime_binaries']['HIP'].get('cmake_flags',[])),f'{p.name}: HIP not built')
+  require(any('GGML_VULKAN:BOOL=ON' in x for x in r['runtime_binaries']['Vulkan'].get('cmake_flags',[])),f'{p.name}: Vulkan not built')
+ if comparisons:
+  require(len(fingerprints)==1 and (ROOT/'backend-comparison-summary.json').is_file(),
+          'comparison summary or source provenance is missing')
+  summary=json.loads((ROOT/'backend-comparison-summary.json').read_text())
+  require(summary.get('schema')=='lfm3.xwing-backend-comparison-summary.v1', 'invalid comparison summary')
+  require({x['comparison_receipt'] for x in summary['comparisons']}=={p.name for p in comparisons}, 'comparison summary missing evidence')
  print('PASS',len(base),'core receipts +',len(extra),'extended experiment receipts +',
-       len(smokes),'ROCm smoke +',len(toolchains),'toolchain audit +',len(comparisons),'matched comparisons')
+       len(smokes),'ROCm smoke +',len(toolchains),'toolchain audit +',len(comparisons),'matched comparisons +',len(fingerprints),'source fingerprint')
  return 0
 if __name__=='__main__':
  try:sys.exit(main())

@@ -125,3 +125,26 @@ python3 benchmark/lfm3-evidence/compare_backends.py --prompt 4096 --decode 64 --
 ```
 
 A comparison is marked **failed** if the HIP binary is absent, the remote node is below the 4 GiB available-memory threshold, the model hash differs, the GPU backend is not the expected one, or any run fails. An A/B result alone is still exploratory: note that the HIP build config disables HIP flash attention, unlike the Vulkan configuration, and the node's background loads and clocks are not controlled. Do not report any speedup unless every source receipt is independently validated.
+
+## Native ROCm inference is functional: measured Vulkan/HIP A/B/B/A results
+
+On xwing's Radeon 8050S (gfx1151), a native HIP llama-bench binary built **successfully** from the extracted llama.cpp 8ca4060 source snapshot. It loads the LFM3-1.7B QAD-Q4_0 GGUF, offloads 99 requested GPU layers, and reports backend `ROCm`, not CPU fallback.
+
+Two matched A/B/B/A experiments used the same SHA-256-bound checkpoint, four CPU threads, FP16 KV, no simultaneous bench processes, three internal repetitions per execution, and two executions per backend:
+
+| Workload | Vulkan mean | HIP mean | Vulkan/HIP |
+| --- | ---: | ---: | ---: |
+| 512 prompt tokens, standalone prefill | 3583.54 tok/s | 2936.67 tok/s | 1.220x |
+| 64 generated tokens, standalone decoding | 150.95 tok/s | 114.43 tok/s | 1.319x |
+| Paired 4096 prompt + 64 generated | 2676.24 *combined* tok/s | 1763.00 *combined* tok/s | 1.518x |
+
+Evidence: `backend-comparison-summary.json` links all four runs per experiment to their raw remote receipts. `backend-fingerprint-*.json` records both runtime binary SHA-256 hashes and matches six **selected** source files against the git tree at `8ca4060b7e30e76baaa5670ee1ec1b760b7f8552`. This is not a full source-tree attestation.
+
+**Interpretation:** Vulkan won on this hardware and build configuration. The HIP CMake build set `GGML_CUDA_FA=OFF`, while Vulkan uses its separate, enabled attention kernels. Differences in kernel compilation, background loads and clocks remain uncontrolled. These results **do not** establish general Vulkan superiority, and must not be treated as equivalent-KV-quality evidence. HIP Flash Attention compatibility and repeatability under isolated load are the next optimization priorities.
+
+Regenerate independently without GPUs:
+
+```bash
+python3 benchmark/lfm3-evidence/summarize_backends.py
+python3 benchmark/lfm3-evidence/validate.py
+```

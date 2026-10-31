@@ -1,0 +1,75 @@
+{
+  "schema": "lfm3.xwing-backend-comparison-summary.v1",
+  "source_fingerprint_receipt": "backend-fingerprint-20261031T000948968829Z.json",
+  "source_git_commit": "8ca4060b7e30e76baaa5670ee1ec1b760b7f8552",
+  "hardware": "xwing, AMD Radeon 8050S, gfx1151",
+  "model": "LFM3-1.7B-QAD-Q4_0",
+  "tested_cache": "f16",
+  "caveats": [
+    "HIP built with GGML_CUDA_FA=OFF; Vulkan has different attention kernels.",
+    "Two backend executions, three llama-bench repetitions per execution.",
+    "Node production services and hardware clocks not isolated or normalized.",
+    "Paired combined tokens/s must not be read as standalone decode speed.",
+    "No broad model accuracy or correctness equivalence verified.",
+    "Only six source snapshot files matched a pinned git commit, not a complete tree attestation."
+  ],
+  "comparisons": [
+    {
+      "comparison_receipt": "backend-compare-20261031T000812645908Z.json",
+      "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "prompt_tokens": 512,
+      "generation_tokens": 64,
+      "cache_type": "f16",
+      "repetitions_per_run": 3,
+      "executions_per_backend": 2,
+      "source_receipts": [
+        "fleet-xwing-20261031T000812670325Z.json",
+        "fleet-xwing-20261031T000817955582Z.json",
+        "fleet-xwing-20261031T000824539543Z.json",
+        "fleet-xwing-20261031T000830841257Z.json"
+      ],
+      "metrics": [
+        {
+          "metric": "prompt_tps",
+          "vulkan_tps": 3583.544,
+          "hip_tps": 2936.67,
+          "vulkan_divided_by_hip": 1.2203,
+          "hip_relative_to_vulkan_percent": 81.95
+        },
+        {
+          "metric": "decode_tps",
+          "vulkan_tps": 150.953,
+          "hip_tps": 114.434,
+          "vulkan_divided_by_hip": 1.3191,
+          "hip_relative_to_vulkan_percent": 75.81
+        }
+      ]
+    },
+    {
+      "comparison_receipt": "backend-compare-20261031T000920326333Z.json",
+      "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "prompt_tokens": 4096,
+      "generation_tokens": 64,
+      "cache_type": "f16",
+      "repetitions_per_run": 3,
+      "executions_per_backend": 2,
+      "source_receipts": [
+        "fleet-xwing-20261031T000920348433Z.json",
+        "fleet-xwing-20261031T000929922200Z.json",
+        "fleet-xwing-20261031T000943167696Z.json",
+        "fleet-xwing-20261031T000957192565Z.json"
+      ],
+      "metrics": [
+        {
+          "metric": "paired_combined_tps",
+          "vulkan_tps": 2676.24,
+          "hip_tps": 1762.996,
+          "vulkan_divided_by_hip": 1.518,
+          "hip_relative_to_vulkan_percent": 65.88
+        }
+      ]
+    }
+  ]
+}
