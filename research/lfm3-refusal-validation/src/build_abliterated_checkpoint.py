@@ -13,6 +13,8 @@ from pathlib import Path
 from safetensors import safe_open
 from safetensors.torch import load_file, save_file
 
+from src.research_job_guard import require_research_write_capacity
+
 
 DEFAULT_SOURCE = Path("/home/scott/lfm3-research/model-metadata")
 DEFAULT_VECTOR = Path(__file__).resolve().parents[1] / "results/directions.safetensors"
@@ -55,6 +57,7 @@ def build(source, vector_path, dest, layer, alpha, allow_smoke):
     import torch
     if not allow_smoke:
         raise ValueError("preliminary two-pair vector: --allow-smoke required")
+    require_research_write_capacity(dest)
     source = source.resolve(strict=True)
     vector_path = vector_path.resolve(strict=True)
     dest = dest.resolve()
@@ -86,6 +89,7 @@ def build(source, vector_path, dest, layer, alpha, allow_smoke):
         updated, before, after = orthogonalize(tensor, r, alpha)
         state[name] = updated
         diagnostics[name] = {"before": round(before, 5), "after": round(after, 5)}
+    require_research_write_capacity(dest)
     try:
         save_file(state, str(tmp), metadata={
             "research": "LFM3 refusal study M1-style; unvalidated smoke artifact",

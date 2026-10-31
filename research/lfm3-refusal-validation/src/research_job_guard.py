@@ -5,6 +5,7 @@ journal or model output. Recheck immediately before each model/generation.
 This is not a filesystem reservation or an enforcement tool for other jobs.
 """
 from pathlib import Path
+import math
 import os
 
 from src.research_storage_preflight import preflight
@@ -22,12 +23,19 @@ class ResearchWriteBlocked(RuntimeError):
 def existing_directory(path):
     """Find actual filesystem for a possibly not-yet-created output path."""
     path = Path(path).expanduser().absolute()
+    if ".." in path.parts:
+        raise ValueError("parent traversal is not allowed in output paths")
+    # Inspect every ancestor, not only the nearest existing directory.
+    # Existing nested paths can otherwise conceal an intermediate symlink.
+    for candidate in (path, *path.parents):
+        if candidate.is_symlink():
+            raise ValueError("symlink component in research output path")
     while not path.exists():
-        parent=path.parent
+        parent = path.parent
         if parent == path:
             raise ValueError("output has no existing parent")
-        path=parent
-    if path.is_symlink() or not path.is_dir():
+        path = parent
+    if not path.is_dir():
         raise ValueError("output path resolves to unsafe non-directory endpoint")
     return path
 def require_research_write_capacity(output_path, local_root=LOCAL_WORK_ROOT,
@@ -41,8 +49,9 @@ def require_research_write_capacity(output_path, local_root=LOCAL_WORK_ROOT,
     """
     local=existing_directory(local_root)
     output=existing_directory(output_path)
-    if any(v < 0 for v in (planned_write_gib,reserve_gib,minimum_free_gib)):
-        raise ValueError("capacity limits must be nonnegative")
+    if any(type(v) not in (int, float) or not math.isfinite(v) or v < 0
+           for v in (planned_write_gib, reserve_gib, minimum_free_gib)):
+        raise ValueError("capacity limits must be finite nonnegative numbers")
     roots=[("local",local)]
     if os.stat(local).st_dev != os.stat(output).st_dev:
         roots.append(("output",output))
