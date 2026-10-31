@@ -274,3 +274,33 @@ python3 benchmark/lfm3-evidence/validate.py
 ```
 
 The raw synthetic generated text is contained in `hip-output-compare-*.json`. The deterministic summary is `hip-output-summary.json`. No customer prompts, personal traces, or production traffic are used or uploaded.
+
+## xwing HIP-FA isolated localhost serving concurrency experiment
+
+A temporary `llama-server` was built in the **same separately attested HIP-FA build tree** with UI disabled and no UI downloads. The extracted source snapshot was missing `scripts/ui-assets.cmake`; that one file was restored from the same pinned `8ca4060` commit and SHA-256-verified (`d3abf3ce…d5fa8e`). No system packages or running services were changed, and no network download was required.
+
+The temporary server executable SHA-256 is `85f3baf1a389ff45e914beef69b1e3e5d524a262472bbac10aa19759547bc662`, native gfx1151 ROCm FA-on backend, Q8 K/V and model SHA-256 `43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452`. See `hip-fa-server-attestation-20261031.json` for hashes and CMake flags. The test server bound to `127.0.0.1` only, with no Web UI. Test requests used synthetic data, and the process was terminated and verified absent after each run.
+
+`xwing_concurrency.py` executes three waves at 1, 2, and 4 concurrent clients, 48 maximum generated tokens/request, collecting **end-to-end response latency**, generated token counts, per-wave aggregate tokens/second, and descriptive sample p95 latency. Both completed runs yielded:
+
+| Clients | Aggregate generated tok/s (run 1 / run 2) | Sample p95 full-response latency (run 1 / run 2) |
+| --- | ---: | ---: |
+| 1 | 95.820 / 89.694 | 0.5193 / 0.6711 s |
+| 2 | 152.883 / 149.211 | 0.6575 / 0.6585 s |
+| 4 | **230.745 / 234.493** | **0.8376 / 0.8409 s** |
+
+An immediate repeat on port 29644 failed its bind preflight with `Address already in use`. That failed receipt is **retained**; a fresh port (29645) completed. Do not mistake the port conflict for a model runtime or GPU failure.
+
+**Limitations:** no matched Vulkan server or no-FA HIP concurrent serving comparison has been completed. Two short-load runs cannot establish stable p95 under sustained traffic, request scheduling behavior under production loads, or absolute model quality. The aggregate generated-tokens/sec metric includes prefill and queueing in its *denominator*, unlike isolated llama-bench decode throughput. No production latency SLO or deployment cutover is approved.
+
+To reproduce on xwing (same isolated paths, no production changes):
+
+```bash
+# Requires the same pinned llama.cpp source snapshot and offline UI script.
+python3 /home/scott/lfm3-research/xwing_concurrency.py --port 29646 --waves 3 --max-parallel 4 --tokens 48
+# Copy only JSON receipts, never local inference logs, into benchmark/lfm3-evidence.
+python3 benchmark/lfm3-evidence/summarize_xwing_concurrency.py
+python3 benchmark/lfm3-evidence/validate.py
+```
+
+No passwords, API keys, user chat histories, or production traces are in these synthetic benchmark receipts.

@@ -253,8 +253,45 @@ def main():
             f'{p.name}: output score aggregation mismatch')
  else:
   require(not (ROOT/'hip-output-summary.json').exists(),'orphan HIP output summary')
+ concurrency_paths=sorted(p for p in ROOT.glob('xwing-concurrency-*.json') if p.name!='xwing-concurrency-summary.json')
+ if concurrency_paths:
+  att_path=ROOT/'hip-fa-server-attestation-20261031.json'
+  summary_path=ROOT/'xwing-concurrency-summary.json'
+  require(att_path.is_file() and summary_path.is_file(),'missing FA server attestation/summary')
+  att=json.loads(att_path.read_text())
+  require(att.get('schema')=='lfm3.xwing-hip-fa-server-provenance.v1' and
+          att.get('source_commit_reference')=='8ca4060b7e30e76baaa5670ee1ec1b760b7f8552',
+          'server provenance invalid')
+  server_sha=att['sha256']['server']
+  require(server_sha=='85f3baf1a389ff45e914beef69b1e3e5d524a262472bbac10aa19759547bc662',
+          'unexpected serving binary')
+  require(att['sha256']['backend_library']=='0a8573c81efa6a3383ac97112d73564e0b4d4b468ada32025c230584c8354ea3',
+          'unexpected serving backend')
+  require(any('GGML_CUDA_FA:BOOL=ON' in flag for flag in att['cmake_flags']) and
+          any('LLAMA_USE_PREBUILT_UI:BOOL=OFF' in flag for flag in att['cmake_flags']),
+          'server config safety gates missing')
+  summary=json.loads(summary_path.read_text())
+  require(summary.get('schema')=='lfm3.xwing-hip-fa-concurrency-summary.v1','bad concurrency summary')
+  require({x['receipt'] for x in summary['receipts']}=={p.name for p in concurrency_paths},
+          'missing concurrency receipts')
+  for p in concurrency_paths:
+   r=json.loads(p.read_text())
+   require(r.get('schema')=='lfm3.xwing-hip-fa-concurrency.v1' and
+           r.get('status') in ('completed','failed','skipped'),f'{p.name}: schema or status')
+   require(r.get('model_sha256_expected')==att['sha256']['model'],f'{p.name}: checkpoint mismatch')
+   if r.get('server_binary_sha256') is not None:
+    require(r['server_binary_sha256']==server_sha,f'{p.name}: server executable mismatch')
+   if r['status']=='completed':
+    require(r.get('server_ready') is True and r.get('flash_attn')=='on' and
+            r.get('cache_type')=='q8_0',f'{p.name}: runtime config mismatch')
+    require([x['concurrency'] for x in r['results']]==[1,2,4],
+            f'{p.name}: incomplete concurrency sequence')
+    require(all(row['samples']==row['concurrency']*r['waves_per_load'] for row in r['results']),
+            f'{p.name}: sample count mismatch')
+    require(all(row['sample_p95_client_latency_s']>=row['median_client_latency_s']>0 for row in r['results']),
+            f'{p.name}: invalid latency')
  print('PASS',len(base),'core receipts +',len(extra),'extended experiment receipts +',
-       len(smokes),'ROCm smoke +',len(toolchains),'toolchain audit +',len(comparisons),'matched comparisons +',len(fingerprints),'source fingerprint +',len(candidate_paths),'HIP FA comparisons +',len(output_receipts),'synthetic output receipts')
+       len(smokes),'ROCm smoke +',len(toolchains),'toolchain audit +',len(comparisons),'matched comparisons +',len(fingerprints),'source fingerprint +',len(candidate_paths),'HIP FA comparisons +',len(output_receipts),'synthetic output receipts +',len(concurrency_paths),'xwing concurrency receipts')
  return 0
 if __name__=='__main__':
  try:sys.exit(main())

@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate recorded measurements without GPUs
         run: |
-          python3 -m py_compile benchmark/lfm3-evidence/run.py benchmark/lfm3-evidence/fleet_runner.py benchmark/lfm3-evidence/summarize.py benchmark/lfm3-evidence/concurrency.py benchmark/lfm3-evidence/resource_profile.py benchmark/lfm3-evidence/quality_probe.py benchmark/lfm3-evidence/validate.py benchmark/lfm3-evidence/summarize_extended.py benchmark/lfm3-evidence/score_retrieval.py benchmark/lfm3-evidence/compare_backends.py benchmark/lfm3-evidence/environment_fingerprint.py benchmark/lfm3-evidence/summarize_backends.py benchmark/lfm3-evidence/compare_hip_fa.py benchmark/lfm3-evidence/summarize_hip_fa.py benchmark/lfm3-evidence/attest_hip_fa.py benchmark/lfm3-evidence/compare_hip_outputs.py benchmark/lfm3-evidence/summarize_hip_outputs.py
+          python3 -m py_compile benchmark/lfm3-evidence/run.py benchmark/lfm3-evidence/fleet_runner.py benchmark/lfm3-evidence/summarize.py benchmark/lfm3-evidence/concurrency.py benchmark/lfm3-evidence/resource_profile.py benchmark/lfm3-evidence/quality_probe.py benchmark/lfm3-evidence/validate.py benchmark/lfm3-evidence/summarize_extended.py benchmark/lfm3-evidence/score_retrieval.py benchmark/lfm3-evidence/compare_backends.py benchmark/lfm3-evidence/environment_fingerprint.py benchmark/lfm3-evidence/summarize_backends.py benchmark/lfm3-evidence/compare_hip_fa.py benchmark/lfm3-evidence/summarize_hip_fa.py benchmark/lfm3-evidence/attest_hip_fa.py benchmark/lfm3-evidence/compare_hip_outputs.py benchmark/lfm3-evidence/summarize_hip_outputs.py benchmark/lfm3-evidence/xwing_concurrency.py benchmark/lfm3-evidence/summarize_xwing_concurrency.py
           bash -n benchmark/lfm3-evidence/build_hip_fa_q8.sh
           bash -n benchmark/lfm3-evidence/build_quality_probe.sh
           python3 -m unittest discover -s benchmark/lfm3-evidence -p "test_hip_fa_preflight.py"
@@ -30,4 +30,5 @@ jobs:
           python3 benchmark/lfm3-evidence/summarize_backends.py
           python3 benchmark/lfm3-evidence/summarize_hip_fa.py
           python3 benchmark/lfm3-evidence/summarize_hip_outputs.py
-          git diff --exit-code -- benchmark/lfm3-evidence/fleet-summary.json benchmark/lfm3-evidence/extended-summary.json benchmark/lfm3-evidence/quality-scored.json benchmark/lfm3-evidence/backend-comparison-summary.json benchmark/lfm3-evidence/hip-fa-summary.json benchmark/lfm3-evidence/hip-output-summary.json
+          python3 benchmark/lfm3-evidence/summarize_xwing_concurrency.py
+          git diff --exit-code -- benchmark/lfm3-evidence/fleet-summary.json benchmark/lfm3-evidence/extended-summary.json benchmark/lfm3-evidence/quality-scored.json benchmark/lfm3-evidence/backend-comparison-summary.json benchmark/lfm3-evidence/hip-fa-summary.json benchmark/lfm3-evidence/hip-output-summary.json benchmark/lfm3-evidence/xwing-concurrency-summary.json
