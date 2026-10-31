@@ -1,0 +1,5 @@
+# Keep raw prompts, server traces, local profiling data and build logs off GitHub.
+*.log
+__pycache__/
+*.pyc
+*.tmp

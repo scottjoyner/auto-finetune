@@ -1,0 +1,25 @@
+{
+  "schema": "lfm3.rocm-compatibility.v1",
+  "collected_utc": "2026-10-30T22:15:39.858047+00:00",
+  "xwing": {
+    "gpu": "AMD Radeon 8050S Graphics",
+    "gfx": "gfx1151",
+    "hipcc_returncode": 0,
+    "hipcc_output": "HIP version: 7.14.60850-0000000\nAMD clang version 23.0.0git (https://github.com/ROCm/llvm-project.git 46fcb339fb61119b337f973c7ca9e710a319fdd0+PATCHED:440716f8b87be9d8e20ed910e10e5b6d14d57cf6)\nTarget: x86_64-unknown-linux-gnu\nThread model: posix\nInstalledDir: /opt/rocm-7.0.0/core-7.14/lib/llvm/bin\n",
+    "smoke_command": "/home/scott/lfm3-research/hip-smoke-gfx1151",
+    "smoke_stdout": "device=AMD Radeon 8050S Graphics, gcn=gfx1151, elements=4096, mismatches=0\n",
+    "smoke_stderr": "",
+    "smoke_returncode": 0,
+    "smoke_passed": true,
+    "smoke_source_sha256": "927ce39f6058b6a46e4402f0f13260a057f6d4ffa294040de2d8cda298f3610b",
+    "llama_hip_build": "incomplete: isolated build deliberately stopped at 111/267; NO LFM3 HIP inference result",
+    "hip_build_flags": "GGML_HIP=ON GGML_CUDA_FA=OFF CMAKE_HIP_ARCHITECTURES=gfx1151"
+  },
+  "x1-370": {
+    "gfx": "gfx1150",
+    "hipcc_returncode": 255,
+    "hipcc_stderr": "Can't exec \"/opt/rocm-7.2.0/llvm/bin/clang-17\": No such file or directory at /usr/bin//hipcc.pl line 180.\nUse of uninitialized value $HIP_CLANG_RT_LIB in scalar chomp at /usr/bin//hipcc.pl line 181.\nCan't exec \"/opt/rocm-7.2.0/bin/rocm_agent_enumerator\": No such file or directory at /usr/bin//hipcc.pl line 495.\nUse of uninitialized value $targetsStr in substitution (s///) at /usr/bin//hipcc.pl line 496.\nUse of uninitialized value $targetsStr in split at /usr/bin//hipcc.pl line 502.\nCan't exec \"/opt/rocm-7.2.0/llvm/bin/clang-17\": No such file or directory at /usr/bin//hipcc.pl line 646.\n",
+    "llama_hip_build": "not_attempted: missing ROCm compiler path"
+  },
+  "interpretation": "HIP smoke tests a 4096-element GPU SAXPY for correctness; it does not measure any LFM3 token throughput."
+}

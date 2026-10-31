@@ -1,0 +1,48 @@
+{
+  "schema": "lfm3.fleet-benchmark.v1",
+  "created_utc": "20261030T214912639155Z",
+  "orchestrator": "x1-370",
+  "node": "deathstar-xps-8920",
+  "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf",
+  "expected_model_sha256": "3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4",
+  "prompt": 512,
+  "decode": 64,
+  "repetitions": 3,
+  "status": "completed",
+  "preflight": {
+    "returncode": 0,
+    "stdout": "deathstar-XPS-8920\n15863\n3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4  /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf\n",
+    "stderr": ""
+  },
+  "available_mib": 15863,
+  "observed_model_sha256": "3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4",
+  "command": [
+    "nice",
+    "-n",
+    "10",
+    "timeout",
+    "240",
+    "/home/scott/lfm3-research/build-vulkan/bin/llama-bench",
+    "-m",
+    "/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf",
+    "-ngl",
+    "99",
+    "-t",
+    "4",
+    "-p",
+    "512",
+    "-n",
+    "64",
+    "-r",
+    "3",
+    "-o",
+    "json"
+  ],
+  "elapsed_seconds": 7.467,
+  "returncode": 0,
+  "stdout": "[\n  {\n    \"build_commit\": \"unknown\",\n    \"build_number\": 0,\n    \"cpu_info\": \"Intel(R) Core(TM) i7-7700 CPU @ 3.60GHz\",\n    \"gpu_info\": \"AMD Radeon RX 480 Graphics (RADV POLARIS10), Intel(R) HD Graphics 630 (KBL GT2)\",\n    \"backends\": \"Vulkan\",\n    \"model_filename\": \"/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf\",\n    \"model_type\": \"lfm3 1.7B Q4_K - Medium\",\n    \"model_size\": 1091380480,\n    \"model_n_params\": 1728801600,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"load_mode\": \"auto\",\n    \"lazy_mode\": \"auto\",\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"repack\": true,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 512,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-10-30T21:49:18Z\",\n    \"avg_ns\": 650223430,\n    \"stddev_ns\": 7616590,\n    \"avg_ts\": 787.493396,\n    \"stddev_ts\": 9.188690,\n    \"samples_ns\": [ 643677681, 658583281, 648409328 ],\n    \"samples_ts\": [ 795.429, 777.426, 789.625 ]\n  },\n  {\n    \"build_commit\": \"unknown\",\n    \"build_number\": 0,\n    \"cpu_info\": \"Intel(R) Core(TM) i7-7700 CPU @ 3.60GHz\",\n    \"gpu_info\": \"AMD Radeon RX 480 Graphics (RADV POLARIS10), Intel(R) HD Graphics 630 (KBL GT2)\",\n    \"backends\": \"Vulkan\",\n    \"model_filename\": \"/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf\",\n    \"model_type\": \"lfm3 1.7B Q4_K - Medium\",\n    \"model_size\": 1091380480,\n    \"model_n_params\": 1728801600,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 99,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"load_mode\": \"auto\",\n    \"lazy_mode\": \"auto\",\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"repack\": true,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 64,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-10-30T21:49:21Z\",\n    \"avg_ns\": 796247864,\n    \"stddev_ns\": 329580,\n    \"avg_ts\": 80.376991,\n    \"stddev_ts\": 0.033147,\n    \"samples_ns\": [ 796575805, 796248721, 795919067 ],\n    \"samples_ts\": [ 80.3439, 80.3769, 80.4102 ]\n  }\n]\n",
+  "stderr": "ggml_vulkan: Found 2 Vulkan devices:\nggml_vulkan: 0 = AMD Radeon RX 480 Graphics (RADV POLARIS10) (radv) | uma: 0 | fp16: 0 | bf16: 0 | fp4: 0 | warp size: 64 | shared memory: 65536 | int dot: 0 | matrix cores: none\nggml_vulkan: 1 = Intel(R) HD Graphics 630 (KBL GT2) (Intel open-source Mesa driver) | uma: 1 | fp16: 1 | bf16: 0 | fp4: 0 | warp size: 32 | shared memory: 49152 | int dot: 0 | matrix cores: none\n",
+  "backend": [
+    "Vulkan"
+  ]
+}

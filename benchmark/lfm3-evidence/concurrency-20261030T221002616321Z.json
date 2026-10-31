@@ -1,0 +1,318 @@
+{
+  "schema": "lfm3.concurrent.v1",
+  "created_utc": "20261030T221002616321Z",
+  "hostname": "x1-370",
+  "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf",
+  "model_sha256_expected": "3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4",
+  "cache": "q8_0",
+  "max_parallel": 4,
+  "repetitions": 3,
+  "tokens": 48,
+  "status": "completed",
+  "results": [
+    {
+      "concurrency": 1,
+      "waves": [
+        {
+          "requests": [
+            {
+              "latency_seconds": 0.911,
+              "predicted_n": 48,
+              "predicted_ms": 798.659,
+              "prompt_n": 90,
+              "content_len": 210,
+              "stop": true,
+              "error": null
+            }
+          ],
+          "wall_seconds": 0.9121,
+          "aggregate_tokens_per_second": 52.628
+        },
+        {
+          "requests": [
+            {
+              "latency_seconds": 0.9155,
+              "predicted_n": 48,
+              "predicted_ms": 805.682,
+              "prompt_n": 91,
+              "content_len": 263,
+              "stop": true,
+              "error": null
+            }
+          ],
+          "wall_seconds": 0.9158,
+          "aggregate_tokens_per_second": 52.414
+        },
+        {
+          "requests": [
+            {
+              "latency_seconds": 0.9005,
+              "predicted_n": 48,
+              "predicted_ms": 790.258,
+              "prompt_n": 91,
+              "content_len": 257,
+              "stop": true,
+              "error": null
+            }
+          ],
+          "wall_seconds": 0.9012,
+          "aggregate_tokens_per_second": 53.26
+        }
+      ],
+      "median_latency_seconds": 0.911,
+      "p95_latency_seconds": 0.915,
+      "mean_aggregate_decode_tokens_per_second": 52.767
+    },
+    {
+      "concurrency": 2,
+      "waves": [
+        {
+          "requests": [
+            {
+              "latency_seconds": 1.2051,
+              "predicted_n": 48,
+              "predicted_ms": 948.775,
+              "prompt_n": 90,
+              "content_len": 221,
+              "stop": true,
+              "error": null
+            },
+            {
+              "latency_seconds": 1.0443,
+              "predicted_n": 40,
+              "predicted_ms": 831.436,
+              "prompt_n": 90,
+              "content_len": 178,
+              "stop": true,
+              "error": null
+            }
+          ],
+          "wall_seconds": 1.2056,
+          "aggregate_tokens_per_second": 72.993
+        },
+        {
+          "requests": [
+            {
+              "latency_seconds": 1.1753,
+              "predicted_n": 48,
+              "predicted_ms": 972.957,
+              "prompt_n": 91,
+              "content_len": 263,
+              "stop": true,
+              "error": null
+            },
+            {
+              "latency_seconds": 1.1745,
+              "predicted_n": 48,
+              "predicted_ms": 972.792,
+              "prompt_n": 91,
+              "content_len": 267,
+              "stop": true,
+              "error": null
+            }
+          ],
+          "wall_seconds": 1.1757,
+          "aggregate_tokens_per_second": 81.655
+        },
+        {
+          "requests": [
+            {
+              "latency_seconds": 1.9904,
+              "predicted_n": 48,
+              "predicted_ms": 1770.261,
+              "prompt_n": 91,
+              "content_len": 257,
+              "stop": true,
+              "error": null
+            },
+            {
+              "latency_seconds": 1.9894,
+              "predicted_n": 48,
+              "predicted_ms": 1767.208,
+              "prompt_n": 91,
+              "content_len": 257,
+              "stop": true,
+              "error": null
+            }
+          ],
+          "wall_seconds": 1.9971,
+          "aggregate_tokens_per_second": 48.069
+        }
+      ],
+      "median_latency_seconds": 1.19,
+      "p95_latency_seconds": 1.99,
+      "mean_aggregate_decode_tokens_per_second": 67.572
+    },
+    {
+      "concurrency": 4,
+      "waves": [
+        {
+          "requests": [
+            {
+              "latency_seconds": 2.1768,
+              "predicted_n": 48,
+              "predicted_ms": 1673.225,
+              "prompt_n": 90,
+              "content_len": 211,
+              "stop": true,
+              "error": null
+            },
+            {
+              "latency_seconds": 1.8595,
+              "predicted_n": 40,
+              "predicted_ms": 1359.16,
+              "prompt_n": 90,
+              "content_len": 178,
+              "stop": true,
+              "error": null
+            },
+            {
+              "latency_seconds": 2.1669,
+              "predicted_n": 48,
+              "predicted_ms": 1671.649,
+              "prompt_n": 90,
+              "content_len": 242,
+              "stop": true,
+              "error": null
+            },
+            {
+              "latency_seconds": 2.1609,
+              "predicted_n": 48,
+              "predicted_ms": 1671.074,
+              "prompt_n": 90,
+              "content_len": 232,
+              "stop": true,
+              "error": null
+            }
+          ],
+          "wall_seconds": 2.1784,
+          "aggregate_tokens_per_second": 84.466
+        },
+        {
+          "requests": [
+            {
+              "latency_seconds": 1.7191,
+              "predicted_n": 48,
+              "predicted_ms": 1394.03,
+              "prompt_n": 91,
+              "content_len": 274,
+              "stop": true,
+              "error": null
+            },
+            {
+              "latency_seconds": 1.7194,
+              "predicted_n": 48,
+              "predicted_ms": 1393.91,
+              "prompt_n": 91,
+              "content_len": 267,
+              "stop": true,
+              "error": null
+            },
+            {
+              "latency_seconds": 1.7194,
+              "predicted_n": 48,
+              "predicted_ms": 1393.692,
+              "prompt_n": 91,
+              "content_len": 257,
+              "stop": true,
+              "error": null
+            },
+            {
+              "latency_seconds": 1.718,
+              "predicted_n": 48,
+              "predicted_ms": 1394.242,
+              "prompt_n": 91,
+              "content_len": 257,
+              "stop": true,
+              "error": null
+            }
+          ],
+          "wall_seconds": 1.7203,
+          "aggregate_tokens_per_second": 111.608
+        },
+        {
+          "requests": [
+            {
+              "latency_seconds": 1.6455,
+              "predicted_n": 48,
+              "predicted_ms": 1325.885,
+              "prompt_n": 91,
+              "content_len": 257,
+              "stop": true,
+              "error": null
+            },
+            {
+              "latency_seconds": 1.6456,
+              "predicted_n": 48,
+              "predicted_ms": 1325.904,
+              "prompt_n": 91,
+              "content_len": 257,
+              "stop": true,
+              "error": null
+            },
+            {
+              "latency_seconds": 1.6459,
+              "predicted_n": 48,
+              "predicted_ms": 1325.877,
+              "prompt_n": 91,
+              "content_len": 257,
+              "stop": true,
+              "error": null
+            },
+            {
+              "latency_seconds": 1.6463,
+              "predicted_n": 48,
+              "predicted_ms": 1325.575,
+              "prompt_n": 91,
+              "content_len": 257,
+              "stop": true,
+              "error": null
+            }
+          ],
+          "wall_seconds": 1.6472,
+          "aggregate_tokens_per_second": 116.562
+        }
+      ],
+      "median_latency_seconds": 1.719,
+      "p95_latency_seconds": 2.177,
+      "mean_aggregate_decode_tokens_per_second": 104.212
+    }
+  ],
+  "preflight_available_mib": 59033,
+  "command": [
+    "nice",
+    "-n",
+    "12",
+    "/home/scott/lfm3-research/llama-build/bin/llama-server",
+    "-m",
+    "/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf",
+    "-ngl",
+    "99",
+    "-t",
+    "4",
+    "-c",
+    "8192",
+    "-np",
+    "4",
+    "-ctk",
+    "q8_0",
+    "-ctv",
+    "q8_0",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "29621",
+    "--log-disable"
+  ],
+  "server_pid": 3538720,
+  "startup_ready": true,
+  "warmup": {
+    "latency_seconds": 0.9203,
+    "predicted_n": 48,
+    "predicted_ms": 801.695,
+    "prompt_n": 91,
+    "content_len": 257,
+    "stop": true,
+    "error": null
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "schema": "lfm3.hip-fa-abba.v1",
+  "created_utc": "20261031T004722859499Z",
+  "node": "xwing",
+  "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+  "expected_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+  "cache": "q8_0",
+  "flash_attention_runtime": "on",
+  "prompt": 512,
+  "generation": 64,
+  "repetitions": 3,
+  "order": [
+    "HIP-noFA",
+    "HIP-FA",
+    "HIP-FA",
+    "HIP-noFA"
+  ],
+  "status": "completed",
+  "runs": [
+    {
+      "expected_variant": "HIP-noFA",
+      "receipt": "fleet-xwing-20261031T004723322326Z.json",
+      "runner_exitcode": 0,
+      "status": "completed",
+      "elapsed_wall_seconds": 6.71,
+      "avg_ts": 455.265814,
+      "stddev_ts": 14.792009,
+      "gpu_info": "AMD Radeon 8050S Graphics"
+    },
+    {
+      "expected_variant": "HIP-FA",
+      "receipt": "fleet-xwing-20261031T004731023893Z.json",
+      "runner_exitcode": 0,
+      "status": "completed",
+      "elapsed_wall_seconds": 4.915,
+      "avg_ts": 770.657363,
+      "stddev_ts": 38.757338,
+      "gpu_info": "AMD Radeon 8050S Graphics"
+    },
+    {
+      "expected_variant": "HIP-FA",
+      "receipt": "fleet-xwing-20261031T004736945661Z.json",
+      "runner_exitcode": 0,
+      "status": "completed",
+      "elapsed_wall_seconds": 4.455,
+      "avg_ts": 749.767845,
+      "stddev_ts": 28.406362,
+      "gpu_info": "AMD Radeon 8050S Graphics"
+    },
+    {
+      "expected_variant": "HIP-noFA",
+      "receipt": "fleet-xwing-20261031T004742396992Z.json",
+      "runner_exitcode": 0,
+      "status": "completed",
+      "elapsed_wall_seconds": 6.119,
+      "avg_ts": 471.806225,
+      "stddev_ts": 17.547791,
+      "gpu_info": "AMD Radeon 8050S Graphics"
+    }
+  ],
+  "caveats": "Small sequential sample; background device load, clocks and memory bandwidth not controlled.",
+  "runtime_binary_sha256": {
+    "HIP-noFA": "614e279d6766d76115d25b4509c542585c01a48f82b062145e065aa6b48e8255",
+    "HIP-FA": "4be79e2718bac9275e54361ce33e07d332422e0b9bf029e658b7c577e0be24e4"
+  },
+  "summary": {
+    "mean_combined_tps": {
+      "HIP-noFA": 463.53601949999995,
+      "HIP-FA": 760.212604
+    },
+    "candidate_divided_by_baseline": 1.6400291930280084
+  }
+}

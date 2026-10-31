@@ -1,0 +1,27 @@
+{
+  "schema": "lfm3.xwing-hip-fa-concurrency.v1",
+  "timestamp_utc": "20261031T010823938352Z",
+  "node": "xwing",
+  "status": "failed",
+  "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+  "model_sha256_expected": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+  "server_binary": "/home/scott/lfm3-research/build-hip-gfx1151-fa-q8/bin/llama-server",
+  "cache_type": "q8_0",
+  "flash_attn": "on",
+  "max_parallel": 4,
+  "waves_per_load": 3,
+  "generated_token_cap": 48,
+  "results": [],
+  "caveats": [
+    "Localhost synthetic requests only; no production requests",
+    "Client-side full-response latencies include prompt, queue and generation",
+    "Small-sample p95 is descriptive, not a stable percentile estimate"
+  ],
+  "preflight": {
+    "available_mib": 8887,
+    "disk_free_mib": 39975
+  },
+  "model_sha256_observed": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+  "server_binary_sha256": "85f3baf1a389ff45e914beef69b1e3e5d524a262472bbac10aa19759547bc662",
+  "reason": "[Errno 98] Address already in use"
+}

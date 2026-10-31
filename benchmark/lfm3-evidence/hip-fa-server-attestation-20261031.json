@@ -1,0 +1,31 @@
+{
+  "schema": "lfm3.xwing-hip-fa-server-provenance.v1",
+  "collected_utc": "2026-10-31T01:09:32.030335+00:00",
+  "node": "xwing",
+  "gpu_arch": "gfx1151",
+  "source_commit_reference": "8ca4060b7e30e76baaa5670ee1ec1b760b7f8552",
+  "source_note": "Six selected source files were checked in prior backend fingerprint receipt. The missing pinned ui-assets.cmake script was restored from this commit into the isolated source snapshot; only that file was added.",
+  "paths": {
+    "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+    "server": "/home/scott/lfm3-research/build-hip-gfx1151-fa-q8/bin/llama-server",
+    "backend_library": "/home/scott/lfm3-research/build-hip-gfx1151-fa-q8/bin/libggml-hip.so.0.27.0",
+    "ui_build_script": "/home/scott/lfm3-research/llama-cpu-8ca4060-source/scripts/ui-assets.cmake"
+  },
+  "sha256": {
+    "model": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+    "server": "85f3baf1a389ff45e914beef69b1e3e5d524a262472bbac10aa19759547bc662",
+    "backend_library": "0a8573c81efa6a3383ac97112d73564e0b4d4b468ada32025c230584c8354ea3",
+    "ui_build_script": "d3abf3ced6aa329a000b6c0df9c19fabfa83581d95f90b1cdd686007edb5fa8e"
+  },
+  "cmake_flags": [
+    "GGML_CUDA_FA:BOOL=ON",
+    "GGML_CUDA_FA_QUANTS:STRING=f16-f16;q8_0-q8_0",
+    "GGML_HIP:BOOL=ON",
+    "LLAMA_BUILD_SERVER:BOOL=ON",
+    "LLAMA_BUILD_UI:BOOL=OFF",
+    "LLAMA_USE_PREBUILT_UI:BOOL=OFF"
+  ],
+  "server_binding": "127.0.0.1 only during ephemeral tests",
+  "production_services_changed": false,
+  "gpu_backend": "ROCm"
+}

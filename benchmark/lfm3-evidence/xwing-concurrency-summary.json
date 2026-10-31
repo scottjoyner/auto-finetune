@@ -1,0 +1,76 @@
+{
+  "schema": "lfm3.xwing-hip-fa-concurrency-summary.v1",
+  "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+  "server_sha256": "85f3baf1a389ff45e914beef69b1e3e5d524a262472bbac10aa19759547bc662",
+  "warning": "Small synthetic localhost-only samples. Sample p95 is descriptive, not a production SLA. Includes failed port reuse.",
+  "receipts": [
+    {
+      "receipt": "xwing-concurrency-20261031T010754286970Z.json",
+      "status": "completed",
+      "reason": null,
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "server_sha256": "85f3baf1a389ff45e914beef69b1e3e5d524a262472bbac10aa19759547bc662",
+      "results": [
+        {
+          "concurrency": 1,
+          "samples": 3,
+          "median_client_latency_s": 0.5018,
+          "sample_p95_client_latency_s": 0.5193,
+          "mean_aggregate_generated_tps": 95.82
+        },
+        {
+          "concurrency": 2,
+          "samples": 6,
+          "median_client_latency_s": 0.6138,
+          "sample_p95_client_latency_s": 0.6575,
+          "mean_aggregate_generated_tps": 152.883
+        },
+        {
+          "concurrency": 4,
+          "samples": 12,
+          "median_client_latency_s": 0.8266,
+          "sample_p95_client_latency_s": 0.8376,
+          "mean_aggregate_generated_tps": 230.745
+        }
+      ]
+    },
+    {
+      "receipt": "xwing-concurrency-20261031T010823938352Z.json",
+      "status": "failed",
+      "reason": "[Errno 98] Address already in use",
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "server_sha256": "85f3baf1a389ff45e914beef69b1e3e5d524a262472bbac10aa19759547bc662",
+      "results": []
+    },
+    {
+      "receipt": "xwing-concurrency-20261031T010839337668Z.json",
+      "status": "completed",
+      "reason": null,
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "server_sha256": "85f3baf1a389ff45e914beef69b1e3e5d524a262472bbac10aa19759547bc662",
+      "results": [
+        {
+          "concurrency": 1,
+          "samples": 3,
+          "median_client_latency_s": 0.5218,
+          "sample_p95_client_latency_s": 0.6711,
+          "mean_aggregate_generated_tps": 89.694
+        },
+        {
+          "concurrency": 2,
+          "samples": 6,
+          "median_client_latency_s": 0.6463,
+          "sample_p95_client_latency_s": 0.6585,
+          "mean_aggregate_generated_tps": 149.211
+        },
+        {
+          "concurrency": 4,
+          "samples": 12,
+          "median_client_latency_s": 0.8165,
+          "sample_p95_client_latency_s": 0.8409,
+          "mean_aggregate_generated_tps": 234.493
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "schema": "lfm3.xwing-backend-fingerprint.v1",
+  "created_utc": "20261031T000948968829Z",
+  "status": "completed",
+  "source_reference": "git HEAD on x1-370",
+  "source_check_scope": "six selected files, NOT a complete source tree attestation",
+  "source_files": [
+    {
+      "path": "CMakeLists.txt",
+      "git_tree_file_sha256": "40da6c2cce09fc79798952e38e0f9d33f9616c5f3a39f89188ff2c1e9198b7ef",
+      "xwing_snapshot_sha256": "40da6c2cce09fc79798952e38e0f9d33f9616c5f3a39f89188ff2c1e9198b7ef",
+      "match": true
+    },
+    {
+      "path": "src/llama-model.cpp",
+      "git_tree_file_sha256": "73ce1788faa7531554a7a1bbf4e6db63807c067b02adc5e5697968a70818cd04",
+      "xwing_snapshot_sha256": "73ce1788faa7531554a7a1bbf4e6db63807c067b02adc5e5697968a70818cd04",
+      "match": true
+    },
+    {
+      "path": "src/llama-context.cpp",
+      "git_tree_file_sha256": "f76532e7d7c510426bb4f96f1c1bcf4ca5321790b07b56ce9446d793feef8d35",
+      "xwing_snapshot_sha256": "f76532e7d7c510426bb4f96f1c1bcf4ca5321790b07b56ce9446d793feef8d35",
+      "match": true
+    },
+    {
+      "path": "ggml/src/ggml-hip/CMakeLists.txt",
+      "git_tree_file_sha256": "644205340d2c421abffcf2750508007fb8a168f9d01a1cd6000131a858e5f274",
+      "xwing_snapshot_sha256": "644205340d2c421abffcf2750508007fb8a168f9d01a1cd6000131a858e5f274",
+      "match": true
+    },
+    {
+      "path": "ggml/src/ggml-vulkan/CMakeLists.txt",
+      "git_tree_file_sha256": "0c7ac5176786975fdd66709b5f9a2b092ce4d6a57456356e67c4d9f9193203c2",
+      "xwing_snapshot_sha256": "0c7ac5176786975fdd66709b5f9a2b092ce4d6a57456356e67c4d9f9193203c2",
+      "match": true
+    },
+    {
+      "path": "tools/llama-bench/llama-bench.cpp",
+      "git_tree_file_sha256": "8eed21016aabf399c7223f1c8588840edc1d15398e87f2048056d381b8a182ec",
+      "xwing_snapshot_sha256": "8eed21016aabf399c7223f1c8588840edc1d15398e87f2048056d381b8a182ec",
+      "match": true
+    }
+  ],
+  "runtime_binaries": {
+    "Vulkan": {
+      "path": "/home/scott/lfm3-research/build-vulkan-8ca4060/bin/llama-bench",
+      "binary_sha256": "03b518ffd20837a678762f5879cb208a21fe2ae6c59f82b0e2be6655deed7f4e",
+      "cmake_flags": [
+        "GGML_CUDA_FA:BOOL=ON",
+        "GGML_HIP:BOOL=OFF",
+        "GGML_VULKAN:BOOL=ON"
+      ]
+    },
+    "HIP": {
+      "path": "/home/scott/lfm3-research/build-hip-gfx1151-bench/bin/llama-bench",
+      "binary_sha256": "614e279d6766d76115d25b4509c542585c01a48f82b062145e065aa6b48e8255",
+      "cmake_flags": [
+        "CMAKE_HIP_ARCHITECTURES:UNINITIALIZED=gfx1151",
+        "GGML_CUDA_FA:BOOL=OFF",
+        "GGML_HIP:BOOL=ON",
+        "GGML_VULKAN:BOOL=OFF"
+      ]
+    }
+  },
+  "source_commit": "8ca4060b7e30e76baaa5670ee1ec1b760b7f8552",
+  "hipcc_version": [
+    "HIP version: 7.14.60850-0000000",
+    "AMD clang version 23.0.0git (https://github.com/ROCm/llvm-project.git 46fcb339fb61119b337f973c7ca9e710a319fdd0+PATCHED:440716f8b87be9d8e20ed910e10e5b6d14d57cf6)",
+    "Target: x86_64-unknown-linux-gnu"
+  ],
+  "kernel": "6.17.0-1033-oem"
+}

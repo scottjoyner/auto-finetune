@@ -1,0 +1,314 @@
+{
+  "schema": "lfm3.xwing-hip-fa-concurrency.v1",
+  "timestamp_utc": "20261031T010754286970Z",
+  "node": "xwing",
+  "status": "completed",
+  "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+  "model_sha256_expected": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+  "server_binary": "/home/scott/lfm3-research/build-hip-gfx1151-fa-q8/bin/llama-server",
+  "cache_type": "q8_0",
+  "flash_attn": "on",
+  "max_parallel": 4,
+  "waves_per_load": 3,
+  "generated_token_cap": 48,
+  "results": [
+    {
+      "concurrency": 1,
+      "waves": [
+        {
+          "wall_seconds": 0.5043,
+          "requests": [
+            {
+              "elapsed_seconds": 0.5018,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 460.396,
+              "content_length": 248,
+              "stop": true
+            }
+          ],
+          "aggregate_generated_tps": 95.181
+        },
+        {
+          "wall_seconds": 0.5199,
+          "requests": [
+            {
+              "elapsed_seconds": 0.5193,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 481.604,
+              "content_length": 272,
+              "stop": true
+            }
+          ],
+          "aggregate_generated_tps": 92.33
+        },
+        {
+          "wall_seconds": 0.4802,
+          "requests": [
+            {
+              "elapsed_seconds": 0.4797,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 448.132,
+              "content_length": 272,
+              "stop": true
+            }
+          ],
+          "aggregate_generated_tps": 99.949
+        }
+      ],
+      "samples": 3,
+      "median_client_latency_s": 0.5018,
+      "sample_p95_client_latency_s": 0.5193,
+      "mean_aggregate_generated_tps": 95.82
+    },
+    {
+      "concurrency": 2,
+      "waves": [
+        {
+          "wall_seconds": 0.6583,
+          "requests": [
+            {
+              "elapsed_seconds": 0.6464,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 582.03,
+              "content_length": 248,
+              "stop": true
+            },
+            {
+              "elapsed_seconds": 0.6575,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 567.536,
+              "content_length": 270,
+              "stop": true
+            }
+          ],
+          "aggregate_generated_tps": 145.831
+        },
+        {
+          "wall_seconds": 0.6148,
+          "requests": [
+            {
+              "elapsed_seconds": 0.6144,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 557.14,
+              "content_length": 272,
+              "stop": true
+            },
+            {
+              "elapsed_seconds": 0.6131,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 557.919,
+              "content_length": 272,
+              "stop": true
+            }
+          ],
+          "aggregate_generated_tps": 156.142
+        },
+        {
+          "wall_seconds": 0.6127,
+          "requests": [
+            {
+              "elapsed_seconds": 0.6116,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 551.729,
+              "content_length": 272,
+              "stop": true
+            },
+            {
+              "elapsed_seconds": 0.6117,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 550.943,
+              "content_length": 272,
+              "stop": true
+            }
+          ],
+          "aggregate_generated_tps": 156.676
+        }
+      ],
+      "samples": 6,
+      "median_client_latency_s": 0.6138,
+      "sample_p95_client_latency_s": 0.6575,
+      "mean_aggregate_generated_tps": 152.883
+    },
+    {
+      "concurrency": 4,
+      "waves": [
+        {
+          "wall_seconds": 0.8297,
+          "requests": [
+            {
+              "elapsed_seconds": 0.8258,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 736.613,
+              "content_length": 270,
+              "stop": true
+            },
+            {
+              "elapsed_seconds": 0.8262,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 736.575,
+              "content_length": 242,
+              "stop": true
+            },
+            {
+              "elapsed_seconds": 0.8271,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 736.452,
+              "content_length": 270,
+              "stop": true
+            },
+            {
+              "elapsed_seconds": 0.8277,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 735.983,
+              "content_length": 280,
+              "stop": true
+            }
+          ],
+          "aggregate_generated_tps": 231.415
+        },
+        {
+          "wall_seconds": 0.8275,
+          "requests": [
+            {
+              "elapsed_seconds": 0.8235,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 728.837,
+              "content_length": 272,
+              "stop": true
+            },
+            {
+              "elapsed_seconds": 0.8247,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 727.815,
+              "content_length": 272,
+              "stop": true
+            },
+            {
+              "elapsed_seconds": 0.8235,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 728.548,
+              "content_length": 296,
+              "stop": true
+            },
+            {
+              "elapsed_seconds": 0.8258,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 727.234,
+              "content_length": 282,
+              "stop": true
+            }
+          ],
+          "aggregate_generated_tps": 232.034
+        },
+        {
+          "wall_seconds": 0.8392,
+          "requests": [
+            {
+              "elapsed_seconds": 0.8373,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 750.775,
+              "content_length": 272,
+              "stop": true
+            },
+            {
+              "elapsed_seconds": 0.8375,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 750.476,
+              "content_length": 272,
+              "stop": true
+            },
+            {
+              "elapsed_seconds": 0.8357,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 751.034,
+              "content_length": 278,
+              "stop": true
+            },
+            {
+              "elapsed_seconds": 0.8376,
+              "predicted_tokens": 48,
+              "prompt_tokens": 58,
+              "model_generation_ms": 749.73,
+              "content_length": 272,
+              "stop": true
+            }
+          ],
+          "aggregate_generated_tps": 228.786
+        }
+      ],
+      "samples": 12,
+      "median_client_latency_s": 0.8266,
+      "sample_p95_client_latency_s": 0.8376,
+      "mean_aggregate_generated_tps": 230.745
+    }
+  ],
+  "caveats": [
+    "Localhost synthetic requests only; no production requests",
+    "Client-side full-response latencies include prompt, queue and generation",
+    "Small-sample p95 is descriptive, not a stable percentile estimate"
+  ],
+  "preflight": {
+    "available_mib": 8491,
+    "disk_free_mib": 39975
+  },
+  "model_sha256_observed": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+  "server_binary_sha256": "85f3baf1a389ff45e914beef69b1e3e5d524a262472bbac10aa19759547bc662",
+  "server_command": [
+    "nice",
+    "-n",
+    "12",
+    "/home/scott/lfm3-research/build-hip-gfx1151-fa-q8/bin/llama-server",
+    "-m",
+    "/home/scott/lfm3-research/gguf/LFM3-1.7B-QAD-Q4_0.gguf",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "29644",
+    "--no-webui",
+    "--log-disable",
+    "-ngl",
+    "99",
+    "-t",
+    "4",
+    "-c",
+    "8192",
+    "-np",
+    "4",
+    "-ctk",
+    "q8_0",
+    "-ctv",
+    "q8_0",
+    "-fa",
+    "on"
+  ],
+  "server_pid": 3245547,
+  "server_ready": true,
+  "warmup": {
+    "elapsed_seconds": 0.5658,
+    "predicted_tokens": 48,
+    "prompt_tokens": 58,
+    "model_generation_ms": 491.599,
+    "content_length": 276,
+    "stop": true
+  }
+}

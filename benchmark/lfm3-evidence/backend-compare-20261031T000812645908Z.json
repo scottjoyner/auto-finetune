@@ -1,0 +1,156 @@
+{
+  "schema": "lfm3.xwing-matched-backends.v1",
+  "created_utc": "20261031T000812645908Z",
+  "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+  "expected_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+  "node": "xwing",
+  "prompt": 512,
+  "decode": 64,
+  "repetitions": 3,
+  "cache_type": "f16",
+  "mode": "separate",
+  "order": [
+    "Vulkan",
+    "HIP",
+    "HIP",
+    "Vulkan"
+  ],
+  "status": "completed",
+  "runs": [
+    {
+      "backend_expected": "Vulkan",
+      "receipt": "fleet-xwing-20261031T000812670325Z.json",
+      "runner_exit_code": 0,
+      "elapsed_s": 4.269,
+      "status": "completed",
+      "backend_observed": [
+        "Vulkan"
+      ],
+      "available_mib": 8628,
+      "measurements": [
+        {
+          "n_prompt": 512,
+          "n_gen": 0,
+          "avg_ts": 3460.702046,
+          "stddev_ts": 125.419001,
+          "build_commit": "unknown",
+          "gpu_info": "Radeon 8050S Graphics (RADV STRIX_HALO)"
+        },
+        {
+          "n_prompt": 0,
+          "n_gen": 64,
+          "avg_ts": 147.998951,
+          "stddev_ts": 1.171868,
+          "build_commit": "unknown",
+          "gpu_info": "Radeon 8050S Graphics (RADV STRIX_HALO)"
+        }
+      ]
+    },
+    {
+      "backend_expected": "HIP",
+      "receipt": "fleet-xwing-20261031T000817955582Z.json",
+      "runner_exit_code": 0,
+      "elapsed_s": 5.599,
+      "status": "completed",
+      "backend_observed": [
+        "ROCm"
+      ],
+      "available_mib": 8368,
+      "measurements": [
+        {
+          "n_prompt": 512,
+          "n_gen": 0,
+          "avg_ts": 2723.53153,
+          "stddev_ts": 600.942348,
+          "build_commit": "unknown",
+          "gpu_info": "AMD Radeon 8050S Graphics"
+        },
+        {
+          "n_prompt": 0,
+          "n_gen": 64,
+          "avg_ts": 107.36208,
+          "stddev_ts": 12.335045,
+          "build_commit": "unknown",
+          "gpu_info": "AMD Radeon 8050S Graphics"
+        }
+      ]
+    },
+    {
+      "backend_expected": "HIP",
+      "receipt": "fleet-xwing-20261031T000824539543Z.json",
+      "runner_exit_code": 0,
+      "elapsed_s": 5.29,
+      "status": "completed",
+      "backend_observed": [
+        "ROCm"
+      ],
+      "available_mib": 8287,
+      "measurements": [
+        {
+          "n_prompt": 512,
+          "n_gen": 0,
+          "avg_ts": 3149.807534,
+          "stddev_ts": 379.039514,
+          "build_commit": "unknown",
+          "gpu_info": "AMD Radeon 8050S Graphics"
+        },
+        {
+          "n_prompt": 0,
+          "n_gen": 64,
+          "avg_ts": 121.505302,
+          "stddev_ts": 2.975277,
+          "build_commit": "unknown",
+          "gpu_info": "AMD Radeon 8050S Graphics"
+        }
+      ]
+    },
+    {
+      "backend_expected": "Vulkan",
+      "receipt": "fleet-xwing-20261031T000830841257Z.json",
+      "runner_exit_code": 0,
+      "elapsed_s": 4.139,
+      "status": "completed",
+      "backend_observed": [
+        "Vulkan"
+      ],
+      "available_mib": 8005,
+      "measurements": [
+        {
+          "n_prompt": 512,
+          "n_gen": 0,
+          "avg_ts": 3706.386132,
+          "stddev_ts": 144.944353,
+          "build_commit": "unknown",
+          "gpu_info": "Radeon 8050S Graphics (RADV STRIX_HALO)"
+        },
+        {
+          "n_prompt": 0,
+          "n_gen": 64,
+          "avg_ts": 153.90673,
+          "stddev_ts": 1.738797,
+          "build_commit": "unknown",
+          "gpu_info": "Radeon 8050S Graphics (RADV STRIX_HALO)"
+        }
+      ]
+    }
+  ],
+  "caveat": "Exploratory: different backend kernels; only 2 executions per backend; no temperature or background-load normalization.",
+  "summary": {
+    "Vulkan": {
+      "prompt": {
+        "mean_tps": 3583.544089
+      },
+      "decode": {
+        "mean_tps": 150.9528405
+      }
+    },
+    "HIP": {
+      "prompt": {
+        "mean_tps": 2936.669532
+      },
+      "decode": {
+        "mean_tps": 114.43369100000001
+      }
+    }
+  }
+}

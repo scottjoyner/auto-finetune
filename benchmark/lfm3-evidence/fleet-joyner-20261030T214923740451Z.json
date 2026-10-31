@@ -1,0 +1,20 @@
+{
+  "schema": "lfm3.fleet-benchmark.v1",
+  "created_utc": "20261030T214923740451Z",
+  "orchestrator": "x1-370",
+  "node": "joyner",
+  "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf",
+  "expected_model_sha256": "3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4",
+  "prompt": 512,
+  "decode": 64,
+  "repetitions": 3,
+  "status": "skipped",
+  "preflight": {
+    "returncode": 0,
+    "stdout": "joyner\n1366\n3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4  /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf\n",
+    "stderr": ""
+  },
+  "available_mib": 1366,
+  "observed_model_sha256": "3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4",
+  "reason": "remote available RAM below safety limit"
+}

@@ -1,0 +1,118 @@
+{
+  "schema": "lfm3.xwing-matched-backends.v1",
+  "created_utc": "20261031T000920326333Z",
+  "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+  "expected_model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+  "node": "xwing",
+  "prompt": 4096,
+  "decode": 64,
+  "repetitions": 3,
+  "cache_type": "f16",
+  "mode": "paired",
+  "order": [
+    "Vulkan",
+    "HIP",
+    "HIP",
+    "Vulkan"
+  ],
+  "status": "completed",
+  "runs": [
+    {
+      "backend_expected": "Vulkan",
+      "receipt": "fleet-xwing-20261031T000920348433Z.json",
+      "runner_exit_code": 0,
+      "elapsed_s": 8.565,
+      "status": "completed",
+      "backend_observed": [
+        "Vulkan"
+      ],
+      "available_mib": 7811,
+      "measurements": [
+        {
+          "n_prompt": 4096,
+          "n_gen": 64,
+          "avg_ts": 2630.317214,
+          "stddev_ts": 14.965302,
+          "build_commit": "unknown",
+          "gpu_info": "Radeon 8050S Graphics (RADV STRIX_HALO)"
+        }
+      ]
+    },
+    {
+      "backend_expected": "HIP",
+      "receipt": "fleet-xwing-20261031T000929922200Z.json",
+      "runner_exit_code": 0,
+      "elapsed_s": 12.253,
+      "status": "completed",
+      "backend_observed": [
+        "ROCm"
+      ],
+      "available_mib": 8538,
+      "measurements": [
+        {
+          "n_prompt": 4096,
+          "n_gen": 64,
+          "avg_ts": 1781.426975,
+          "stddev_ts": 27.92554,
+          "build_commit": "unknown",
+          "gpu_info": "AMD Radeon 8050S Graphics"
+        }
+      ]
+    },
+    {
+      "backend_expected": "HIP",
+      "receipt": "fleet-xwing-20261031T000943167696Z.json",
+      "runner_exit_code": 0,
+      "elapsed_s": 13.018,
+      "status": "completed",
+      "backend_observed": [
+        "ROCm"
+      ],
+      "available_mib": 8443,
+      "measurements": [
+        {
+          "n_prompt": 4096,
+          "n_gen": 64,
+          "avg_ts": 1744.564934,
+          "stddev_ts": 33.340032,
+          "build_commit": "unknown",
+          "gpu_info": "AMD Radeon 8050S Graphics"
+        }
+      ]
+    },
+    {
+      "backend_expected": "Vulkan",
+      "receipt": "fleet-xwing-20261031T000957192565Z.json",
+      "runner_exit_code": 0,
+      "elapsed_s": 7.932,
+      "status": "completed",
+      "backend_observed": [
+        "Vulkan"
+      ],
+      "available_mib": 8756,
+      "measurements": [
+        {
+          "n_prompt": 4096,
+          "n_gen": 64,
+          "avg_ts": 2722.163457,
+          "stddev_ts": 10.034782,
+          "build_commit": "unknown",
+          "gpu_info": "Radeon 8050S Graphics (RADV STRIX_HALO)"
+        }
+      ]
+    }
+  ],
+  "caveat": "Exploratory: different backend kernels; only 2 executions per backend; no temperature or background-load normalization.",
+  "summary": {
+    "Vulkan": {
+      "paired": {
+        "mean_tps": 2676.2403355
+      }
+    },
+    "HIP": {
+      "paired": {
+        "mean_tps": 1762.9959545000002
+      }
+    }
+  }
+}

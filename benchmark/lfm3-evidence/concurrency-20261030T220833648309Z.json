@@ -1,0 +1,15 @@
+{
+  "schema": "lfm3.concurrent.v1",
+  "created_utc": "20261030T220833648309Z",
+  "hostname": "x1-370",
+  "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf",
+  "model_sha256_expected": "3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4",
+  "cache": "f16",
+  "max_parallel": 4,
+  "repetitions": 3,
+  "tokens": 48,
+  "status": "failed",
+  "results": [],
+  "preflight_available_mib": 58584,
+  "reason": "[Errno 98] Address already in use"
+}

@@ -1,0 +1,30 @@
+{
+  "timestamp_utc": "2026-10-30T21:21:24.582253+00:00",
+  "hostname": "x1-370",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+  "model": "/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf",
+  "model_exists": true,
+  "command": [
+    "/home/scott/lfm3-research/build-cpu-avx2/bin/llama-bench",
+    "-m",
+    "/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf",
+    "-ngl",
+    "0",
+    "-t",
+    "4",
+    "-p",
+    "128",
+    "-n",
+    "32",
+    "-r",
+    "1",
+    "-o",
+    "json"
+  ],
+  "status": "completed",
+  "model_sha256": "3793e1e6e2266919d6e015287221b41100175a98eddaba92e111aed3b05c93c4",
+  "returncode": 0,
+  "elapsed_seconds": 4.919,
+  "stdout": "[\n  {\n    \"build_commit\": \"8ca4060\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen AI 9 HX 370 w/ Radeon 890M\",\n    \"gpu_info\": \"\",\n    \"backends\": \"CPU\",\n    \"model_filename\": \"/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf\",\n    \"model_type\": \"lfm3 1.7B Q4_K - Medium\",\n    \"model_size\": 1091380480,\n    \"model_n_params\": 1728801600,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"load_mode\": \"auto\",\n    \"lazy_mode\": \"auto\",\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"repack\": true,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 128,\n    \"n_gen\": 0,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-10-30T21:21:26Z\",\n    \"avg_ns\": 1150843052,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 111.222812,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 1150843052 ],\n    \"samples_ts\": [ 111.223 ]\n  },\n  {\n    \"build_commit\": \"8ca4060\",\n    \"build_number\": 1,\n    \"cpu_info\": \"AMD Ryzen AI 9 HX 370 w/ Radeon 890M\",\n    \"gpu_info\": \"\",\n    \"backends\": \"CPU\",\n    \"model_filename\": \"/home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf\",\n    \"model_type\": \"lfm3 1.7B Q4_K - Medium\",\n    \"model_size\": 1091380480,\n    \"model_n_params\": 1728801600,\n    \"n_batch\": 2048,\n    \"n_ubatch\": 512,\n    \"n_threads\": 4,\n    \"cpu_mask\": \"0x0\",\n    \"cpu_strict\": false,\n    \"poll\": 50,\n    \"type_k\": \"f16\",\n    \"type_v\": \"f16\",\n    \"n_gpu_layers\": 0,\n    \"n_cpu_moe\": 0,\n    \"split_mode\": \"layer\",\n    \"main_gpu\": 0,\n    \"no_kv_offload\": false,\n    \"flash_attn\": -1,\n    \"devices\": \"auto\",\n    \"tensor_split\": \"0.00\",\n    \"tensor_buft_overrides\": \"none\",\n    \"load_mode\": \"auto\",\n    \"lazy_mode\": \"auto\",\n    \"embeddings\": false,\n    \"no_op_offload\": 0,\n    \"no_host\": false,\n    \"repack\": true,\n    \"fit_target\": 0,\n    \"fit_min_ctx\": 0,\n    \"n_prompt\": 0,\n    \"n_gen\": 32,\n    \"n_depth\": 0,\n    \"test_time\": \"2026-10-30T21:21:28Z\",\n    \"avg_ns\": 1139506166,\n    \"stddev_ns\": 0,\n    \"avg_ts\": 28.082340,\n    \"stddev_ts\": 0.000000,\n    \"samples_ns\": [ 1139506166 ],\n    \"samples_ts\": [ 28.0823 ]\n  }\n]\n",
+  "stderr": ""
+}

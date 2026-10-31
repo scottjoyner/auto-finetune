@@ -1,0 +1,176 @@
+{
+  "schema": "lfm3.xwing-backend-comparison-summary.v1",
+  "source_fingerprint_receipt": "backend-fingerprint-20261031T000948968829Z.json",
+  "source_git_commit": "8ca4060b7e30e76baaa5670ee1ec1b760b7f8552",
+  "hardware": "xwing, AMD Radeon 8050S, gfx1151",
+  "model": "LFM3-1.7B-QAD-Q4_0",
+  "tested_caches": [
+    "f16",
+    "q8_0"
+  ],
+  "caveats": [
+    "HIP-noFA baselines compiled with GGML_CUDA_FA=OFF; HIP-FA candidate separately attested. Vulkan uses independent kernels.",
+    "Two backend executions, three llama-bench repetitions per execution.",
+    "Node production services and hardware clocks not isolated or normalized.",
+    "Paired combined tokens/s must not be read as standalone decode speed.",
+    "No broad model accuracy or correctness equivalence verified.",
+    "Only six source snapshot files matched a pinned git commit, not a complete tree attestation."
+  ],
+  "comparisons": [
+    {
+      "comparison_receipt": "backend-compare-20261031T000812645908Z.json",
+      "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "prompt_tokens": 512,
+      "generation_tokens": 64,
+      "cache_type": "f16",
+      "hip_variant": "no-fa",
+      "runtime_fa": "auto",
+      "hip_executable_sha256": null,
+      "repetitions_per_run": 3,
+      "executions_per_backend": 2,
+      "source_receipts": [
+        "fleet-xwing-20261031T000812670325Z.json",
+        "fleet-xwing-20261031T000817955582Z.json",
+        "fleet-xwing-20261031T000824539543Z.json",
+        "fleet-xwing-20261031T000830841257Z.json"
+      ],
+      "metrics": [
+        {
+          "metric": "prompt_tps",
+          "vulkan_tps": 3583.544,
+          "hip_tps": 2936.67,
+          "vulkan_divided_by_hip": 1.2203,
+          "hip_relative_to_vulkan_percent": 81.95
+        },
+        {
+          "metric": "decode_tps",
+          "vulkan_tps": 150.953,
+          "hip_tps": 114.434,
+          "vulkan_divided_by_hip": 1.3191,
+          "hip_relative_to_vulkan_percent": 75.81
+        }
+      ]
+    },
+    {
+      "comparison_receipt": "backend-compare-20261031T001805944361Z.json",
+      "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "prompt_tokens": 512,
+      "generation_tokens": 64,
+      "cache_type": "q8_0",
+      "hip_variant": "no-fa",
+      "runtime_fa": "auto",
+      "hip_executable_sha256": null,
+      "repetitions_per_run": 3,
+      "executions_per_backend": 2,
+      "source_receipts": [
+        "fleet-xwing-20261031T001805970125Z.json",
+        "fleet-xwing-20261031T001810911655Z.json",
+        "fleet-xwing-20261031T001819444931Z.json",
+        "fleet-xwing-20261031T001827325045Z.json"
+      ],
+      "metrics": [
+        {
+          "metric": "prompt_tps",
+          "vulkan_tps": 3704.473,
+          "hip_tps": 953.484,
+          "vulkan_divided_by_hip": 3.8852,
+          "hip_relative_to_vulkan_percent": 25.74
+        },
+        {
+          "metric": "decode_tps",
+          "vulkan_tps": 150.463,
+          "hip_tps": 95.666,
+          "vulkan_divided_by_hip": 1.5728,
+          "hip_relative_to_vulkan_percent": 63.58
+        }
+      ]
+    },
+    {
+      "comparison_receipt": "backend-compare-20261031T000920326333Z.json",
+      "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "prompt_tokens": 4096,
+      "generation_tokens": 64,
+      "cache_type": "f16",
+      "hip_variant": "no-fa",
+      "runtime_fa": "auto",
+      "hip_executable_sha256": null,
+      "repetitions_per_run": 3,
+      "executions_per_backend": 2,
+      "source_receipts": [
+        "fleet-xwing-20261031T000920348433Z.json",
+        "fleet-xwing-20261031T000929922200Z.json",
+        "fleet-xwing-20261031T000943167696Z.json",
+        "fleet-xwing-20261031T000957192565Z.json"
+      ],
+      "metrics": [
+        {
+          "metric": "paired_combined_tps",
+          "vulkan_tps": 2676.24,
+          "hip_tps": 1762.996,
+          "vulkan_divided_by_hip": 1.518,
+          "hip_relative_to_vulkan_percent": 65.88
+        }
+      ]
+    },
+    {
+      "comparison_receipt": "backend-compare-20261031T005237169571Z.json",
+      "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "prompt_tokens": 4096,
+      "generation_tokens": 64,
+      "cache_type": "q8_0",
+      "hip_variant": "fa-q8",
+      "runtime_fa": "on",
+      "hip_executable_sha256": "4be79e2718bac9275e54361ce33e07d332422e0b9bf029e658b7c577e0be24e4",
+      "repetitions_per_run": 3,
+      "executions_per_backend": 2,
+      "source_receipts": [
+        "fleet-xwing-20261031T005237196875Z.json",
+        "fleet-xwing-20261031T005245643917Z.json",
+        "fleet-xwing-20261031T005254892381Z.json",
+        "fleet-xwing-20261031T005304287933Z.json"
+      ],
+      "metrics": [
+        {
+          "metric": "paired_combined_tps",
+          "vulkan_tps": 2706.928,
+          "hip_tps": 2423.767,
+          "vulkan_divided_by_hip": 1.1168,
+          "hip_relative_to_vulkan_percent": 89.54
+        }
+      ]
+    },
+    {
+      "comparison_receipt": "backend-compare-20261031T001313616787Z.json",
+      "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "prompt_tokens": 4096,
+      "generation_tokens": 64,
+      "cache_type": "q8_0",
+      "hip_variant": "no-fa",
+      "runtime_fa": "auto",
+      "hip_executable_sha256": null,
+      "repetitions_per_run": 3,
+      "executions_per_backend": 2,
+      "source_receipts": [
+        "fleet-xwing-20261031T001313637453Z.json",
+        "fleet-xwing-20261031T001322846400Z.json",
+        "fleet-xwing-20261031T001445632239Z.json",
+        "fleet-xwing-20261031T001604522632Z.json"
+      ],
+      "metrics": [
+        {
+          "metric": "paired_combined_tps",
+          "vulkan_tps": 2675.106,
+          "hip_tps": 217.898,
+          "vulkan_divided_by_hip": 12.2769,
+          "hip_relative_to_vulkan_percent": 8.15
+        }
+      ]
+    }
+  ],
+  "failed_comparisons": []
+}

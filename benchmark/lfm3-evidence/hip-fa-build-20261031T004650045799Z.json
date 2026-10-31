@@ -1,0 +1,27 @@
+{
+  "schema": "lfm3.hip-fa-build-provenance.v1",
+  "created_utc": "20261031T004650045799Z",
+  "status": "completed",
+  "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+  "source_commit_reference": "8ca4060b7e30e76baaa5670ee1ec1b760b7f8552",
+  "selected_source_sha256": {
+    "CMakeLists.txt": "40da6c2cce09fc79798952e38e0f9d33f9616c5f3a39f89188ff2c1e9198b7ef",
+    "src/llama-model.cpp": "73ce1788faa7531554a7a1bbf4e6db63807c067b02adc5e5697968a70818cd04",
+    "src/llama-context.cpp": "f76532e7d7c510426bb4f96f1c1bcf4ca5321790b07b56ce9446d793feef8d35",
+    "ggml/src/ggml-hip/CMakeLists.txt": "644205340d2c421abffcf2750508007fb8a168f9d01a1cd6000131a858e5f274",
+    "ggml/src/ggml-vulkan/CMakeLists.txt": "0c7ac5176786975fdd66709b5f9a2b092ce4d6a57456356e67c4d9f9193203c2",
+    "tools/llama-bench/llama-bench.cpp": "8eed21016aabf399c7223f1c8588840edc1d15398e87f2048056d381b8a182ec"
+  },
+  "sha256": {
+    "model": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+    "hip_no_fa": "614e279d6766d76115d25b4509c542585c01a48f82b062145e065aa6b48e8255",
+    "hip_fa_q8": "4be79e2718bac9275e54361ce33e07d332422e0b9bf029e658b7c577e0be24e4"
+  },
+  "candidate_cmake_flags": [
+    "CMAKE_HIP_ARCHITECTURES:UNINITIALIZED=gfx1151",
+    "GGML_CUDA_FA:BOOL=ON",
+    "GGML_CUDA_FA_QUANTS:STRING=f16-f16;q8_0-q8_0",
+    "GGML_HIP:BOOL=ON"
+  ],
+  "runtime_version_output": "ggml_cuda_init: found 1 ROCm devices (Total VRAM: 15294 MiB):\n  Device 0: AMD Radeon 8050S Graphics, gfx1151 (0x1151), VMM: no, Wave Size: 32, VRAM: 15294 MiB\nversion: 0.7.0-dev (build 0, commit unknown)\nbuilt with GNU 15.2.0 for Linux x86_64\n"
+}
