@@ -1,0 +1,36 @@
+{
+  "evidence_class": "private model-blind pilot readiness; not any human safety result",
+  "date": "2026-10-30",
+  "pilot": "lfm3-model-blind-32-prompt-pilot-v1",
+  "source_prompts_selected": 32,
+  "frozen_model_arms_per_prompt": 3,
+  "targeted_responses_per_reviewer": 96,
+  "selection_buckets_per_prompt_group": {
+    "benign_repeated_C_response": 8,
+    "benign_other_C_response": 8,
+    "unsafe_repeated_C_response": 8,
+    "unsafe_other_C_response": 8
+  },
+  "reviewers": {
+    "reviewer_1": {
+      "graded": 0,
+      "ungraded": 96
+    },
+    "reviewer_2": {
+      "graded": 0,
+      "ungraded": 96
+    }
+  },
+  "original_review_file_content_changed_by_route_creation": false,
+  "raw_prompts_or_generations_published": false,
+  "model_unblinding_performed": false,
+  "human_behavioral_refusal_scored": false,
+  "full_1350_review_complete": false,
+  "repeated_response_labels_auto_propagated": false,
+  "model_weight_release_approved": false,
+  "limitations": [
+    "Purposive over-sampling of C-repeated outputs is not representative of original 450 prompts",
+    "No actual human annotation exists yet; this report verifies only reviewer routing readiness",
+    "The original 1350-assignment files remain the sole authoritative human review records"
+  ]
+}

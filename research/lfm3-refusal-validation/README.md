@@ -98,6 +98,23 @@ per-response hashes remain private. Details and aggregate-only evidence:
 [XSTEST_RESPONSE_DIVERSITY_20261030.md](XSTEST_RESPONSE_DIVERSITY_20261030.md).
 Human refusal grading, actionable-harm review and model release stay blocked.
 
+## Human-only targeted review pilot (October 30, 2026)
+
+An independently reproducible 32-prompt, 96-response-per-reviewer pilot
+was **actually selected on x1-370** from the complete frozen XSTest
+review queue. It deliberately includes safe/unsafe contexts where C
+repeated its modal response or generated another response (8 prompts
+per bucket, three checkpoint answers per prompt). No model-arm labels,
+raw responses, source IDs, human graders or response hashes are
+published. The original blinded CSVs remain authoritative: an
+interactive human reviewer edits the original assigned batch rows,
+not a competing private packet. Pilot status is **0/96 graded for each
+of two independent reviewers**; no annotations are manufactured.
+This is a purposive pilot, NOT a representative estimate, a blinded
+human outcome, consensus, or a model-release authorization.
+See [PRIVATE_HUMAN_REVIEW_PILOT_20261030.md](PRIVATE_HUMAN_REVIEW_PILOT_20261030.md)
+for local human-only launch and progress commands.
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
