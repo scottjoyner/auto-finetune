@@ -107,7 +107,7 @@ def assess_pilot(entries, first, second, mapping, benchmark):
             "Two 1350-row full-study human reviews remain a separate release gate",
         ],
     }
-def read_paired_batches(entries, batches_dir):
+def read_paired_batches(entries, batches_dir, packet_dir):
     """Private source CSVs only; no independent copies or model judging."""
     by_reviewer = []
     for reviewer in (1, 2):
@@ -116,7 +116,8 @@ def read_paired_batches(entries, batches_dir):
         for entry in entries:
             batch = entry["batch"]
             if batch not in cache:
-                cache[batch] = open_batch(batches_dir, reviewer, batch)[1]
+                cache[batch] = open_batch(
+                    batches_dir, reviewer, batch, packet_dir=packet_dir)[1]
             item = cache[batch][entry["index"] - 1]
             if item["review_id"] != entry["review_id"]:
                 raise ValueError("original review batch shifted since route")
@@ -132,7 +133,7 @@ def assess_private(results_dir, packet_dir, batches_dir, route_path):
     _, entries = attest_route_with_entries(
         results_dir, packet_dir, batches_dir, route_path)
     identities = [entry["review_id"] for entry in entries]
-    first, second = read_paired_batches(entries, batches_dir)
+    first, second = read_paired_batches(entries, batches_dir, packet_dir)
     private_key = json.loads((Path(packet_dir) / "private_model_key.json").read_text())
     lookup = {ident: private_key[ident] for ident in identities}
     benchmark = {source["id"]: source for source in read_verified_dataset()}

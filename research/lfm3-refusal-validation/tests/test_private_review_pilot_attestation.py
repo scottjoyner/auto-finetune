@@ -138,7 +138,7 @@ def test_agreement_uses_attested_snapshot_not_second_route_read(
                         lambda *args, **kwargs: (_ for _ in ()).throw(
                             AssertionError("route must not be reopened")))
     monkeypatch.setattr(agreement, "read_paired_batches",
-                        lambda entries, batches: ({"SYNTH_PRIVATE_1": {}},
+                        lambda entries, batches, packet: ({"SYNTH_PRIVATE_1": {}},
                                                    {"SYNTH_PRIVATE_1": {}}))
     monkeypatch.setattr(agreement, "read_verified_dataset",
                         lambda: [{"id": "synthetic-case", "class": "safe"}])
