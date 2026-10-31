@@ -255,6 +255,18 @@ during the verified live inventory. See
 [MOUNT_AWARE_STORAGE_RECOVERY_20261031.md](MOUNT_AWARE_STORAGE_RECOVERY_20261031.md)
 and unresolved incident #106.
 
+## Verified root Cargo cache recovery (October 31, 2026)
+
+A root-filesystem-specific recovery pass reclaimed **21.134 GiB** of
+measured Git-ignored Cargo incremental compiler caches across **37**
+inactive worktrees; the active Rust build was excluded. The corrected
+mount mapping was checked before each removal. Following two passes,
+root unprivileged free space held at **26.071 GiB** across four samples,
+above the existing **20 GiB** heavy-compute floor. Cargo may rebuild
+these caches; live writers may consume the recovered space. Storage
+incident #106 remains under observation, not permanently resolved.
+See [ROOT_CACHE_RECOVERY_EVIDENCE_20261031.md](ROOT_CACHE_RECOVERY_EVIDENCE_20261031.md).
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
