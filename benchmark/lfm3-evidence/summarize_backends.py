@@ -82,7 +82,7 @@ def main():
         "source_git_commit": fp["source_commit"],
         "hardware": "xwing, AMD Radeon 8050S, gfx1151",
         "model": "LFM3-1.7B-QAD-Q4_0",
-        "tested_cache": "f16",
+        "tested_caches": sorted({c["cache_type"] for c in summaries}),
         "caveats": [
             "HIP built with GGML_CUDA_FA=OFF; Vulkan has different attention kernels.",
             "Two backend executions, three llama-bench repetitions per execution.",

@@ -116,8 +116,49 @@ def main():
   blocked={x['comparison_receipt'] for x in summary.get('failed_comparisons',[])}
   require(not reported.intersection(blocked) and reported.union(blocked)=={p.name for p in comparisons},
           'comparison summary missing or double-counting evidence')
+ for p in base:
+  r=json.loads(p.read_text())
+  digest=r.get('observed_binary_sha256')
+  if digest is not None:
+   require(isinstance(digest,str) and len(digest)==64 and all(c in '0123456789abcdefABCDEF' for c in digest),
+           f'{p.name}: invalid runtime executable hash')
+   expected=r.get('expected_binary_sha256')
+   require(not expected or digest.lower()==expected.lower(), f'{p.name}: executable hash mismatch')
+ candidate_paths=sorted(ROOT.glob('hip-fa-compare-*.json'))
+ if candidate_paths:
+  candidate_summary=ROOT/'hip-fa-summary.json'
+  require(candidate_summary.is_file(),'missing HIP FA summary')
+  # Validation stays independent of the binary; summary comparison is deterministic.
+  summary=json.loads(candidate_summary.read_text())
+  require(summary.get('schema')=='lfm3.hip-fa-summary.v1','invalid HIP FA summary')
+  reported={x['comparison_receipt'] for x in summary.get('comparisons',[])}
+  failed={x['receipt'] for x in summary.get('failed_comparisons',[])}
+  require(not reported.intersection(failed) and reported.union(failed)=={p.name for p in candidate_paths},
+          'HIP FA comparison missing or duplicated')
+  for p in candidate_paths:
+   r=json.loads(p.read_text())
+   require(r.get('schema')=='lfm3.hip-fa-abba.v1' and r.get('order')==['HIP-noFA','HIP-FA','HIP-FA','HIP-noFA'],
+           f'{p.name}: invalid HIP FA comparison')
+   require(r.get('status') in ('completed','failed'),f'{p.name}: invalid status')
+   runs=r.get('runs',[])
+   require(len(runs)<=4,f'{p.name}: oversized run count')
+   if r.get('status')=='completed':
+    require(len(runs)==4 and all(x.get('status')=='completed' for x in runs),
+            f'{p.name}: missing run in completed comparison')
+   for i,row in enumerate(runs):
+    require(row.get('expected_variant')==r['order'][i], f'{p.name}: comparison order mismatch')
+    name=row.get('receipt','')
+    require(name.startswith('fleet-xwing-') and (ROOT/name).is_file(),
+            f'{p.name}: source receipt missing')
+    source=json.loads((ROOT/name).read_text())
+    require(row.get('status')==source.get('status'),f'{p.name}: status mismatch')
+    if row.get('status')=='completed':
+     require(source.get('backend')==['ROCm'] and source.get('flash_attn')=='on' and source.get('cache_type')=='q8_0',
+             f'{p.name}: wrong runtime test')
+     require(source.get('observed_binary_sha256')==r.get('runtime_binary_sha256',{}).get(row['expected_variant']),
+             f'{p.name}: binary mismatch')
  print('PASS',len(base),'core receipts +',len(extra),'extended experiment receipts +',
-       len(smokes),'ROCm smoke +',len(toolchains),'toolchain audit +',len(comparisons),'matched comparisons +',len(fingerprints),'source fingerprint')
+       len(smokes),'ROCm smoke +',len(toolchains),'toolchain audit +',len(comparisons),'matched comparisons +',len(fingerprints),'source fingerprint +',len(candidate_paths),'HIP FA comparisons')
  return 0
 if __name__=='__main__':
  try:sys.exit(main())

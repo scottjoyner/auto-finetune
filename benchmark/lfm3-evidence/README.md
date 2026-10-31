@@ -197,3 +197,18 @@ bash benchmark/lfm3-evidence/build_hip_fa_q8.sh
 ```
 
 An incomplete compile is **not evidence of successful FA support or speedup**. Verify the binary is present, that the exact HIP backend is loaded, and run a separately labelled, checksum-bound benchmark before comparing against any baseline.
+
+## Candidate HIP Flash Attention measurement protocol
+
+`compare_hip_fa.py` compares two **isolated native HIP binaries** (baseline no-FA vs candidate FA-on) on **xwing**, using a checksum-pinned QAD-Q4_0 model and the strict A/B/B/A order `HIP-noFA → HIP-FA → HIP-FA → HIP-noFA`. Both variants use identical runtime `-fa on`, Q8 K/V cache, 99 requested GPU layers and a 6 GiB remote available-memory admission gate. All four source receipts pin the **actual executable SHA-256**, verify the ROCm backend and record task timing and process outcomes. A candidate is not accepted merely because it compiles: we require model loading, valid outputs, and a separately executed quality test.
+
+Only run this comparison after the candidate HIP FA binary is present. Both the original no-FA baseline and the existing Vulkan baseline remain unchanged.
+
+```bash
+python3 benchmark/lfm3-evidence/compare_hip_fa.py --prompt 512 --decode 64 --repetitions 3
+python3 benchmark/lfm3-evidence/compare_hip_fa.py --prompt 4096 --decode 64 --repetitions 2
+python3 benchmark/lfm3-evidence/summarize_hip_fa.py
+python3 benchmark/lfm3-evidence/validate.py
+```
+
+The summary (once experiments exist) keeps *failed candidate comparisons* separate from completed measurements. Comparing two HIP variants does not by itself establish superiority over Vulkan; include a new matched Vulkan run for deployment recommendations. No modifications to production inference services are included.
