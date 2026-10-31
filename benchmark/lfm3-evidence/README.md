@@ -114,3 +114,14 @@ python3 benchmark/lfm3-evidence/score_retrieval.py
 **x1-370 gfx1150 ROCm packaging conflict:** the installed `hipcc` is **5.7.1-3**, while HIP runtime is **7.2.26015.70200** with ROCm LLVM clang-22. Legacy `hipcc` seeks a nonexistent clang-17 in the ROCm 7.2 tree; installed `libamdhip64-dev` also belongs to the 5.7 generation. The attempted direct compiler smoke test was unsuccessful. Neither ROCm installation nor system-level packages were changed. The full toolchain audit is retained locally on x1-370 as `rocm-x1-toolchain-20261030.json` and is not included in the published PR; only the high-level compatibility finding is published.
 
 Do not infer HIP backend performance, or recommend replacing system packages without isolating service compatibility and ensuring rollback.
+
+## Matched Vulkan/HIP benchmark harness (xwing)
+
+`compare_backends.py` is a bounded, fail-closed A/B/B/A runner, requiring a compiled HIP executable. It runs `fleet_runner.py` sequentially with identical model SHA-256, batch sizes, threads, cache quantization, prompt/generation token counts, and three in-process repetitions; no benchmarks run concurrently. Output includes four underlying remote receipts and a summary of mean tokens/s per backend.
+
+```bash
+python3 benchmark/lfm3-evidence/compare_backends.py --prompt 512 --decode 64
+python3 benchmark/lfm3-evidence/compare_backends.py --prompt 4096 --decode 64 --paired
+```
+
+A comparison is marked **failed** if the HIP binary is absent, the remote node is below the 4 GiB available-memory threshold, the model hash differs, the GPU backend is not the expected one, or any run fails. An A/B result alone is still exploratory: note that the HIP build config disables HIP flash attention, unlike the Vulkan configuration, and the node's background loads and clocks are not controlled. Do not report any speedup unless every source receipt is independently validated.
