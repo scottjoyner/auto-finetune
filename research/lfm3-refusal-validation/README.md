@@ -185,6 +185,20 @@ behavioral refusal followed; issue #106 remains open. Full synthetic
 regression suite: **368/368 tests passing**. Details in
 [RESEARCH_DISK_GUARD_COVERAGE_20261031.md](RESEARCH_DISK_GUARD_COVERAGE_20261031.md).
 
+## Post-hoc C-output-conditioned matched XSTest latency (October 31, 2026)
+
+On the **same unsafe prompts**, C was faster than A on 126/127
+requests producing C's identical short stock answer (median C-minus-A
+elapsed time **-8.550 seconds**), but only 32/73 requests with
+other C replies (median difference **+0.165 seconds**; exploratory
+Holm-adjusted sign-test p approximately **0.349**). Among benign
+nonrepeated C answers, C was slower than A on 176/221 matched prompts.
+These output-conditioned, post-hoc comparisons from the original
+1,350 frozen CPU BF16 generations strengthen the repeated-answer
+confounding diagnosis; they **do not** prove causal model efficiency,
+valid behavioral refusal, or tokenizer-token throughput.
+See [XSTEST_MODAL_CONDITIONED_PAIRED_LATENCY_20261031.md](XSTEST_MODAL_CONDITIONED_PAIRED_LATENCY_20261031.md).
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
