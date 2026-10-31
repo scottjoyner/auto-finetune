@@ -186,3 +186,14 @@ Flash Attention probes, captured in separate source receipts:
 These diagnostic runs are **not matched A/B comparisons**, and a runtime flag does not retroactively compile unavailable HIP Flash Attention kernels. The next optimization candidate is a *separate* HIP build compiled with `GGML_CUDA_FA=ON` and selected Q8/f16 attention kernels. Keep the original binaries and receipts unmodified. See tracking issue #105.
 
 `fleet_runner.py` now accepts `--flash-attn auto|on|off` and records the chosen runtime flag in the raw receipt. Its default is still `auto`.
+
+## Safe isolated candidate HIP Flash Attention build
+
+The candidate binary is a **separate** gfx1151 HIP build tree, never a replacement for the successful no-FA baseline. `build_hip_fa_q8.sh` is a reproducible xwing-only helper with model-source hash checks (six selected files), RAM and disk preflight, exclusive lock, 2 low-priority compiler workers, and a 300-second hard timeout. It enables HIP Flash Attention while compiling only selected f16 and q8 K/V attention combinations, without touching system packages.
+
+```bash
+# Execute on xwing only, with the existing approved source tree:
+bash benchmark/lfm3-evidence/build_hip_fa_q8.sh
+```
+
+An incomplete compile is **not evidence of successful FA support or speedup**. Verify the binary is present, that the exact HIP backend is loaded, and run a separately labelled, checksum-bound benchmark before comparing against any baseline.
