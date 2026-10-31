@@ -19,6 +19,25 @@ RUNTIMES = {
     "Vulkan": "/home/scott/lfm3-research/build-vulkan-8ca4060/bin/llama-bench",
     "HIP": "/home/scott/lfm3-research/build-hip-gfx1151-bench/bin/llama-bench",
 }
+HIP_FA_RUNTIME = "/home/scott/lfm3-research/build-hip-gfx1151-fa-q8/bin/llama-bench"
+
+
+def candidate_hashes():
+    """Use immutable build-attestation and source fingerprint receipts."""
+    original = sorted(ROOT.glob("backend-fingerprint-*.json"))
+    candidate = sorted(ROOT.glob("hip-fa-build-*.json"))
+    if len(original) != 1 or len(candidate) != 1:
+        raise RuntimeError("missing or ambiguous binary attestation")
+    old = json.loads(original[0].read_text())
+    fa = json.loads(candidate[0].read_text())
+    if old.get("status") != "completed" or fa.get("status") != "completed":
+        raise RuntimeError("unverified candidate or Vulkan baseline")
+    if fa.get("sha256", {}).get("model") != MODEL_SHA:
+        raise RuntimeError("candidate model checkpoint mismatch")
+    return {
+        "Vulkan": old["runtime_binaries"]["Vulkan"]["binary_sha256"],
+        "HIP": fa["sha256"]["hip_fa_q8"],
+    }
 
 
 def main():
@@ -28,7 +47,15 @@ def main():
     parser.add_argument("--repetitions", type=int, default=3, choices=[3])
     parser.add_argument("--cache", choices=["f16", "q8_0"], default="f16")
     parser.add_argument("--paired", action="store_true")
+    parser.add_argument("--hip-variant", choices=["no-fa", "fa-q8"], default="no-fa")
     opts = parser.parse_args()
+    if opts.hip_variant == "fa-q8" and opts.cache != "q8_0":
+        parser.error("FA candidate protocol currently supports Q8 KV only")
+    runtimes = dict(RUNTIMES)
+    binary_hashes = {}
+    if opts.hip_variant == "fa-q8":
+        runtimes["HIP"] = HIP_FA_RUNTIME
+        binary_hashes = candidate_hashes()
 
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     path = ROOT / ("backend-compare-" + stamp + ".json")
@@ -42,6 +69,9 @@ def main():
         "decode": opts.decode,
         "repetitions": opts.repetitions,
         "cache_type": opts.cache,
+        "hip_variant": opts.hip_variant,
+        "runtime_fa": "on" if opts.hip_variant == "fa-q8" else "auto",
+        "binary_sha256": binary_hashes,
         "mode": "paired" if opts.paired else "separate",
         "order": ["Vulkan", "HIP", "HIP", "Vulkan"],
         "status": "not_run",
@@ -56,18 +86,21 @@ def main():
                 sys.executable,
                 str(ROOT / "fleet_runner.py"),
                 "--node", "xwing",
-                "--binary", RUNTIMES[backend],
+                "--binary", runtimes[backend],
                 "--gpu-layers", "99",
                 "--model-name", result["model"],
                 "--prompt", str(opts.prompt),
                 "--decode", str(opts.decode),
                 "--repetitions", str(opts.repetitions),
                 "--cache", opts.cache,
+                "--flash-attn", "on" if opts.hip_variant == "fa-q8" else "auto",
                 "--timeout", "180",
                 "--min-available-mib", "4096",
             ]
             if opts.paired:
                 cmd.append("--paired")
+            if binary_hashes:
+                cmd += ["--expected-binary-sha256", binary_hashes[backend]]
             started = time.monotonic()
             completed = subprocess.run(cmd, capture_output=True, text=True, timeout=210)
             newer = sorted((p for p in ROOT.glob("fleet-xwing-*.json") if p.name not in before))
@@ -88,6 +121,8 @@ def main():
                 raise RuntimeError(f"{backend}: benchmark failed or was safety-skipped; {receipt.get('reason')}")
             if receipt.get("observed_model_sha256") != MODEL_SHA:
                 raise RuntimeError(f"{backend}: model checksum differs")
+            if binary_hashes and receipt.get("observed_binary_sha256") != binary_hashes[backend]:
+                raise RuntimeError(f"{backend}: executable SHA-256 mismatch")
             actual = [str(x).upper() for x in receipt.get("backend", [])]
             if not actual or not all(
                 ("VULKAN" in name if backend == "Vulkan" else "HIP" in name or "ROCM" in name)
@@ -108,7 +143,7 @@ def main():
             time.sleep(1)
 
         aggregates = {}
-        for backend in RUNTIMES:
+        for backend in runtimes:
             runs = [r for r in result["runs"] if r["backend_expected"] == backend]
             keys = ["paired"] if opts.paired else ["prompt", "decode"]
             values = {

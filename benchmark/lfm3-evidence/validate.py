@@ -84,6 +84,20 @@ def main():
    source=json.loads(receipt.read_text())
    require(source.get('observed_model_sha256')==r.get('expected_model_sha256'),f'{p.name}: incompatible model hashes')
    require(row.get('status')==source.get('status'),f'{p.name}: mismatch source status')
+  if r.get('hip_variant')=='fa-q8':
+   attest_paths=sorted(ROOT.glob('hip-fa-build-*.json'))
+   fp_paths=sorted(ROOT.glob('backend-fingerprint-*.json'))
+   require(len(attest_paths)==1 and len(fp_paths)==1,f'{p.name}: no candidate attestations')
+   attest=json.loads(attest_paths[0].read_text())
+   fp=json.loads(fp_paths[0].read_text())
+   expected={'Vulkan':fp['runtime_binaries']['Vulkan']['binary_sha256'],
+             'HIP':attest['sha256']['hip_fa_q8']}
+   require(r.get('cache_type')=='q8_0' and r.get('runtime_fa')=='on' and
+           r.get('binary_sha256')==expected,f'{p.name}: non-matching candidate settings')
+   for row in runs:
+    source=json.loads((ROOT/row['receipt']).read_text())
+    require(source.get('observed_binary_sha256')==expected[row['backend_expected']] and
+            source.get('flash_attn')=='on',f'{p.name}: candidate binary/flag mismatch')
   if r['status']=='completed':
    require(len(runs)==4 and all(x.get('status')=='completed' for x in runs),f'{p.name}: incomplete success')
    require(all(r['order'][i]==x['backend_expected'] for i,x in enumerate(runs)),f'{p.name}: mismatched backend sequence')

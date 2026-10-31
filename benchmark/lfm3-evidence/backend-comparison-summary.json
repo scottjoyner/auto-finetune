@@ -9,7 +9,7 @@
     "q8_0"
   ],
   "caveats": [
-    "HIP built with GGML_CUDA_FA=OFF; Vulkan has different attention kernels.",
+    "HIP-noFA baselines compiled with GGML_CUDA_FA=OFF; HIP-FA candidate separately attested. Vulkan uses independent kernels.",
     "Two backend executions, three llama-bench repetitions per execution.",
     "Node production services and hardware clocks not isolated or normalized.",
     "Paired combined tokens/s must not be read as standalone decode speed.",
@@ -24,6 +24,9 @@
       "prompt_tokens": 512,
       "generation_tokens": 64,
       "cache_type": "f16",
+      "hip_variant": "no-fa",
+      "runtime_fa": "auto",
+      "hip_executable_sha256": null,
       "repetitions_per_run": 3,
       "executions_per_backend": 2,
       "source_receipts": [
@@ -56,6 +59,9 @@
       "prompt_tokens": 512,
       "generation_tokens": 64,
       "cache_type": "q8_0",
+      "hip_variant": "no-fa",
+      "runtime_fa": "auto",
+      "hip_executable_sha256": null,
       "repetitions_per_run": 3,
       "executions_per_backend": 2,
       "source_receipts": [
@@ -88,6 +94,9 @@
       "prompt_tokens": 4096,
       "generation_tokens": 64,
       "cache_type": "f16",
+      "hip_variant": "no-fa",
+      "runtime_fa": "auto",
+      "hip_executable_sha256": null,
       "repetitions_per_run": 3,
       "executions_per_backend": 2,
       "source_receipts": [
@@ -107,12 +116,43 @@
       ]
     },
     {
+      "comparison_receipt": "backend-compare-20261031T005237169571Z.json",
+      "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "prompt_tokens": 4096,
+      "generation_tokens": 64,
+      "cache_type": "q8_0",
+      "hip_variant": "fa-q8",
+      "runtime_fa": "on",
+      "hip_executable_sha256": "4be79e2718bac9275e54361ce33e07d332422e0b9bf029e658b7c577e0be24e4",
+      "repetitions_per_run": 3,
+      "executions_per_backend": 2,
+      "source_receipts": [
+        "fleet-xwing-20261031T005237196875Z.json",
+        "fleet-xwing-20261031T005245643917Z.json",
+        "fleet-xwing-20261031T005254892381Z.json",
+        "fleet-xwing-20261031T005304287933Z.json"
+      ],
+      "metrics": [
+        {
+          "metric": "paired_combined_tps",
+          "vulkan_tps": 2706.928,
+          "hip_tps": 2423.767,
+          "vulkan_divided_by_hip": 1.1168,
+          "hip_relative_to_vulkan_percent": 89.54
+        }
+      ]
+    },
+    {
       "comparison_receipt": "backend-compare-20261031T001313616787Z.json",
       "model": "LFM3-1.7B-QAD-Q4_0.gguf",
       "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
       "prompt_tokens": 4096,
       "generation_tokens": 64,
       "cache_type": "q8_0",
+      "hip_variant": "no-fa",
+      "runtime_fa": "auto",
+      "hip_executable_sha256": null,
       "repetitions_per_run": 3,
       "executions_per_backend": 2,
       "source_receipts": [

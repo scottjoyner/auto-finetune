@@ -229,3 +229,18 @@ Each mean is across two independent executions per binary, in A/B/B/A order. Eve
 This substantially resolves the **measured** HIP Q8 regression on xwing, but does not conclusively identify the exact slow old-kernel dispatch. The source contains a possible quantized K/V fallback path, which was not observed as a warning in this baseline run. Background service loads and clocks were not standardized; results are exploratory.
 
 **Release gates still open:** matched Vulkan-vs-FA A/B/B/A on the latest runtime, output correctness / instruction-following equivalence and long-duration p95 latency / memory validation. Do not replace the existing inference deployment solely on these speed measurements.
+
+## Direct Vulkan versus FA-enabled HIP matched comparison
+
+A separate four-run Vulkan/HIP-FA/HIP-FA/Vulkan experiment on xwing, with the **same model SHA**, Q8 K/V cache, `-fa on`, 99 requested GPU layers and a paired 4096 prompt + 64 generated workload, yielded:
+
+| Backend | Mean combined tok/s | Relative |
+| --- | ---: | --- |
+| Vulkan | **2706.93** | 1.000 |
+| Isolated ROCm HIP Flash Attention candidate | **2423.77** | **89.54% of Vulkan** |
+
+There were two independent executions per backend with three in-process benchmark repetitions each. The model and **both binary SHA-256 fingerprints** were checked against the published attestations before any test. The candidate is only ~10.5% below Vulkan in this experiment, versus the >12x regression measured with the original HIP no-FA build.
+
+Evidence is in `backend-comparison-summary.json`, the corresponding `backend-compare-20261031T005237169571Z.json` and its four `fleet-xwing` source receipts.
+
+**Disposition:** kernel-level performance regression is substantially mitigated, but the candidate is not approved for production substitution until output correctness and concurrent serving latency are validated, thermal/load repeatability is established, and rollback is rehearsed. No production service was changed.

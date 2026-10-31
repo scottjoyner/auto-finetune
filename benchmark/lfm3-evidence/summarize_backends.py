@@ -71,6 +71,9 @@ def main():
             "prompt_tokens": r["prompt"],
             "generation_tokens": r["decode"],
             "cache_type": r["cache_type"],
+            "hip_variant": r.get("hip_variant", "no-fa"),
+            "runtime_fa": r.get("runtime_fa", "auto"),
+            "hip_executable_sha256": r.get("binary_sha256", {}).get("HIP"),
             "repetitions_per_run": r["repetitions"],
             "executions_per_backend": 2,
             "source_receipts": [x["receipt"] for x in r["runs"]],
@@ -84,14 +87,14 @@ def main():
         "model": "LFM3-1.7B-QAD-Q4_0",
         "tested_caches": sorted({c["cache_type"] for c in summaries}),
         "caveats": [
-            "HIP built with GGML_CUDA_FA=OFF; Vulkan has different attention kernels.",
+            "HIP-noFA baselines compiled with GGML_CUDA_FA=OFF; HIP-FA candidate separately attested. Vulkan uses independent kernels.",
             "Two backend executions, three llama-bench repetitions per execution.",
             "Node production services and hardware clocks not isolated or normalized.",
             "Paired combined tokens/s must not be read as standalone decode speed.",
             "No broad model accuracy or correctness equivalence verified.",
             "Only six source snapshot files matched a pinned git commit, not a complete tree attestation.",
         ],
-        "comparisons": sorted(summaries, key=lambda x: (x["prompt_tokens"], x["cache_type"])),
+        "comparisons": sorted(summaries, key=lambda x: (x["prompt_tokens"], x["cache_type"], x["hip_variant"])),
         "failed_comparisons": failed,
     }
     dest = ROOT / "backend-comparison-summary.json"
