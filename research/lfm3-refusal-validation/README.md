@@ -84,6 +84,20 @@ also tested with six Holm-adjusted exploratory exact sign tests.
 No behavioral safety, justified refusal, or helpfulness was verified.
 Details: [XSTEST_LENGTH_CONFOUNDING_20261030.md](XSTEST_LENGTH_CONFOUNDING_20261030.md).
 
+## Exact response-duplication audit (October 30, 2026)
+
+The full immutable 1,350-generation XSTest panel exhibits a significant
+descriptive caveat: pretrained C returned **one identical short,
+keyword-positive response 156 times**, including 29 benign prompts
+and 127 unsafe prompts. C generated only 37 distinct keyword-positive
+unsafe response strings despite 163 unsafe keyword-positive samples.
+A had 168 distinct keyword-positive unsafe strings from 172 positives;
+B had 167 from 167. These are exact-string diversity measurements,
+**not independent verified behavioral refusal events**. Responses and
+per-response hashes remain private. Details and aggregate-only evidence:
+[XSTEST_RESPONSE_DIVERSITY_20261030.md](XSTEST_RESPONSE_DIVERSITY_20261030.md).
+Human refusal grading, actionable-harm review and model release stay blocked.
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
