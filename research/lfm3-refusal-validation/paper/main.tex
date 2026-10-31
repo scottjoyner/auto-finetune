@@ -255,6 +255,30 @@ refusal rate. Raw text and per-response hashes remain private.
 Both post-hoc audits leave the original 1,350 generations and
 all A/B/C weights unchanged. Independent human scoring is required.
 
+\subsection{Observed latency and repeated short-output confounding}
+The frozen full-XSTest journal includes elapsed time for each
+of 1,350 CPU BF16 prompt-response generations, but contains no
+per-token decode timing, generated-token count, or finish reason.
+Median recorded elapsed seconds for benign prompts were
+14.9825 (A), 15.8860 (B), and 15.5300 (C); for unsafe prompts,
+the medians were 11.7500 (A), 15.7000 (B), and 2.6165 (C).
+The surprisingly low C unsafe median coincided with a strong
+post-hoc repetition effect: its 127 identical short unsafe answers
+had median elapsed time 2.523 seconds, compared with 15.456
+seconds for its 73 other unsafe responses. The same repeated
+answer occurred 29 times among benign prompts, with median
+elapsed time 2.514 seconds versus 15.620 seconds for its 221
+other benign answers. Thus the apparent unsafe response-time
+advantage is substantially confounded by short, repeated text.
+
+Six exploratory within-prompt timing-direction sign tests
+(three checkpoint contrasts in each stratum) were also
+Holm-adjusted. These comparisons describe logged elapsed
+time, not controlled hardware throughput or refusal efficacy.
+Checkpoint tests were not randomized or matched by generated
+token length; no claim of improved tokens per second, causal
+architecture efficiency, or human-verified refusal follows.
+
 \subsection{Exploratory exact matched lexical-proxy inference}
 As a sensitivity analysis, the frozen 450-by-three lexical-proxy
 aggregate also supports exact conditional matched-pair tests.

@@ -144,6 +144,20 @@ The real x1-370 pilot is **still ungraded: 0/96 per reviewer**; its
 agreement CLI correctly exits 2 without writing a report.
 See [PRIVATE_PILOT_HUMAN_AGREEMENT_GATE_20261030.md](PRIVATE_PILOT_HUMAN_AGREEMENT_GATE_20261030.md).
 
+## Frozen XSTest timing and repeated-output confounding (October 31, 2026)
+
+The original 1,350 CPU BF16 completions now have a reproducible
+aggregate-only elapsed-time audit. Unsafe-prompt median per-generation
+elapsed time was A 11.75 s, B 15.70 s, C 2.6165 s, but C's 127
+identical short unsafe replies had median 2.523 s versus 15.456 s for
+the 73 other unsafe C outputs. Therefore C's apparent fast response
+time is closely associated with short, repeated answers; the logs
+cannot establish improved decode throughput or safety. Exploratory
+per-prompt signed timing comparisons use six Holm-adjusted tests.
+There are **no tokenizer token counts, prefill/decode splits or finish
+reasons** in the frozen response journal. See
+[XSTEST_LATENCY_REPETITION_20261031.md](XSTEST_LATENCY_REPETITION_20261031.md).
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf
