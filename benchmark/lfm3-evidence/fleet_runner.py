@@ -27,6 +27,7 @@ def main():
  p.add_argument("--timeout",type=int,default=240)
  p.add_argument("--paired",action="store_true")
  p.add_argument("--cache",choices=["f16","q8_0"],default="f16")
+ p.add_argument("--flash-attn",choices=["auto","on","off"],default="auto")
  a=p.parse_args()
  if not(1<=a.prompt<=4096 and 1<=a.decode<=256 and 1<=a.repetitions<=5):p.error("unsafe benchmark bounds")
  binary,filename=NODES[a.node]
@@ -36,7 +37,7 @@ def main():
  ts=datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
  receipt={"schema":"lfm3.fleet-benchmark.v1","created_utc":ts,"orchestrator":platform.node(),"node":a.node,
           "model":model,"expected_model_sha256":EXPECTED[filename],"prompt":a.prompt,"decode":a.decode,
-          "repetitions":a.repetitions,"gpu_layers":a.gpu_layers,"mode":"paired" if a.paired else "separate","cache_type":a.cache,"status":"not_run"}
+          "repetitions":a.repetitions,"gpu_layers":a.gpu_layers,"mode":"paired" if a.paired else "separate","cache_type":a.cache,"flash_attn":a.flash_attn,"status":"not_run"}
  path=ROOT/("fleet-"+a.node+"-"+ts+".json")
  try:
   checks=ssh(a.node,"hostname; awk '/MemAvailable:/ {print int($2/1024)}' /proc/meminfo; sha256sum "+shlex.quote(model),30)
@@ -47,7 +48,7 @@ def main():
   receipt["available_mib"]=available;receipt["observed_model_sha256"]=observed
   if available<a.min_available_mib:raise RuntimeError("remote available RAM below safety limit")
   if observed!=EXPECTED[filename]:raise RuntimeError("model SHA-256 mismatch")
-  cmd=["env","LD_LIBRARY_PATH="+str(pathlib.Path(binary).parent),binary,"-m",model,"-ngl",str(a.gpu_layers),"-t","4","-ctk",a.cache,"-ctv",a.cache]
+  cmd=["env","LD_LIBRARY_PATH="+str(pathlib.Path(binary).parent),binary,"-m",model,"-ngl",str(a.gpu_layers),"-t","4","-ctk",a.cache,"-ctv",a.cache,"-fa",a.flash_attn]
   cmd+=["-p","0","-n","0","-pg",f"{a.prompt},{a.decode}"] if a.paired else ["-p",str(a.prompt),"-n",str(a.decode)]
   cmd+=["-r",str(a.repetitions),"-o","json"]
   receipt["command"]=["nice","-n","10","timeout",str(a.timeout)]+cmd

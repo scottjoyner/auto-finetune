@@ -165,3 +165,24 @@ Vulkan/HIP = **12.277x** for this paired 4096-prompt + 64-generation workload. B
 For comparison, **FP16 KV** in the same ABBA protocol yielded Vulkan 2676.24 vs HIP 1763.00 *combined tok/s*. This suggests the HIP q8_0 K/V code path is disproportionately expensive in the current binary; the exact reason is **not verified**. HIP was built with `GGML_CUDA_FA=OFF`; attention kernels, VRAM residency, bandwidth, possible dequantization fallbacks, and device counters need targeted profiling. No production runtime defaults were changed. This evidence argues **against enabling HIP Q8 KV by default on xwing** before investigating.
 
 Full files: `backend-compare-20261031T001313616787Z.json`, its four referenced `fleet-xwing-*.json` source receipts, and the deterministic `backend-comparison-summary.json`. All records remain reproducible and hash-linked to the same checkpoint.
+
+## Q8 KV path isolation, October 30 follow-up
+
+A second A/B/B/A test with Q8 KV, now separating 512-token prompt processing from 64-token generation, measured:
+
+| Metric | Vulkan | HIP | Vulkan / HIP |
+| --- | ---: | ---: | ---: |
+| 512 prompt tokens | 3704.47 tok/s | 953.48 tok/s | 3.885x |
+| 64 generated tokens | 150.46 tok/s | 95.67 tok/s | 1.573x |
+
+This identifies a **larger prompt-processing penalty** than decoding penalty at short context, and an even more severe 4K combined-workload penalty. The causes are hypotheses, not proven by throughput measurements alone.
+
+Flash Attention probes, captured in separate source receipts:
+
+- Vulkan, Q8 K/V, 4096+64 paired, `-fa off`: **fails at context initialization** with `quantized V cache requires flash_attn to be enabled`; this unsupported experiment is recorded as `failed`.
+- Native HIP binary compiled with `GGML_CUDA_FA=OFF`, Q8 K/V, 512+64 paired, `-fa on`: completes at 438.12 combined tok/s (single repetition).
+- The same HIP binary, Q8 K/V, 4096+64 paired, `-fa on`: completes at 219.79 combined tok/s (single repetition), **not a meaningful improvement** over the 217.90 tok/s matched average with runtime FA set to auto.
+
+These diagnostic runs are **not matched A/B comparisons**, and a runtime flag does not retroactively compile unavailable HIP Flash Attention kernels. The next optimization candidate is a *separate* HIP build compiled with `GGML_CUDA_FA=ON` and selected Q8/f16 attention kernels. Keep the original binaries and receipts unmodified. See tracking issue #105.
+
+`fleet_runner.py` now accepts `--flash-attn auto|on|off` and records the chosen runtime flag in the raw receipt. Its default is still `auto`.

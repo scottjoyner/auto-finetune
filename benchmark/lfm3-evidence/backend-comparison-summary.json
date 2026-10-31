@@ -47,6 +47,38 @@
       ]
     },
     {
+      "comparison_receipt": "backend-compare-20261031T001805944361Z.json",
+      "model": "LFM3-1.7B-QAD-Q4_0.gguf",
+      "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
+      "prompt_tokens": 512,
+      "generation_tokens": 64,
+      "cache_type": "q8_0",
+      "repetitions_per_run": 3,
+      "executions_per_backend": 2,
+      "source_receipts": [
+        "fleet-xwing-20261031T001805970125Z.json",
+        "fleet-xwing-20261031T001810911655Z.json",
+        "fleet-xwing-20261031T001819444931Z.json",
+        "fleet-xwing-20261031T001827325045Z.json"
+      ],
+      "metrics": [
+        {
+          "metric": "prompt_tps",
+          "vulkan_tps": 3704.473,
+          "hip_tps": 953.484,
+          "vulkan_divided_by_hip": 3.8852,
+          "hip_relative_to_vulkan_percent": 25.74
+        },
+        {
+          "metric": "decode_tps",
+          "vulkan_tps": 150.463,
+          "hip_tps": 95.666,
+          "vulkan_divided_by_hip": 1.5728,
+          "hip_relative_to_vulkan_percent": 63.58
+        }
+      ]
+    },
+    {
       "comparison_receipt": "backend-compare-20261031T000920326333Z.json",
       "model": "LFM3-1.7B-QAD-Q4_0.gguf",
       "model_sha256": "43a7d09a0e9cba91b63eb7052488b9564569bddfd65754d2e426465e572a7452",
