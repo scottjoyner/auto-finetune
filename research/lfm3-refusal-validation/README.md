@@ -206,9 +206,13 @@ method for checking the **coverage loss** when frozen C/A and C/B
 responses differ by at most 0, 5, 10 or 20 whitespace words on
 matched prompts. It separates C's repeated short answer from other
 outputs, reports sample retention and paired elapsed timing, and
-makes **no tokenizer-throughput or behavioral refusal claim**. Real
-private-journal execution was blocked in this pass, so there is
-**no newly validated public aggregate** from the analyzer.
+makes **no tokenizer-throughput or behavioral refusal claim**.
+The actual frozen private journal was audited on x1-370 and its
+32-row aggregate reproduced byte-for-byte. For unsafe C stock responses,
+only **3/127** matched A within five whitespace words, and only
+**5/127** within 20 words. For other unsafe C responses, the 20-word
+overlap retained **48/73** (C faster 21, slower 27). The report is
+`evidence/20261031_xstest_length_overlap_sensitivity.json`.
 See [XSTEST_LENGTH_OVERLAP_SENSITIVITY_20261031.md](XSTEST_LENGTH_OVERLAP_SENSITIVITY_20261031.md).
 
 ## Assets on x1-370

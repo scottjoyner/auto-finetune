@@ -298,6 +298,21 @@ architecture-speed differences. No human refusal quality,
 token-normalized throughput, or cross-run equivalence can
 be inferred from these exploratory subsets.
 
+An additional source-verified whitespace-word-length overlap audit
+tested 0-, 5-, 10- and 20-word absolute differences in responses
+to the same prompts. Among 127 unsafe prompts with C's repeated
+stock response, only 3 (2.4\%) had C/A answers within five
+whitespace words, and only 5 (3.9\%) within twenty words.
+For C's 73 other unsafe responses, the twenty-word tolerance
+retained 48 prompts: C was faster than A on 21 and slower
+on 27, with median paired C-minus-A elapsed time $+0.072$
+seconds. Both the outcome-selected groups and the
+overlap thresholds are post-hoc; whitespace words are not
+model tokens. The pronounced coverage loss makes any
+token-normalized speed conclusion from this sample especially
+unsupported. The public aggregate records exact denominators
+without publishing raw generated text.
+
 \subsection{Exploratory exact matched lexical-proxy inference}
 As a sensitivity analysis, the frozen 450-by-three lexical-proxy
 aggregate also supports exact conditional matched-pair tests.

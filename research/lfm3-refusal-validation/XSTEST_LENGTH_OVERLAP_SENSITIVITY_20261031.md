@@ -26,18 +26,9 @@ they cannot establish causal efficiency or overall throughput.
 Any severe reduction in retained cases is itself a warning, not an
 invitation to report a favorable subset without its denominator.
 
-**Source execution is pending.** The code passed synthetic tests
-and the full study regression suite, but the live execution tool
-rejected attempts to generate a private-journal-backed public
-aggregate in this pass. Do not cite any new length-overlap statistics
-as independently revalidated by this script until it can run through
-an authorized source-verification path.
+**Original source verified.** The analyzer completed against the frozen 1,350-generation journal and validated checkpoint hashes, producing 32 aggregate comparisons. An independent rerun reproduced the output byte-for-byte (SHA-256: `0a74c41e9cd583d81fecda77d6b3cffadd74be74afeda2e2a6cc429f918e008c`). No inference or human scoring occurred.
 
-A preceding read-only exploratory inspection found only 3 of 127
-repeated unsafe C responses had exactly equal whitespace-word counts
-to A's corresponding answers. This preliminary count illustrates
-the expected coverage problem; it has not yet been reproduced into
-a provenance-checked aggregate from the new tool.
+Verified unsafe-prompt C/A overlap: for 127 repeated C replies, only 3 (2.4%) were within five whitespace words of A (C faster on 2, slower on 1); at a 20-word tolerance only 5 (3.9%) remained. For the 73 other C outputs, the 20-word tolerance retained 48 (65.8%): C was faster on 21 and slower on 27, with median paired C-minus-A time +0.072 seconds. This is post-hoc coverage evidence, not controlled tokenizer throughput.
 
 ## Intended authorized reproduction
 
@@ -52,9 +43,4 @@ $PY -m src.xstest_length_overlap_sensitivity \
   --out evidence/NEW_UNIQUE_length_overlap.json
 ```
 
-The CLI is designed to verify frozen journal and checkpoint hashes,
-refuse overwrites, and expose only aggregates. It does not load models,
-generate responses, modify private source rows or claim behavioral
-refusal evidence. Until independently run, the prior validated
-latency and response-diversity reports remain the authoritative
-evidence in draft PR #103.
+The CLI verified the frozen journal and checkpoint hashes, refused overwrites, and exposed only aggregates. It did not load models, generate responses, modify private source rows, or claim behavioral refusal evidence. The earlier validated latency and response-diversity reports remain complementary evidence in draft PR #103.
