@@ -115,6 +115,22 @@ human outcome, consensus, or a model-release authorization.
 See [PRIVATE_HUMAN_REVIEW_PILOT_20261030.md](PRIVATE_HUMAN_REVIEW_PILOT_20261030.md)
 for local human-only launch and progress commands.
 
+## Pilot source-attestation and large-write storage guard (October 30, 2026)
+
+The existing human-only pilot review/status commands now fail closed if
+the 96 blinded review ID positions differ from a **fresh deterministic
+reconstruction** based on the pinned 1,350-generation journal, complete
+450-case source, C-repeat strata, and original model/blind mapping. A
+live tamper test confirmed that a route containing valid but reordered
+IDs now gets rejected, while the authentic route passes. No original
+human ratings or prompt/response text are changed or published.
+The optional read-only compute preflight (`src.research_storage_preflight`)
+correctly **blocks** a 5-GiB planned write on x1-370 with only ~8.6 GiB
+available under a 20-GiB free-space floor. This guard applies only to
+new job launchers explicitly invoking it; it does not reserve space or
+automatically block external processes. See
+[PILOT_ROUTE_ATTESTATION_AND_STORAGE_PREFLIGHT_20261030.md](PILOT_ROUTE_ATTESTATION_AND_STORAGE_PREFLIGHT_20261030.md).
+
 ## Assets on x1-370
 - Original source weights: /home/scott/lfm3-research/model-metadata
 - Original Q4 benchmark: /home/scott/lfm3-research/gguf/LFM3-1.7B-Q4_K_M.gguf

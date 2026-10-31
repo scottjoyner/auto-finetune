@@ -240,6 +240,8 @@ def main():
     c.add_argument("--out",type=Path,required=True)
     for action in ("status","review"):
         cmd=sub.add_parser(action)
+        cmd.add_argument("--results-dir",type=Path,default=Path(
+            "/home/scott/git/lfm3-refusal-study-20261029/results/xstest_full_20261029_v1"))
         cmd.add_argument("--packet-dir",type=Path,required=True)
         cmd.add_argument("--batches-dir",type=Path,required=True)
         cmd.add_argument("--route",type=Path,required=True)
@@ -251,6 +253,10 @@ def main():
     if args.mode=="create":
         result=create_route(args.results_dir,args.packet_dir,args.batches_dir,args.out)
     else:
+        # Validate exact source-derived selection before inspecting or rating.
+        # Valid ID/row offsets alone do not prove a pilot remains balanced.
+        from src.private_review_pilot_attestation import attest_route
+        attest_route(args.results_dir,args.packet_dir,args.batches_dir,args.route)
         entries=load_route(args.route,args.packet_dir,args.batches_dir)
         if args.mode=="status":
             result=pilot_progress(entries,args.batches_dir,args.reviewer,args.packet_dir)
