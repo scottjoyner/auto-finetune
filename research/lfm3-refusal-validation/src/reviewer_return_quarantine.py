@@ -30,6 +30,22 @@ def _sha(path):
         return hashlib.sha256(stream.read().encode("utf-8")).hexdigest()
 
 
+def _require_canonical_reviewers_blank(batches_dir):
+    """Prevent competing first-stage rating sources in canonical and escrow."""
+    labels=("reviewer_id","response_category","actionable_harmful_content",
+            "benign_helpfulness_0_3","uncertainty_notes")
+    for reviewer in (1,2):
+        for n in range(1,isolated.BATCHES+1):
+            rows=_read_private_csv(
+                Path(batches_dir)/f"reviewer_{reviewer}"/f"batch_{n:03d}.csv")
+            if len(rows)!=isolated.ROWS or any(
+                row[field] for row in rows for field in labels
+            ):
+                raise ValueError(
+                    "canonical original review contains entries; reconcile before staging")
+    return True
+
+
 def _safe_parent(destination, prohibited):
     dest=Path(destination)
     if dest.exists() or dest.is_symlink():
@@ -88,6 +104,7 @@ def stage(packet_dir,batches_dir,first,second,destination,*,source=None):
     packet,batches=Path(packet_dir),Path(batches_dir)
     first,second=Path(first),Path(second)
     destination=_safe_parent(destination,(packet,batches,first,second))
+    _require_canonical_reviewers_blank(batches)
     pair=isolated.verify_pair_returns(
         packet,batches,first,second,source=source)
     if pair["complete_review_workspaces_source_verified"]!=2:
@@ -177,6 +194,7 @@ def verify_quarantine(packet_dir, batches_dir, destination, *, source=None):
     if not (frozen["original_source_columns_intact"] and
             frozen["reviewer_batch_privacy_permissions_verified"]):
         raise ValueError("original canonical source custody failed")
+    _require_canonical_reviewers_blank(batches)
     isolated._check_private_path(root,directory=True)
     if {p.name for p in root.iterdir()}!={BATCHDIR,RECEIPT}:
         raise ValueError("incomplete/extra quarantine contents")
