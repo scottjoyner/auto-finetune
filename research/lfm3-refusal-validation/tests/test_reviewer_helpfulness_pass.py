@@ -123,7 +123,7 @@ def test_stale_concurrent_review_is_rejected(packet):
     path=batches/"reviewer_1"/"batch_001.csv"
     rows=read_csv(path)
     index=next(i for i,row in enumerate(rows) if row["review_id"] in eligible)
-    stale=list(rows)
+    stale=[dict(item) for item in rows]
     rows[index]["uncertainty_notes"]="concurrent note"
     from src.local_reviewer_terminal import atomic_save
     atomic_save(path,rows)
