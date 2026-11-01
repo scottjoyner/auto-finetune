@@ -60,9 +60,6 @@ def audit(packet_dir, batches_dir, *, source=None):
     # manifest, so independently owned 0700 reviewer subfolders would
     # not be traversable by the two reviewers. A separated staging
     # workflow is required; do not infer readiness merely from chown.
-    shared_parent_private=bool(batch_meta.st_mode & 0o700 == 0o700 and
-                                batch_meta.st_mode & 0o077 == 0)
-    isolated_parent_access=not shared_parent_private
     # Evaluate all claims fail closed. This repository does not yet
     # implement a separate-account verified handoff.
     boundary_verified=False
@@ -95,11 +92,11 @@ def audit(packet_dir, batches_dir, *, source=None):
     }
 
 
-def require_separately_isolated(audit_result):
-    """A release/runtime guard: no opt-out or reviewer-ID string bypass."""
-    if not isinstance(audit_result,dict) or \
-       audit_result.get("independent_reviewer_access_verified") is not True or \
-       audit_result.get("physical_independence_of_two_humans_verified") is not True:
+def require_separately_isolated(packet_dir, batches_dir, *, source=None):
+    """Never trust a caller-supplied status: re-audit the actual host paths."""
+    audit_result = audit(packet_dir, batches_dir, source=source)
+    if audit_result["independent_reviewer_access_verified"] is not True or \
+       audit_result["physical_independence_of_two_humans_verified"] is not True:
         raise PermissionError(
             "independent human reviewer identities and isolated OS access not established")
     return True
