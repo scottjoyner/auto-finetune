@@ -288,6 +288,43 @@ def verify_return(packet_dir, batches_dir, workspace, *, source=None):
         "model_release_authorized":False,
     }
 
+
+def verify_pair_returns(packet_dir, batches_dir, first, second, *, source=None):
+    """Require two completed returns under different non-key Unix owners.
+
+    OS separation is proven from verified file metadata only. Two distinct
+    real humans still require out-of-band independent attestation.
+    """
+    a=verify_return(packet_dir,batches_dir,first,source=source)
+    b=verify_return(packet_dir,batches_dir,second,source=source)
+    if {a["reviewer_slot"],b["reviewer_slot"]}!={1,2}:
+        raise ValueError("expected one returned workspace for each reviewer slot")
+    first_meta=_check_private_path(first,directory=True)
+    second_meta=_check_private_path(second,directory=True)
+    if first_meta.st_uid==second_meta.st_uid:
+        raise PermissionError("two reviewer workspaces owned by the same Unix principal")
+    human_ids=[]
+    for workspace in (first,second):
+        ids=set()
+        for i in range(1,BATCHES+1):
+            _,rows=_batch(workspace,i)
+            ids.update(r["reviewer_id"].strip() for r in rows)
+        if len(ids)!=1 or not next(iter(ids)):
+            raise ValueError("returned workspace has inconsistent human identity")
+        human_ids.extend(ids)
+    if human_ids[0]==human_ids[1]:
+        raise ValueError("same private reviewer ID used for both independent returns")
+    return {
+        "complete_review_workspaces_source_verified":2,
+        "reviewer_unix_principal_ownership_distinct":True,
+        "unique_reviewer_id_strings":True,
+        "separate_real_human_attestation_verified":False,
+        "owner_approved_central_import_performed":False,
+        "model_key_and_ground_truth_exported":False,
+        "model_release_authorized":False,
+    }
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     sub=p.add_subparsers(dest="action",required=True)
@@ -302,6 +339,11 @@ def main():
     d.add_argument("--packet-dir",type=Path,required=True)
     d.add_argument("--batches-dir",type=Path,required=True)
     d.add_argument("--workspace",type=Path,required=True)
+    e=sub.add_parser("return-pair-audit",help="read-only two-workspace owner and source check")
+    e.add_argument("--packet-dir",type=Path,required=True)
+    e.add_argument("--batches-dir",type=Path,required=True)
+    e.add_argument("--first",type=Path,required=True)
+    e.add_argument("--second",type=Path,required=True)
     c=sub.add_parser("review",help="human TTY under a distinct, non-root Unix account")
     c.add_argument("--workspace",type=Path,required=True)
     c.add_argument("--reviewer-id",required=True)
@@ -313,6 +355,9 @@ def main():
         result=inspect(args.workspace)
     elif args.action=="return-audit":
         result=verify_return(args.packet_dir,args.batches_dir,args.workspace)
+    elif args.action=="return-pair-audit":
+        result=verify_pair_returns(
+            args.packet_dir,args.batches_dir,args.first,args.second)
     else:
         result=review(args.workspace,args.reviewer_id,args.batch)
     print(json.dumps(result,indent=2))
