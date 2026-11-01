@@ -34,7 +34,7 @@ def fake_mounted_ssd(tmp_path, monkeypatch):
 def fake_rustc(tmp_path):
     """Create an executable compiler placeholder; never invoke real rustc."""
     compiler = tmp_path / "rustc"
-    compiler.write_text("#!/bin/sh\\nexit 0\\n")
+    compiler.write_text("#!/bin/sh\nexit 0\n")
     compiler.chmod(0o700)
     return compiler
 
