@@ -1,0 +1,66 @@
+{
+  "evidence_class": "post-hoc frozen LFM3 two-calibrator direction weight sensitivity; no causal behavioral inference",
+  "source_model_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "source_pair_dataset_sha256": "ebdff35111f03617632a557793122fda05e9a235444c3dd0d6396f925bbf3d81",
+  "source_direction_file_sha256": "7f31109d5212b4bb1f0839544935a694b9d4f4475e9c3a36926eebe28bd9437f",
+  "original_source_reconstruction_cosine": 1.0,
+  "calibration_pairs": 2,
+  "heldout_pairs": 6,
+  "calibrator_norm_1": 1.121841,
+  "calibrator_norm_2": 2.018015,
+  "calibration_magnitude_ratio_larger_to_smaller": 1.798842,
+  "calibration_unit_cosine": 0.096468,
+  "equal_weight_vs_original_direction_cosine": 0.968036,
+  "candidate_diagnostics": {
+    "original_magnitude_weighted": {
+      "matched_heldout_pairs": 6,
+      "mean_signed_cosine": 0.361621,
+      "min_signed_cosine": 0.095145,
+      "max_signed_cosine": 0.51426,
+      "mean_absolute_cosine": 0.361621,
+      "positive_signed_alignment_count": 6
+    },
+    "equal_unit_weight": {
+      "matched_heldout_pairs": 6,
+      "mean_signed_cosine": 0.360391,
+      "min_signed_cosine": 0.171938,
+      "max_signed_cosine": 0.492242,
+      "mean_absolute_cosine": 0.360391,
+      "positive_signed_alignment_count": 6
+    },
+    "calibrator_1_only": {
+      "matched_heldout_pairs": 6,
+      "mean_signed_cosine": 0.232678,
+      "min_signed_cosine": 0.066906,
+      "max_signed_cosine": 0.359515,
+      "mean_absolute_cosine": 0.232678,
+      "positive_signed_alignment_count": 6
+    },
+    "calibrator_2_only": {
+      "matched_heldout_pairs": 6,
+      "mean_signed_cosine": 0.301009,
+      "min_signed_cosine": -0.063758,
+      "max_signed_cosine": 0.509727,
+      "mean_absolute_cosine": 0.322262,
+      "positive_signed_alignment_count": 5
+    }
+  },
+  "balanced_minus_original_mean_signed_cosine": -0.00123,
+  "balanced_minus_original_min_signed_cosine": 0.076793,
+  "selection_was_post_hoc": true,
+  "independent_new_prompts": 0,
+  "new_model_forward_passes": 0,
+  "new_model_generations": 0,
+  "model_weights_changed": false,
+  "candidate_checkpoint_created": false,
+  "human_refusal_review_complete": false,
+  "model_release_approved": false,
+  "limitations": [
+    "Only two calibration and six reused held-out contrasts; a post-hoc comparison, not generalization",
+    "Equal weighting creates a possible direction candidate but it was not used for any model generation",
+    "Better minimum held-out alignment alone may simply reflect topic or prompt differences",
+    "The four directions are not randomized treatments and no significance testing is justified",
+    "The private vector file and per-pair contrast directions must never be committed or logged",
+    "No ability, unsafe actionability or appropriate refusal outcomes measured by these scores"
+  ]
+}
