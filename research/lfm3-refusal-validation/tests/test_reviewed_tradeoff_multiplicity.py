@@ -3,7 +3,7 @@ import copy
 import pytest
 
 from src.reviewed_tradeoff_multiplicity import (
-    _bootstrap, _validate, analyze_consensus,
+    _bootstrap, _validate, analyze_consensus, bounded_mean_interval,
 )
 from src.xstest_450_eval import ARM_ORDER
 
@@ -82,8 +82,9 @@ def test_binary_and_ordinal_intervals_have_different_methods():
     r = analyze_consensus(data, cases, require_full=False, resamples=2000)
     for item in r["comparisons"]:
         if item["metric"] == "helpfulness_0_3":
-            assert "bootstrap" in item["interval_method"]
-            assert item["exact_frequentist_coverage_guaranteed"] is False
+            assert "Hoeffding" in item["interval_method"]
+            assert item["finite_sample_coverage_given_independent_prompts"] is True
+            assert item["exploratory_paired_bootstrap"][0] <= item["mean_right_minus_left"] <= item["exploratory_paired_bootstrap"][1]
             assert item["bootstrap_resamples"] == 2000
         else:
             assert "Clopper-Pearson" in item["interval_method"]
@@ -218,3 +219,36 @@ def test_source_mapping_checksum_rejects_modified_mapping(monkeypatch):
     })
     with pytest.raises(ValueError, match="mapping drift"):
         gate.audited_human_consensus("/synthetic/packet", "/synthetic/batches")
+
+
+def test_ordinal_primary_interval_covers_distribution_free_range():
+    import math
+    vals = [0, 1, -1, 2, -2] * 50
+    lower, upper = bounded_mean_interval(vals, alpha=.05/12)
+    assert lower < 0 < upper
+    assert lower == pytest.approx(-6*math.sqrt(math.log(2/(.05/12))/(2*250)))
+    assert upper == pytest.approx(-lower)
+    tiny = bounded_mean_interval([3], alpha=.05/12)
+    assert tiny == (-3., 3.)
+    assert bounded_mean_interval([0]*2500, alpha=.05/12)[1] < upper
+
+
+@pytest.mark.parametrize("bad, alpha", [
+    ([], .05/12), ([4], .05/12), ([-4], .05/12),
+    ([1.0], .05/12), ([True], .05/12),
+    ([0], 0), ([0], 1), ([0], float("nan")),
+    ("private raw text", .05/12),
+])
+def test_ordinal_interval_rejects_non_human_binary_or_invalid_inputs(bad, alpha):
+    with pytest.raises(ValueError):
+        bounded_mean_interval(bad, alpha=alpha)
+
+
+def test_joint_family_primary_interval_has_valid_claims():
+    data, cases = synthetic_study()
+    report = analyze_consensus(data, cases, require_full=False, resamples=2000)
+    assert report["familywise_alpha"] == pytest.approx(.05)
+    assert len(report["comparisons"]) == 12
+    assert sum("Hoeffding" in row["interval_method"] for row in report["comparisons"]) == 3
+    assert sum("Clopper-Pearson" in row["interval_method"] for row in report["comparisons"]) == 9
+    assert "finite-sample coverage" in " ".join(report["limitations"])
