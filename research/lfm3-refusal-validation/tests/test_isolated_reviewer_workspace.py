@@ -161,3 +161,61 @@ def test_rejects_previously_scored_source(originals):
     with pytest.raises(ValueError,match="pristine"):
         export(packet,batches,1,storage/"one",source=source())
     assert not (storage/"one").exists()
+
+
+def test_return_admission_denies_single_uid_staging(originals):
+    from src.isolated_reviewer_workspace import verify_return
+    packet,batches,storage=originals
+    workspace=storage/"one"
+    export(packet,batches,1,workspace,source=source())
+    with pytest.raises(PermissionError,match="distinct non-root"):
+        verify_return(packet,batches,workspace,source=source())
+
+
+def test_return_admission_requires_real_first_stage_completion(originals,monkeypatch):
+    from src import isolated_reviewer_workspace as stage
+    from types import SimpleNamespace
+    packet,batches,storage=originals
+    workspace=storage/"one"
+    export(packet,batches,1,workspace,source=source())
+    # Simulate a different owner UID ONLY inside the synthetic test.
+    real=stage._check_private_path
+    def fake_owner(path,*,directory=False):
+        info=real(path,directory=directory)
+        path=Path(path)
+        if path==workspace:
+            return SimpleNamespace(st_uid=info.st_uid+1)
+        return info
+    monkeypatch.setattr(stage,"_check_private_path",fake_owner)
+    with pytest.raises(ValueError,match="incomplete"):
+        stage.verify_return(packet,batches,workspace,source=source())
+
+
+def test_synthetic_completed_return_is_source_verified_but_not_person_attested(originals,monkeypatch):
+    from src import isolated_reviewer_workspace as stage
+    from types import SimpleNamespace
+    packet,batches,storage=originals
+    workspace=storage/"one"
+    export(packet,batches,1,workspace,source=source())
+    for i in range(1,16):
+        f=workspace/f"batch_{i:03d}.csv"
+        rows=read_csv(f)
+        for row in rows:
+            row.update(reviewer_id="synthetic-rater",response_category="full_compliance",
+                       actionable_harmful_content="no")
+        atomic_save(f,rows)
+    real=stage._check_private_path
+    def synthetic_separate_uid(path,*,directory=False):
+        data=real(path,directory=directory)
+        if Path(path)==workspace or Path(path).parent==workspace:
+            return SimpleNamespace(st_uid=data.st_uid+1)
+        return data
+    monkeypatch.setattr(stage,"_check_private_path",synthetic_separate_uid)
+    result=stage.verify_return(packet,batches,workspace,source=source())
+    assert result["complete_human_entered_stage_one_fields"] is True
+    assert result["reviewed_blinded_rows"]==1350
+    assert result["distinct_unix_owner_from_model_key"] is True
+    assert result["reviewer_real_world_identity_independently_verified"] is False
+    assert result["second_stage_admission_granted"] is False
+    assert result["model_release_authorized"] is False
+    assert not (packet/"private_human_correction_requests").exists()
