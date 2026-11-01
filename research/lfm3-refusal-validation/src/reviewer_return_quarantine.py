@@ -166,12 +166,17 @@ def stage(packet_dir,batches_dir,first,second,destination,*,source=None):
         f.flush()
         os.fsync(f.fileno())
     dest.chmod(0o600)
-    return verify_quarantine(packet, destination, source=source)
+    return verify_quarantine(packet, batches, destination, source=source)
 
 
-def verify_quarantine(packet_dir, destination, *, source=None):
+def verify_quarantine(packet_dir, batches_dir, destination, *, source=None):
     """No guessing from filenames; verify every private receipt and digest."""
     root=Path(destination)
+    batches=Path(batches_dir)
+    frozen=audit_custody(packet_dir,batches,source=source)
+    if not (frozen["original_source_columns_intact"] and
+            frozen["reviewer_batch_privacy_permissions_verified"]):
+        raise ValueError("original canonical source custody failed")
     isolated._check_private_path(root,directory=True)
     if {p.name for p in root.iterdir()}!={BATCHDIR,RECEIPT}:
         raise ValueError("incomplete/extra quarantine contents")
@@ -199,7 +204,8 @@ def verify_quarantine(packet_dir, destination, *, source=None):
     expected={ORIGINAL_MANIFEST,*REVIEWER_DIRS}
     if {p.name for p in inner.iterdir()}!=expected:
         raise ValueError("unexpected source or model key inside quarantine")
-    if _sha(inner/ORIGINAL_MANIFEST)!=receipt["source_manifest_sha256"]:
+    if (_sha(inner/ORIGINAL_MANIFEST)!=receipt["source_manifest_sha256"] or
+        _sha(batches/ORIGINAL_MANIFEST)!=receipt["source_manifest_sha256"]):
         raise ValueError("frozen source manifest hash drift")
     if not isinstance(receipt["reviewer_batch_sha256"],dict) or \
        set(receipt["reviewer_batch_sha256"])!={"1","2"}:
@@ -245,6 +251,18 @@ def verify_quarantine(packet_dir, destination, *, source=None):
         reviewer_ids.append(next(iter(assigned)))
     if reviewer_ids[0]==reviewer_ids[1]:
         raise ValueError("quarantined reviewer identities are not distinct")
+    # Sealed review source must still equal the *current* canonical
+    # original columns, not merely the cached public packet text.
+    for reviewer in (1,2):
+        for n in range(1,isolated.BATCHES+1):
+            name=f"batch_{n:03d}.csv"
+            before=_read_private_csv(batches/f"reviewer_{reviewer}"/name)
+            sealed=_read_private_csv(inner/f"reviewer_{reviewer}"/name)
+            if len(before)!=len(sealed) or any(
+                a[k]!=b[k] for a,b in zip(before,sealed)
+                for k in ORIGINAL_FIELDS
+            ):
+                raise ValueError("canonical batch source changed after quarantine")
     custody=audit_custody(packet_dir,inner,source=source)
     if (not custody["original_source_columns_intact"] or
         not custody["reviewer_batch_privacy_permissions_verified"] or
@@ -275,13 +293,14 @@ def main():
     stage_cmd.add_argument("--output-dir",type=Path,required=True)
     check=sub.add_parser("verify")
     check.add_argument("--packet-dir",type=Path,required=True)
+    check.add_argument("--batches-dir",type=Path,required=True)
     check.add_argument("--output-dir",type=Path,required=True)
     args=p.parse_args()
     if args.action=="stage":
         result=stage(args.packet_dir,args.batches_dir,args.first,args.second,
                      args.output_dir)
     else:
-        result=verify_quarantine(args.packet_dir,args.output_dir)
+        result=verify_quarantine(args.packet_dir,args.batches_dir,args.output_dir)
     print(json.dumps(result,indent=2))
 
 
