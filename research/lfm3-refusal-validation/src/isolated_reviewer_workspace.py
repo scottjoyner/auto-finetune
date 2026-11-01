@@ -292,6 +292,10 @@ def main():
     a.add_argument("--destination",type=Path,required=True)
     b=sub.add_parser("status",help="verify private reviewer stage-one packet and source custody")
     b.add_argument("--workspace",type=Path,required=True)
+    d=sub.add_parser("return-audit",help="read-only completed human return check; never import")
+    d.add_argument("--packet-dir",type=Path,required=True)
+    d.add_argument("--batches-dir",type=Path,required=True)
+    d.add_argument("--workspace",type=Path,required=True)
     c=sub.add_parser("review",help="human TTY under a distinct, non-root Unix account")
     c.add_argument("--workspace",type=Path,required=True)
     c.add_argument("--reviewer-id",required=True)
@@ -301,6 +305,8 @@ def main():
         result=export(args.packet_dir,args.batches_dir,args.reviewer,args.destination)
     elif args.action=="status":
         result=inspect(args.workspace)
+    elif args.action=="return-audit":
+        result=verify_return(args.packet_dir,args.batches_dir,args.workspace)
     else:
         result=review(args.workspace,args.reviewer_id,args.batch)
     print(json.dumps(result,indent=2))
