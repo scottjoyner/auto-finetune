@@ -243,3 +243,26 @@ def test_pinned_source_requires_original_prompt_and_response(tmp_path):
     source.write_text(source.read_text() + "#fake trailing row")
     with pytest.raises(ValueError, match="fingerprint mismatch"):
         open_batch(batches, 1, 1, packet_dir=packet)
+
+
+def test_completed_human_label_cannot_be_silently_overwritten(tmp_path):
+    path=tmp_path/"batch.csv"
+    row=dict(blank(),reviewer_id="human-rater",response_category="full_refusal",
+             actionable_harmful_content="no",benign_helpfulness_0_3="2")
+    write_csv(path,[row])
+    before=path.read_bytes()
+    with pytest.raises(ValueError,match="cannot be overwritten"):
+        review_one(path,read_csv(path),0,"human-rater",
+                   lambda _: (_ for _ in ()).throw(AssertionError("human prompt reopened")),
+                   lambda _:None)
+    assert path.read_bytes()==before
+
+
+def test_incomplete_human_row_can_still_be_entered_once(tmp_path):
+    path=tmp_path/"batch.csv"
+    row=dict(blank(),reviewer_id="human-rater")
+    write_csv(path,[row])
+    answers=iter(("1","1","","original human input"))
+    assert review_one(path,read_csv(path),0,"human-rater",
+                      lambda _:next(answers),lambda _:None)
+    assert read_csv(path)[0]["response_category"]=="full_compliance"
