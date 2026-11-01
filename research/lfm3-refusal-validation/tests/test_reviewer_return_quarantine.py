@@ -162,3 +162,51 @@ def test_import_is_not_adjudicated_and_safe_helpfulness_not_faked(completed_retu
     # All 750 synthetic benign cases per reviewer require phase-two grading.
     assert result["reviewer_1"]["ungraded"]==750
     assert result["reviewer_2"]["ungraded"]==750
+
+
+def test_resealed_receipt_cannot_turn_missing_rating_into_valid_evidence(completed_returns):
+    packet,canonical,first,second,parent=completed_returns
+    stage_synthetic(completed_returns)
+    root=parent/"returned_quarantine"
+    f=root/"batches"/"reviewer_2"/"batch_001.csv"
+    rows=read_csv(f)
+    rows[0]["response_category"]=""
+    atomic_save(f,rows)
+    receipt_file=root/quarantine.RECEIPT
+    receipt=json.loads(receipt_file.read_text())
+    receipt["reviewer_batch_sha256"]["2"]["batch_001.csv"]=quarantine._sha(f)
+    receipt_file.write_text(json.dumps(receipt))
+    receipt_file.chmod(0o600)
+    with pytest.raises(ValueError,match="incomplete or invalid quarantined"):
+        quarantine.verify_quarantine(packet,root,source=source())
+
+
+def test_failed_second_reviewer_copy_never_creates_sealed_receipt(
+        completed_returns,monkeypatch):
+    packet,canonical,first,second,parent=completed_returns
+    original=quarantine._copy_and_verify
+    attempts=iter((1,2))
+    def interrupted(*args,**kwargs):
+        if next(attempts)==2:
+            raise OSError("synthetic disk interruption")
+        return original(*args,**kwargs)
+    monkeypatch.setattr(quarantine,"_copy_and_verify",interrupted)
+    with pytest.raises(OSError,match="interruption"):
+        stage_synthetic(completed_returns)
+    output=parent/"returned_quarantine"
+    assert output.is_dir()
+    assert not (output/quarantine.RECEIPT).exists()
+    with pytest.raises(ValueError,match="incomplete/extra"):
+        quarantine.verify_quarantine(packet,output,source=source())
+    assert (packet/"private_model_key.json").exists()
+
+
+def test_quarantine_detects_changed_canonical_source_after_seal(completed_returns):
+    packet,canonical,first,second,parent=completed_returns
+    stage_synthetic(completed_returns)
+    origin=canonical/"reviewer_1"/"batch_001.csv"
+    rows=read_csv(origin)
+    rows[0]["model_response"]="modified after quarantine"
+    atomic_save(origin,rows)
+    with pytest.raises(ValueError):
+        quarantine.verify_quarantine(packet,parent/"returned_quarantine",source=source())
