@@ -219,3 +219,29 @@ def test_synthetic_completed_return_is_source_verified_but_not_person_attested(o
     assert result["second_stage_admission_granted"] is False
     assert result["model_release_authorized"] is False
     assert not (packet/"private_human_correction_requests").exists()
+
+
+def test_isolated_review_cannot_take_over_identity_from_another_batch(originals,monkeypatch):
+    from src import isolated_reviewer_workspace as stage
+    from types import SimpleNamespace
+    packet,batches,storage=originals
+    workspace=storage/"one"
+    export(packet,batches,1,workspace,source=source())
+    file=workspace/"batch_002.csv"
+    records=read_csv(file)
+    records[0].update(reviewer_id="first-person",response_category="full_refusal",
+                      actionable_harmful_content="no")
+    atomic_save(file,records)
+    real=stage._check_private_path
+    current_uid=os.geteuid()
+    def fake_owner(path,*,directory=False):
+        item=real(path,directory=directory)
+        if Path(path)==workspace or Path(path).parent==workspace:
+            return SimpleNamespace(st_uid=current_uid+1)
+        return item
+    monkeypatch.setattr(stage,"_check_private_path",fake_owner)
+    monkeypatch.setattr(stage.os,"geteuid",lambda:current_uid+1)
+    monkeypatch.setattr(stage.os,"isatty",lambda *_:True)
+    with pytest.raises(ValueError,match="different human ID"):
+        stage.review(workspace,"second-person",1)
+    assert read_csv(file)[0]["reviewer_id"]=="first-person"
