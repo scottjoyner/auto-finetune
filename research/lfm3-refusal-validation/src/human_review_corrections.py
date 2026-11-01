@@ -102,7 +102,7 @@ def read_requests(packet_dir, batches_dir):
     return requested, fingerprints
 
 
-def request(packet_dir, batches_dir, reviewer, batch, index, reviewer_id, reason):
+def request(packet_dir, batches_dir, reviewer, batch, index, reviewer_id, reason, *, source=None):
     """Record human-initiated correction request without touching prior grades."""
     if type(reviewer) is not int or reviewer not in (1,2) or \
        type(batch) is not int or not 1<=batch<=15 or \
@@ -112,7 +112,7 @@ def request(packet_dir, batches_dir, reviewer, batch, index, reviewer_id, reason
         raise ValueError("invalid human correction request")
     # Prior custody check detects source/response/key manipulation and
     # inconsistent reviewer assignments before introducing a request.
-    audit_custody(packet_dir,batches_dir)
+    audit_custody(packet_dir,batches_dir,source=source)
     _,rows=open_batch(batches_dir,reviewer,batch,packet_dir=packet_dir)
     row=rows[index-1]
     rid=row["review_id"]
