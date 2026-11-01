@@ -47,6 +47,19 @@ export PYTHONDONTWRITEBYTECODE=1
   --workspace '<private-completed-workspace>'
 ```
 
+## Two-workspace return gate (new)
+
+After two actual human-operated, distinct-owner accounts complete stage one, the **read-only** pair audit checks the original model-key owner is distinct from both reviewer workspace owners, their source texts and all 1350 first-stage ratings are complete, the two reviewer slots differ, and the two Unix UIDs and private reviewer ID strings differ:
+
+```bash
+"$PY" -m src.isolated_reviewer_workspace return-pair-audit \
+  --packet-dir "$PACKET" --batches-dir "$BATCHES" \
+  --first '<approved-human-one-completed-workspace>' \
+  --second '<approved-human-two-completed-workspace>'
+```
+
+The pair check **does not** import anything, prove genuine two-person independence, reveal the model key, authorize stage two, or release a checkpoint. Different owner UIDs and different reviewer ID strings are necessary evidence, not sufficient human identity attestation. Synthetic tests explicitly simulate UID separation; the real fleet has NOT passed this gate.
+
 ## Remaining blockers / acceptance requirements
 
 The actual approved transfer, verified two-person attestation, side-by-side access denial tests, independent return/import into the canonical adjudication engine, stage-two safe-only helpfulness handoff in the isolated accounts, and third-human identity separation are **NOT implemented or verified**. The return audit checks per-workspace content integrity and ownership, but ownership and a self-reported reviewer ID do not prove the existence of two independent humans. Full issue #107 should remain open until operational access, independent attestations, secure import, and access denial tests are confirmed.
