@@ -1,0 +1,67 @@
+{
+  "evidence_class": "private activation contrast geometry; not behavioral refusal or safety evidence",
+  "method": "last-token adversarial-minus-benign residual differences, layer 10, BF16 CPU",
+  "source_model_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "source_pairs_sha256": "ebdff35111f03617632a557793122fda05e9a235444c3dd0d6396f925bbf3d81",
+  "source_direction_file_sha256": "7f31109d5212b4bb1f0839544935a694b9d4f4475e9c3a36926eebe28bd9437f",
+  "layer": 10,
+  "calibration_pairs": 2,
+  "heldout_pairs": 6,
+  "hidden_size": 2048,
+  "frozen_fitted_direction_reconstruction_cosine": 1.0,
+  "calibration_leave_one_out_cosine": 0.096468,
+  "heldout_fitted_alignment_mean": 0.361621,
+  "heldout_fitted_alignment_min": 0.095145,
+  "heldout_fitted_alignment_max": 0.51426,
+  "heldout_fitted_absolute_alignment_mean": 0.361621,
+  "heldout_positive_direction_matches": 6,
+  "heldout_loo_single_calibrator_absolute_alignment_mean": [
+    0.232678,
+    0.322262
+  ],
+  "independent_sham_directions_orthogonal_to_fit": [
+    {
+      "seed": 17,
+      "mean_absolute_holdout_cosine": 0.014478,
+      "fitted_higher_absolute_alignment_cases": 6,
+      "ties": 0,
+      "sham_higher_absolute_alignment_cases": 0
+    },
+    {
+      "seed": 23,
+      "mean_absolute_holdout_cosine": 0.015566,
+      "fitted_higher_absolute_alignment_cases": 6,
+      "ties": 0,
+      "sham_higher_absolute_alignment_cases": 0
+    },
+    {
+      "seed": 41,
+      "mean_absolute_holdout_cosine": 0.008591,
+      "fitted_higher_absolute_alignment_cases": 6,
+      "ties": 0,
+      "sham_higher_absolute_alignment_cases": 0
+    },
+    {
+      "seed": 59,
+      "mean_absolute_holdout_cosine": 0.031386,
+      "fitted_higher_absolute_alignment_cases": 6,
+      "ties": 0,
+      "sham_higher_absolute_alignment_cases": 0
+    }
+  ],
+  "source_activation_vectors_exported": false,
+  "new_model_generations": 0,
+  "model_weights_changed": false,
+  "human_refusals_evaluated": false,
+  "claim_of_direction_stability_verified": false,
+  "model_release_approved": false,
+  "limitations": [
+    "Eight paired contrasts are only two calibration plus six held-out examples",
+    "Direction is an activation contrast, not a demonstrated refusal causal vector",
+    "Two leave-one-out single-calibrator directions cannot support statistical generalization",
+    "Sham directions are orthogonal to fit and therefore not an exchangeable randomization null",
+    "Sham comparisons are descriptive; no p-values or efficacy claims are computed",
+    "Source-hash metadata alone is insufficient; the capture command must attest source bytes",
+    "Results are ungraded activation geometry, not human-rated refusal, utility, or actionability"
+  ]
+}
