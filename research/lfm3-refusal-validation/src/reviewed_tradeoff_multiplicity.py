@@ -4,6 +4,7 @@ Only call with annotations from consensus_rows() after two independent,
 complete blinded human review sheets. Does not auto-grade model responses.
 """
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -13,7 +14,7 @@ import stat
 
 from src.paired_exact_uncertainty import clopper_pearson
 from src.paired_reviewed_effects import consensus_rows
-from src.local_reviewer_terminal import open_batch
+from src.local_reviewer_terminal import open_batch, _open_private_snapshot, _read_private_json
 from src.reviewer_handoff_audit import audit as audit_custody
 from src.xstest_450_eval import ARM_ORDER, read_verified_dataset
 
@@ -192,7 +193,15 @@ def audited_human_consensus(packet_dir, batches_dir):
             or any(custody.get(f"reviewer_{i}", {}).get("graded") != 1350
                    for i in (1, 2))):
         raise ValueError("two complete independently human-rated source-bound sheets required")
-    mapping = json.loads((Path(packet_dir) / "private_model_key.json").read_text())
+    # Bind the actual opened mapping bytes to the immutable source manifest,
+    # rather than trusting a prior pathname-only audit after it can change.
+    with _open_private_snapshot(Path(packet_dir) / "private_model_key.json") as stream:
+        mapping_text = stream.read()
+    manifest = _read_private_json(Path(batches_dir) / "private_batch_manifest.json")
+    if hashlib.sha256(mapping_text.encode("utf-8")).hexdigest() != manifest.get(
+            "private_key_sha256"):
+        raise ValueError("review source mapping drift after custody audit")
+    mapping = json.loads(mapping_text)
     first, second = {}, {}
     for reviewer, target in ((1, first), (2, second)):
         for batch in range(1, 16):
