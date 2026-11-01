@@ -142,11 +142,10 @@ def stage(packet_dir,batches_dir,first,second,destination,*,source=None):
                 raise ValueError("reviewer source changed during quarantine copy")
     custody=audit_custody(packet,inner,source=source)
     if (not custody["original_source_columns_intact"] or
-        custody["reviewer_1"]["graded"]!=0 or
-        custody["reviewer_2"]["graded"]!=0):
-        # First-stage-only safe cases lack helpfulness; this is NOT complete
-        # adjudication input, and must not claim behavioral score readiness.
-        raise ValueError("unexpected final human-grade readiness in phase-one quarantine")
+        custody["human_review_completed"]):
+        # Unsafe cases can have complete initial fields; safe cases lack
+        # stage-two helpfulness. This is NOT completed human consensus.
+        raise ValueError("unexpected human-consensus readiness in phase-one quarantine")
     receipt={
         "kind":"private-incomplete-human-provenance-stage-one-quarantine",
         "schema":1,"total_return_rows":2700,
