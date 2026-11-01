@@ -30,6 +30,15 @@ def fake_mounted_ssd(tmp_path, monkeypatch):
     return repo, mount, cargo
 
 
+@pytest.fixture
+def fake_rustc(tmp_path):
+    """Create an executable compiler placeholder; never invoke real rustc."""
+    compiler = tmp_path / "rustc"
+    compiler.write_text("#!/bin/sh\\nexit 0\\n")
+    compiler.chmod(0o700)
+    return compiler
+
+
 def test_plan_is_read_only_and_targets_unique_ssd_worktree(fake_mounted_ssd):
     repo, mount, cargo = fake_mounted_ssd
     job = s.plan(repo, mount, cargo_binary=cargo)
@@ -71,9 +80,9 @@ def test_capacity_fail_closed_without_creating_anything(fake_mounted_ssd, limits
 
 
 def test_explicit_run_targets_ssd_and_does_not_mutate_repo(
-        fake_mounted_ssd, monkeypatch):
+        fake_mounted_ssd, fake_rustc, monkeypatch):
     repo, mount, cargo = fake_mounted_ssd
-    job = s.plan(repo, mount, cargo_binary=cargo)
+    job = s.plan(repo, mount, cargo_binary=cargo, rustc_binary=fake_rustc)
     calls = []
     def fake_execute(args, *, cwd, env, check):
         calls.append((args, cwd, env, check))
@@ -86,7 +95,7 @@ def test_explicit_run_targets_ssd_and_does_not_mutate_repo(
     assert argv[0] == str(cargo)
     assert env["CARGO_TARGET_DIR"] == job["cargo_target_dir"]
     assert env["CARGO_INCREMENTAL"] == "0"
-    assert env["RUSTC"] == str(s.DEFAULT_RUSTC)
+    assert env["RUSTC"] == str(fake_rustc)
     assert env["TMPDIR"] == job["ssd_tmpdir"]
     assert Path(env["CARGO_TARGET_DIR"]).is_dir()
     assert Path(env["TMPDIR"]).is_dir()
@@ -94,9 +103,9 @@ def test_explicit_run_targets_ssd_and_does_not_mutate_repo(
     assert check is False
 
 
-def test_recheck_blocks_after_capacity_changes(fake_mounted_ssd, monkeypatch):
+def test_recheck_blocks_after_capacity_changes(fake_mounted_ssd, fake_rustc, monkeypatch):
     repo, mount, cargo = fake_mounted_ssd
-    job = s.plan(repo, mount, cargo_binary=cargo)
+    job = s.plan(repo, mount, cargo_binary=cargo, rustc_binary=fake_rustc)
     monkeypatch.setattr(s, "_available_bytes",
                         lambda path: (200 if Path(path) == mount else 19) * GIB)
     with pytest.raises(s.CargoCapacityBlocked, match="changed"):
@@ -141,9 +150,9 @@ def test_missing_compiler_fails_before_target_creation(fake_mounted_ssd):
     assert not (mount / s.NAMESPACE).exists()
 
 
-def test_mount_device_changed_after_plan_is_blocked(fake_mounted_ssd, monkeypatch):
+def test_mount_device_changed_after_plan_is_blocked(fake_mounted_ssd, fake_rustc, monkeypatch):
     repo, mount, cargo = fake_mounted_ssd
-    job = s.plan(repo, mount, cargo_binary=cargo)
+    job = s.plan(repo, mount, cargo_binary=cargo, rustc_binary=fake_rustc)
     monkeypatch.setattr(s, "_device", lambda _: job["root_device"])
     with pytest.raises(s.CargoCapacityBlocked, match="mount identity"):
         s.run_explicit(job)
