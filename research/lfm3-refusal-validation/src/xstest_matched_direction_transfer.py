@@ -99,6 +99,10 @@ def _paired_stats(records,direction):
     for row,delta in zip(records,signed):
         by[row[0]].append(delta)
     mean=math.fsum(signed)/len(signed)
+    ordered=sorted(signed)
+    mid=len(ordered)//2
+    median=((ordered[mid-1]+ordered[mid])/2 if len(ordered)%2==0
+            else ordered[mid])
     catmeans=[math.fsum(by[k])/len(by[k]) for k in sorted(by)]
     stable_pairs=sum(x>0 for x in signed)
     remove_one=[math.fsum(v for j,v in enumerate(catmeans) if j!=i) /
@@ -106,7 +110,7 @@ def _paired_stats(records,direction):
     return {
         'matched_pair_count':len(signed),
         'mean_signed_unsafe_minus_safe_cosine':round(mean,6),
-        'median_signed_pair_delta':round(sorted(signed)[len(signed)//2],6),
+        'median_signed_pair_delta':round(median,6),
         'minimum_signed_pair_delta':round(min(signed),6),
         'maximum_signed_pair_delta':round(max(signed),6),
         'positive_matched_pair_count':stable_pairs,
@@ -146,7 +150,8 @@ def analyze(pairs, private, *, full=True):
         'isotropic_shams_at_least_as_large_as_fitted':sum(x>=fitted for x in d),
         'shams_are_causal_null':False,
         'paired_char_length_delta_mean':round(math.fsum(x[3] for x in verified)/len(verified),6),
-        'matched_design_preselected_from_xstest':True,
+        'matched_design_fixed_before_current_measurement':True,
+        'matched_family_choice_posthoc_to_prior_xstest_activation_result':True,
         'models_weights_changed':False,
         'model_generations':0,
         'human_refusal_grades':0,
