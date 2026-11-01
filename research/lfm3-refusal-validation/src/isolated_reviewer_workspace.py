@@ -239,6 +239,49 @@ def review(workspace, reviewer_id, batch=None):
     return inspect(workspace)
 
 
+
+def verify_return(packet_dir, batches_dir, workspace, *, source=None):
+    """Inspect one complete, distinct-owner stage-one return; never import."""
+    packet,batches=Path(packet_dir),Path(batches_dir)
+    custody=canonical_audit(packet,batches,source=source)
+    if not (custody["original_source_columns_intact"] and
+            custody["reviewer_batch_privacy_permissions_verified"]):
+        raise ValueError("canonical source custody failed")
+    manifest=_manifest(workspace)
+    key=_check_private_path(packet/"private_model_key.json")
+    owner=_check_private_path(workspace,directory=True)
+    if (manifest["exporter_uid"]!=key.st_uid or
+            owner.st_uid in (0,key.st_uid)):
+        raise PermissionError("distinct non-root reviewer owner required")
+    origin=packet/f"blinded_reviewer_{manifest['reviewer_slot']}.csv"
+    _check_private_path(origin)
+    if hashlib.sha256(origin.read_bytes()).hexdigest()!=manifest["source_sheet_sha256"]:
+        raise ValueError("review source fingerprint mismatch")
+    summary=inspect(workspace)
+    if (summary["reviewed_cases"]!=TOTAL or summary["ungraded_cases"]!=0
+            or not summary["reviewer_identity_present"]):
+        raise ValueError("incomplete reviewer stage-one ratings")
+    for n in range(1,BATCHES+1):
+        source_rows=_read_private_csv(
+            batches/f"reviewer_{manifest['reviewer_slot']}"/f"batch_{n:03d}.csv")
+        _,returned=_batch(workspace,n,manifest=manifest)
+        if len(source_rows)!=len(returned) or any(
+            a[k]!=b[k] for a,b in zip(source_rows,returned)
+            for k in ORIGINAL_FIELDS
+        ):
+            raise ValueError("reviewed source ID, prompt or response changed")
+    return {
+        "reviewer_slot":manifest["reviewer_slot"],
+        "complete_human_entered_stage_one_fields":True,
+        "reviewed_blinded_rows":TOTAL,
+        "distinct_unix_owner_from_model_key":True,
+        "frozen_review_source_verified":True,
+        "original_files_modified":False,
+        "reviewer_real_world_identity_independently_verified":False,
+        "second_stage_admission_granted":False,
+        "model_release_authorized":False,
+    }
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     sub=p.add_subparsers(dest="action",required=True)
