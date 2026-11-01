@@ -48,3 +48,16 @@ Research code was staged from PR branch commit `951f29b` onto the SSD without ch
 
 Before fitting another direction, compare the original calibration-delta magnitudes, independently verify the cross-pair alignment under larger disjoint contrast sets, and test whether projected activations alter **human-rated** benign over-refusal without increasing unsafe actionability or losing canonical task capability. Keep sham controls distinct from a randomized null and retain the existing open research and storage gates.
 
+
+## Post-hoc calibration magnitude sensitivity
+
+A subsequent **model-free, no-new-prompts** analysis was run on the same private frozen eight-pair activation capture using `src/calibration_balance_sensitivity.py`. It compares the existing M1 direction (sum of unnormalized calibration deltas, then unit normalization), an equal-unit-weight mean of the two calibrators, and each single-calibrator direction. Nine synthetic contract tests passed on x1-370. The public-safe result is `evidence/20261101_calibration_balance_sensitivity_actual.json`.
+
+- Calibrator 1 contrast norm: **1.121841**; calibrator 2: **2.018015** (ratio **1.798842**).
+- Equal-unit-weight candidate cosine to existing fitted direction: **0.968036**.
+- Mean signed held-out cosine: existing **0.361621**, equal-unit-weight **0.360391**; the balanced candidate is slightly *lower* on this measure.
+- Minimum signed held-out cosine: existing **0.095145**, equal-unit-weight **0.171938**; the balanced candidate is higher by **0.076793**.
+- Single-calibrator mean signed alignments: first **0.232678**, second **0.301009**. The second alone is negative on one of six held-out contrasts (minimum **−0.063758**).
+- Both combined directions show positive signed alignment on all six held-out pairs. The balanced candidate was selected **post hoc** after seeing the original result, so this is sensitivity analysis rather than a separately validated improvement.
+
+These figures provide a reason to study **calibration weighting** with newly selected source contrasts, but they do not establish that the balanced candidate changes actual model refusal or yields a better checkpoint. No second checkpoint was created, no edit was applied, and there were zero additional model forward passes for this offline follow-up.
