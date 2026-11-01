@@ -139,3 +139,82 @@ def test_private_report_directory_rejects_world_access_and_symlink(tmp_path):
     alias.symlink_to(out, target_is_directory=True)
     with pytest.raises(ValueError, match="symlinks"):
         _private_directory(alias)
+
+
+def test_private_grade_snapshot_uses_all_thirty_files_without_exposing_contents(monkeypatch):
+    import hashlib
+    import io
+    from contextlib import contextmanager
+    from src import reviewed_tradeoff_multiplicity as gate
+
+    opened = []
+    @contextmanager
+    def fake_open(path):
+        opened.append(path.name)
+        yield io.StringIO(f"private human grade for {path.name}")
+    monkeypatch.setattr(gate, "_open_private_snapshot", fake_open)
+    result = gate._batch_snapshot_digests("/synthetic/private")
+    assert len(result) == len(set(opened)) == 30
+    assert len(set(result)) == 15  # Identical synthetic text across two reviewers.
+    assert all(len(x) == 64 for x in result)
+    assert all("private" not in x for x in result)
+
+
+def test_changed_human_grade_blocks_post_custody_reattest(monkeypatch):
+    import hashlib
+    import io
+    from contextlib import contextmanager
+    from src import reviewed_tradeoff_multiplicity as gate
+    class_count = {"calls": 0}
+    custody = {
+        "original_source_columns_intact": True,
+        "reviewer_batch_privacy_permissions_verified": True,
+        "human_review_completed": True,
+        "reviewer_1": {"graded": 1350},
+        "reviewer_2": {"graded": 1350},
+    }
+    monkeypatch.setattr(gate, "audit_custody", lambda *args: custody)
+    def fake_snapshots(_):
+        class_count["calls"] += 1
+        return ("one",) * 30 if class_count["calls"] == 1 else ("two",) * 30
+    monkeypatch.setattr(gate, "_batch_snapshot_digests", fake_snapshots)
+    payload = "{}"
+    @contextmanager
+    def fake_open(_):
+        yield io.StringIO(payload)
+    monkeypatch.setattr(gate, "_open_private_snapshot", fake_open)
+    monkeypatch.setattr(gate, "_read_private_json", lambda *args: {
+        "private_key_sha256": hashlib.sha256(payload.encode()).hexdigest(),
+    })
+    monkeypatch.setattr(gate, "open_batch", lambda root, reviewer, batch, **kw: (
+        None, [{"review_id": f"batch-{batch}"}]))
+    monkeypatch.setattr(gate, "read_verified_dataset", lambda: [
+        {"id": "synthetic", "class": "safe"}])
+    monkeypatch.setattr(gate, "consensus_rows", lambda *args, **kwargs: {})
+    with pytest.raises(ValueError, match="changed during analysis"):
+        gate.audited_human_consensus("/synthetic/packet", "/synthetic/batches")
+    assert class_count["calls"] == 2
+
+
+def test_source_mapping_checksum_rejects_modified_mapping(monkeypatch):
+    import io
+    from contextlib import contextmanager
+    from src import reviewed_tradeoff_multiplicity as gate
+    custody = {
+        "original_source_columns_intact": True,
+        "reviewer_batch_privacy_permissions_verified": True,
+        "human_review_completed": True,
+        "reviewer_1": {"graded": 1350},
+        "reviewer_2": {"graded": 1350},
+    }
+    monkeypatch.setattr(gate, "audit_custody", lambda *args: custody)
+    monkeypatch.setattr(gate, "_batch_snapshot_digests", lambda *args: ("same",) * 30)
+    @contextmanager
+    def fake_open(_):
+        yield io.StringIO('{"sample":"changed after audit"}')
+    monkeypatch.setattr(gate, "_open_private_snapshot", fake_open)
+    monkeypatch.setattr(gate, "_read_private_json", lambda *args: {
+        "private_key_sha256": "0" * 64,
+    })
+    with pytest.raises(ValueError, match="mapping drift"):
+        gate.audited_human_consensus("/synthetic/packet", "/synthetic/batches")
