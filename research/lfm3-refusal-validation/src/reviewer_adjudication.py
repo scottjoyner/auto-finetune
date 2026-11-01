@@ -188,7 +188,7 @@ def resolve(packet,batches,adj,output,lookup,resamples=2000):
     principal_audit=audit_principal_access(
         packet,batches,source=list(lookup.values()))
     report.update({
-        "evidence_class":"two independent human reviews with third-human adjudication",
+        "evidence_class":"two distinct reviewer ID strings; independent humans/OS access not yet verified",
         "resolved_disagreements":dispute_count,
         "adjudicated_human_correction_requests":len(requested),
         "adjudication_required":bool(selected),
@@ -201,7 +201,7 @@ def resolve(packet,batches,adj,output,lookup,resamples=2000):
             principal_audit["reviewers_share_one_unix_uid"],
         "third_human_adjudicator_required_for_disagreements":True,
         "original_review_fingerprints_verified":True,
-        "review_mode":"two independent humans plus third human for every disagreement or unresolved response",
+        "review_mode":"two original reviewer IDs plus third human for every disagreement or correction request; actual human independence unverified",
         "automatic_grading":False,
         "release_authorized":False,
         "external_independent_review_complete":False,
