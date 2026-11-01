@@ -1,0 +1,88 @@
+{
+  "evidence_class": "matched semantic-family XSTest activation differences; not behavioral refusal",
+  "source_model_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "source_direction_sha256": "7f31109d5212b4bb1f0839544935a694b9d4f4475e9c3a36926eebe28bd9437f",
+  "source_dataset_sha256": "11783fb294ed017473ee53c207d71f2161c7672c8d0b037501e78387f801cb5a",
+  "selection": "6 manual verified source-index paired category families x 3 pairs, seed 9418",
+  "matched_pairs": 18,
+  "source_category_families": 6,
+  "new_model_forward_passes": 36,
+  "layer": 10,
+  "candidate_matched_diagnostics": {
+    "original_M1_fitted": {
+      "matched_pair_count": 18,
+      "mean_signed_unsafe_minus_safe_cosine": 0.17959,
+      "median_signed_pair_delta": 0.163781,
+      "minimum_signed_pair_delta": 0.065532,
+      "maximum_signed_pair_delta": 0.363709,
+      "positive_matched_pair_count": 18,
+      "positive_family_mean_count": 6,
+      "leave_one_family_out_mean_range": [
+        0.154289,
+        0.1892
+      ]
+    },
+    "equal_unit_weight": {
+      "matched_pair_count": 18,
+      "mean_signed_unsafe_minus_safe_cosine": 0.154175,
+      "median_signed_pair_delta": 0.133314,
+      "minimum_signed_pair_delta": 0.052528,
+      "maximum_signed_pair_delta": 0.309991,
+      "positive_matched_pair_count": 18,
+      "positive_family_mean_count": 6,
+      "leave_one_family_out_mean_range": [
+        0.132728,
+        0.163921
+      ]
+    },
+    "calibrator_1_only": {
+      "matched_pair_count": 18,
+      "mean_signed_unsafe_minus_safe_cosine": 0.032841,
+      "median_signed_pair_delta": 0.033355,
+      "minimum_signed_pair_delta": -0.02963,
+      "maximum_signed_pair_delta": 0.067414,
+      "positive_matched_pair_count": 15,
+      "positive_family_mean_count": 5,
+      "leave_one_family_out_mean_range": [
+        0.028671,
+        0.039586
+      ]
+    },
+    "calibrator_2_only": {
+      "matched_pair_count": 18,
+      "mean_signed_unsafe_minus_safe_cosine": 0.19547,
+      "median_signed_pair_delta": 0.182047,
+      "minimum_signed_pair_delta": 0.064091,
+      "maximum_signed_pair_delta": 0.400036,
+      "positive_matched_pair_count": 18,
+      "positive_family_mean_count": 6,
+      "leave_one_family_out_mean_range": [
+        0.167425,
+        0.203157
+      ]
+    }
+  },
+  "isotropic_sham_count": 128,
+  "isotropic_sham_first_seed": 32000,
+  "isotropic_sham_median_absolute_mean_gap": 0.006848,
+  "isotropic_sham_maximum_absolute_mean_gap": 0.025893,
+  "isotropic_shams_at_least_as_large_as_fitted": 0,
+  "shams_are_causal_null": false,
+  "paired_char_length_delta_mean": -1.0,
+  "matched_design_fixed_before_current_measurement": true,
+  "matched_family_choice_posthoc_to_prior_xstest_activation_result": true,
+  "models_weights_changed": false,
+  "model_generations": 0,
+  "human_refusal_grades": 0,
+  "model_release_approved": false,
+  "raw_prompts_or_pair_activations_exported": false,
+  "limitations": [
+    "Index-matched prompts preserve source focus but do not eliminate all topic/framing/length confounds",
+    "18 selected pairs across six families are small and not independently sampled from a wider population",
+    "This source previously participated in A/B/C response evaluation; source is not a virgin benchmark",
+    "A positive activation difference is not a refusal outcome or proof of a causal direction",
+    "Sham direction geometry is descriptive; no behavioral null or statistical p-value",
+    "Paired prompt length differences can still confound the final-token activation",
+    "Equal-unit-weight direction was proposed after inspecting the earlier six-pair data"
+  ]
+}
