@@ -85,6 +85,27 @@ def _bootstrap(differences, *, alpha, resamples, seed):
     return draws[low], draws[high]
 
 
+
+def bounded_mean_interval(differences, *, alpha):
+    """Finite-sample Hoeffding mean interval for bounded ordinal differences.
+
+    For independent sampled source prompts, each paired helpfulness score
+    difference lies in [-3,3]. A union bound with the binary contrasts
+    yields 95% familywise simultaneous coverage, without distributional
+    normality or bootstrap quantile assumptions.
+    """
+    if (not isinstance(differences, (tuple, list)) or not differences or
+            type(alpha) not in (int, float) or
+            not math.isfinite(alpha) or not 0 < alpha < 1):
+        raise ValueError("invalid paired bounded interval inputs")
+    if any(type(v) is not int or not -3 <= v <= 3 for v in differences):
+        raise ValueError("paired helpfulness differences must be integers in [-3,3]")
+    n = len(differences)
+    mean = math.fsum(differences) / n
+    radius = 6 * math.sqrt(math.log(2 / alpha) / (2 * n))
+    return max(-3., mean-radius), min(3., mean+radius)
+
+
 def analyze_consensus(annotations, benchmark, *, require_full=True,
                       resamples=4000, seed=17):
     """The caller must independently prove human provenance before invoking."""
@@ -117,14 +138,21 @@ def analyze_consensus(annotations, benchmark, *, require_full=True,
                         "human_rating_no_longer_positive": lost,
                     })
                 else:
-                    lower, upper = _bootstrap(
+                    lower, upper = bounded_mean_interval(
+                        delta, alpha=ALPHA/N_CONTRASTS)
+                    # Secondary exploratory estimate, never the primary gate.
+                    bootstrap_lower, bootstrap_upper = _bootstrap(
                         delta, alpha=ALPHA/N_CONTRASTS,
                         resamples=resamples, seed=seed)
                     row.update({
-                        "interval_method": "Bonferroni matched-prompt percentile bootstrap",
+                        "interval_method": "Bonferroni Hoeffding bounded-difference mean interval",
+                        "finite_sample_coverage_given_independent_prompts": True,
+                        "exploratory_paired_bootstrap": [
+                            round(bootstrap_lower, 6),
+                            round(bootstrap_upper, 6),
+                        ],
                         "bootstrap_resamples": resamples,
                         "bootstrap_seed": seed,
-                        "exact_frequentist_coverage_guaranteed": False,
                     })
                 if not lower - 1e-12 <= observed <= upper + 1e-12:
                     raise AssertionError("observed human effect outside interval")
@@ -162,7 +190,8 @@ def analyze_consensus(annotations, benchmark, *, require_full=True,
         "model_release_approved": False,
         "limitations": [
             "Requires two actual independent blinded humans, full consensus and no unresolved grades",
-            "Ordinal-helpfulness percentile bootstrap has no exact finite-sample coverage guarantee",
+            "Primary ordinal-helpfulness bounds have finite-sample coverage for independent source prompts, not arbitrary correlated/purposive samples",
+            "Ordinal percentile bootstrap remains exploratory and cannot replace the primary Hoeffding interval",
             "Even all three directional criteria do not authorize model publication",
             "Prompt-selection dependence and rubric reliability affect population interpretation",
             "Raw prompts, responses, reviewer IDs, mapping, and case identifiers never appear in this aggregate",
