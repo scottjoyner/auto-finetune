@@ -26,6 +26,13 @@ def test_both_benchmarks_and_all_12_comparisons(frozen):
     assert result["human_refusal_utility_review_complete"] is False
     assert len(result["a_vs_b_canonical_capability"])==2
     assert result["benign_lexical_reduction_established"] is False
+    assert result["provisional_capability_noninferiority_sensitivity"] == [
+        {"candidate_loss_margin_pp": 2.0, "not_predeclared": True,
+         "capability_preserved_at_margin": False},
+        {"candidate_loss_margin_pp": 5.0, "not_predeclared": True,
+         "capability_preserved_at_margin": True},
+    ]
+
 
 
 def test_canonical_a_b_effect_sizes_and_custody(frozen):
