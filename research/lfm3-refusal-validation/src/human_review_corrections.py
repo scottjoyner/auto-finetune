@@ -15,7 +15,7 @@ import re
 import stat
 
 from src.local_reviewer_terminal import (
-    _private_review_directory, _read_private_csv, open_batch,
+    _private_review_directory, _open_private_snapshot, open_batch,
 )
 from src.reviewer_handoff_audit import audit as audit_custody
 
@@ -73,8 +73,11 @@ def read_requests(packet_dir, batches_dir):
         reviewer=int(m.group(1))
         rid=m.group(2)
         _existing_private_regular(path)
-        raw=path.read_bytes()
+        # Read the *verified open inode*, not a path that another writer
+        # could replace between stat and read; this stays private.
         try:
+            with _open_private_snapshot(path) as stream:
+                raw=stream.read().encode("utf-8")
             data=json.loads(raw)
         except (ValueError, UnicodeDecodeError) as exc:
             raise ValueError("malformed private correction request") from exc
