@@ -13,7 +13,8 @@ import stat
 
 from src.paired_exact_uncertainty import clopper_pearson
 from src.paired_reviewed_effects import consensus_rows
-from src.reviewed_xstest_metrics import read_review
+from src.local_reviewer_terminal import open_batch
+from src.reviewer_handoff_audit import audit as audit_custody
 from src.xstest_450_eval import ARM_ORDER, read_verified_dataset
 
 STRATA = ("safe", "unsafe")
@@ -177,22 +178,60 @@ def _private_directory(path):
         raise PermissionError("private report directory must be owner-only")
 
 
+
+def audited_human_consensus(packet_dir, batches_dir):
+    """Require verified original source + complete human batch records.
+
+    This does not infer any labels. It refuses incomplete, tampered,
+    mixed-identity or unresolved independent human annotations.
+    """
+    custody = audit_custody(packet_dir, batches_dir)
+    if (custody.get("original_source_columns_intact") is not True
+            or custody.get("reviewer_batch_privacy_permissions_verified") is not True
+            or custody.get("human_review_completed") is not True
+            or any(custody.get(f"reviewer_{i}", {}).get("graded") != 1350
+                   for i in (1, 2))):
+        raise ValueError("two complete independently human-rated source-bound sheets required")
+    mapping = json.loads((Path(packet_dir) / "private_model_key.json").read_text())
+    first, second = {}, {}
+    for reviewer, target in ((1, first), (2, second)):
+        for batch in range(1, 16):
+            # Open exact source-pinned batch snapshots through the existing
+            # secure reviewer reader, not generic CSV path reopening.
+            _, rows = open_batch(
+                batches_dir, reviewer, batch, packet_dir=packet_dir)
+            for row in rows:
+                rid = row["review_id"]
+                if rid in target:
+                    raise ValueError("duplicated blinded response in review batches")
+                target[rid] = row
+    benchmark = {row["id"]: row for row in read_verified_dataset()}
+    annotations = consensus_rows(first, second, mapping, benchmark,
+                                 require_full=True)
+    # Reattest to reject ordinary source drift during collection. This
+    # cannot provide an atomic snapshot against concurrent hostile writes.
+    repeat = audit_custody(packet_dir, batches_dir)
+    if repeat != custody:
+        raise ValueError("human-review sources changed during analysis")
+    return annotations, benchmark
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--review-dir", type=Path, required=True)
+    parser.add_argument("--packet-dir", type=Path, required=True,
+                        help="private original model-blind human packet directory")
+    parser.add_argument("--batches-dir", type=Path, required=True,
+                        help="original 15-batch-per-reviewer human review directory")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--resamples", type=int, default=4000)
     args = parser.parse_args()
-    # Do not print private paths, hidden case mapping or unreviewed content.
+    # Never print private paths, hidden case mapping or unreviewed content.
     if args.output.exists():
         raise FileExistsError("will not overwrite a prior review report")
     _private_directory(args.output.parent)
-    a = read_review(args.review_dir / "blinded_reviewer_1.csv")
-    b = read_review(args.review_dir / "blinded_reviewer_2.csv")
-    private_key = json.loads((args.review_dir / "private_model_key.json").read_text())
-    benchmark = {row["id"]: row for row in read_verified_dataset()}
-    ratings = consensus_rows(a, b, private_key, benchmark, require_full=True)
+    ratings, benchmark = audited_human_consensus(args.packet_dir, args.batches_dir)
     report = analyze_consensus(ratings, benchmark, resamples=args.resamples)
+    report["private_source_custody_rechecked"] = True
     os.umask(0o077)
     fd = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                  getattr(os, "O_NOFOLLOW", 0), 0o600)
