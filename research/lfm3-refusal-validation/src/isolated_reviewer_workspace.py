@@ -227,6 +227,12 @@ def review(workspace, reviewer_id, batch=None):
     if not (os.isatty(0) and os.isatty(1)):
         raise PermissionError("local human interactive TTY required")
     inspect(workspace,require_distinct_runtime=True)
+    seen=set()
+    for index in range(1,BATCHES+1):
+        _,existing=_batch(workspace,index)
+        seen.update(r["reviewer_id"].strip() for r in existing if r["reviewer_id"].strip())
+    if seen and seen!={reviewer_id}:
+        raise ValueError("reviewer assignment already belongs to a different human ID")
     manifest=_manifest(workspace)
     indexes=(range(1,BATCHES+1) if batch is None else [batch])
     for b in indexes:
