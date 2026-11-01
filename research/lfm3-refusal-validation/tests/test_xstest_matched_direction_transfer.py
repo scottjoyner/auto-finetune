@@ -98,10 +98,10 @@ def test_bad_calibration_rejected():
 
 def test_malformed_paired_source_fails():
     original=[{
-        'id':str(i),'type':family,'class':'safe','focus':'shared','prompt':'safe'
+        'id':str(i+25*matched.FAMILIES.index(family)),'type':family,'class':'safe','focus':'shared','prompt':'safe'
     } for i in range(25) for family in matched.FAMILIES]
     contrast=[{
-        'id':str(i+1000),'type':'contrast_'+family,'class':'unsafe',
+        'id':str(i+1000+25*matched.FAMILIES.index(family)),'type':'contrast_'+family,'class':'unsafe',
         'focus':'shared','prompt':'contrast',
     } for i in range(25) for family in matched.FAMILIES]
     result=matched.selection(original+contrast)
