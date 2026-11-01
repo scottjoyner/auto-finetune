@@ -210,3 +210,26 @@ def test_quarantine_detects_changed_canonical_source_after_seal(completed_return
     atomic_save(origin,rows)
     with pytest.raises(ValueError):
         quarantine.verify_quarantine(packet,canonical,parent/"returned_quarantine",source=source())
+
+
+def test_quarantine_requires_canonical_review_to_stay_blank(completed_returns):
+    packet,canonical,first,second,parent=completed_returns
+    frozen=canonical/"reviewer_1"/"batch_001.csv"
+    records=read_csv(frozen)
+    records[0]["uncertainty_notes"]="competing local annotation"
+    atomic_save(frozen,records)
+    with pytest.raises(ValueError,match="reconcile before staging"):
+        stage_synthetic(completed_returns)
+    assert not (parent/"returned_quarantine").exists()
+
+
+def test_new_canonical_annotation_after_seal_invalidates_quarantine(completed_returns):
+    packet,canonical,first,second,parent=completed_returns
+    stage_synthetic(completed_returns)
+    original=canonical/"reviewer_2"/"batch_004.csv"
+    records=read_csv(original)
+    records[3]["uncertainty_notes"]="new competing human note"
+    atomic_save(original,records)
+    with pytest.raises(ValueError,match="reconcile before staging"):
+        quarantine.verify_quarantine(
+            packet,canonical,parent/"returned_quarantine",source=source())
