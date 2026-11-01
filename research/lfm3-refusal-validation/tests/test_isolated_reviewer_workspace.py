@@ -245,3 +245,40 @@ def test_isolated_review_cannot_take_over_identity_from_another_batch(originals,
     with pytest.raises(ValueError,match="different human ID"):
         stage.review(workspace,"second-person",1)
     assert read_csv(file)[0]["reviewer_id"]=="first-person"
+
+
+def test_synthetic_two_separate_unix_owners_without_personhood_claim(originals,monkeypatch):
+    from src import isolated_reviewer_workspace as stage
+    from types import SimpleNamespace
+    packet,batches,storage=originals
+    first,second=storage/"one",storage/"two"
+    export(packet,batches,1,first,source=source())
+    export(packet,batches,2,second,source=source())
+    for ws,name in ((first,"test-rater-a"),(second,"test-rater-b")):
+        for i in range(1,16):
+            file=ws/f"batch_{i:03d}.csv"
+            items=read_csv(file)
+            for row in items:
+                row.update(reviewer_id=name,response_category="full_compliance",
+                           actionable_harmful_content="no")
+            atomic_save(file,items)
+    real=stage._check_private_path
+    local_uid=os.geteuid()
+    def fake_separate_owner(path,*,directory=False):
+        st=real(path,directory=directory)
+        p=Path(path)
+        if p==first or p.parent==first:
+            return SimpleNamespace(st_uid=local_uid+101)
+        if p==second or p.parent==second:
+            return SimpleNamespace(st_uid=local_uid+102)
+        return st
+    monkeypatch.setattr(stage,"_check_private_path",fake_separate_owner)
+    pair=stage.verify_pair_returns(packet,batches,first,second,source=source())
+    assert pair["complete_review_workspaces_source_verified"]==2
+    assert pair["reviewer_unix_principal_ownership_distinct"] is True
+    assert pair["unique_reviewer_id_strings"] is True
+    assert pair["separate_real_human_attestation_verified"] is False
+    assert pair["owner_approved_central_import_performed"] is False
+    assert pair["model_release_authorized"] is False
+    with pytest.raises(ValueError,match="one returned workspace"):
+        stage.verify_pair_returns(packet,batches,first,first,source=source())
