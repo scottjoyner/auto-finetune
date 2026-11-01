@@ -1,0 +1,111 @@
+{
+  "evidence_class": "model-free paired proxy power-planning sensitivity; not a new inference experiment",
+  "model_checkpoints": [
+    "A_original_posttrained",
+    "B_M1_abliterated_smoke",
+    "C_base_pretrained"
+  ],
+  "n_unique_existing_prompts": 450,
+  "model_weights_changed": false,
+  "new_generations": 0,
+  "benchmark_sha256": "11783fb294ed017473ee53c207d71f2161c7672c8d0b037501e78387f801cb5a",
+  "private_journal_sha256": "b5e88e85cd3c7ec79c54e756bbf4402440e36aec4d141b661a416d058653e51e",
+  "checkpoint_sha256": {
+    "A_original_posttrained": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+    "B_M1_abliterated_smoke": "be6fa00aa433cdf91fb4d3b3a83f967d897a6e7a95ffba6874c98aa94b450798",
+    "C_base_pretrained": "61a3f541d65b03a2180d08964bf0d55e349463a2706032814d455ae046bc8b59"
+  },
+  "assumed_two_sided_family_alpha_per_contrast": 0.008333333333333333,
+  "method": "normal approximation to paired binary score-test power; six-test Bonferroni design allowance",
+  "assumption": "future independent cases replicate observed gain/loss rates; retrospective and unstable",
+  "planning": [
+    {
+      "stratum": "safe",
+      "left": "A_original_posttrained",
+      "right": "B_M1_abliterated_smoke",
+      "n_observed": 250,
+      "gain": 1,
+      "loss": 9,
+      "observed_net_difference_pp": -3.2,
+      "observed_exact_p": 0.021484375,
+      "planning_discordance_rate": 0.04,
+      "approx_power_at_observed_n": 0.4563,
+      "approx_n_for_80pct_power": 471
+    },
+    {
+      "stratum": "safe",
+      "left": "A_original_posttrained",
+      "right": "C_base_pretrained",
+      "n_observed": 250,
+      "gain": 11,
+      "loss": 16,
+      "observed_net_difference_pp": -2.0,
+      "observed_exact_p": 0.44206833839416504,
+      "planning_discordance_rate": 0.108,
+      "approx_power_at_observed_n": 0.0467,
+      "approx_n_for_80pct_power": 3267
+    },
+    {
+      "stratum": "safe",
+      "left": "B_M1_abliterated_smoke",
+      "right": "C_base_pretrained",
+      "n_observed": 250,
+      "gain": 16,
+      "loss": 13,
+      "observed_net_difference_pp": 1.2,
+      "observed_exact_p": 0.711071103811264,
+      "planning_discordance_rate": 0.116,
+      "approx_power_at_observed_n": 0.0193,
+      "approx_n_for_80pct_power": 9752
+    },
+    {
+      "stratum": "unsafe",
+      "left": "A_original_posttrained",
+      "right": "B_M1_abliterated_smoke",
+      "n_observed": 200,
+      "gain": 5,
+      "loss": 10,
+      "observed_net_difference_pp": -2.5,
+      "observed_exact_p": 0.3017578125,
+      "planning_discordance_rate": 0.075,
+      "approx_power_at_observed_n": 0.0881,
+      "approx_n_for_80pct_power": 1451
+    },
+    {
+      "stratum": "unsafe",
+      "left": "A_original_posttrained",
+      "right": "C_base_pretrained",
+      "n_observed": 200,
+      "gain": 8,
+      "loss": 17,
+      "observed_net_difference_pp": -4.5,
+      "observed_exact_p": 0.10775214433670044,
+      "planning_discordance_rate": 0.125,
+      "approx_power_at_observed_n": 0.199,
+      "approx_n_for_80pct_power": 745
+    },
+    {
+      "stratum": "unsafe",
+      "left": "B_M1_abliterated_smoke",
+      "right": "C_base_pretrained",
+      "n_observed": 200,
+      "gain": 13,
+      "loss": 17,
+      "observed_net_difference_pp": -2.0,
+      "observed_exact_p": 0.584664711728692,
+      "planning_discordance_rate": 0.15,
+      "approx_power_at_observed_n": 0.0284,
+      "approx_n_for_80pct_power": 4539
+    }
+  ],
+  "human_behavioral_grades_completed": false,
+  "refusal_reduction_validated": false,
+  "release_approved": false,
+  "limitations": [
+    "Normal approximation is unreliable for sparse discordant transitions",
+    "Observed effect sizes and discordance were estimated on the same frozen data",
+    "Effect sizes are lexical proxy changes; power is not evidence of harmful compliance",
+    "C is an unmatched training regime; do not interpret its contrasts as an ablation",
+    "No human grades or new model generations were produced"
+  ]
+}
