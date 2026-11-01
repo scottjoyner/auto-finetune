@@ -217,6 +217,34 @@ def verify_quarantine(packet_dir, destination, *, source=None):
             isolated._check_private_path(parent/name)
             if _sha(parent/name)!=checks[name]:
                 raise ValueError("human reviewer evidence modified after quarantine")
+    # File digests alone cannot establish that every rating was actually
+    # provided; revalidate stage-one human field domains and uniqueness
+    # even if a privileged writer regenerated the private receipt.
+    reviewer_ids=[]
+    for reviewer in (1,2):
+        assigned=set()
+        review_ids=set()
+        for n in range(1,isolated.BATCHES+1):
+            rows=_read_private_csv(
+                inner/f"reviewer_{reviewer}"/f"batch_{n:03d}.csv")
+            if len(rows)!=isolated.ROWS:
+                raise ValueError("quarantined reviewer batch size changed")
+            for row in rows:
+                if row["review_id"] in review_ids:
+                    raise ValueError("duplicate quarantined blinded review ID")
+                review_ids.add(row["review_id"])
+                human=row["reviewer_id"].strip()
+                if (not human or
+                    row["response_category"] not in isolated.STAGE_ONE_CATEGORIES or
+                    row["actionable_harmful_content"] not in isolated.STAGE_ONE_ACTION or
+                    row["benign_helpfulness_0_3"]!=""):
+                    raise ValueError("incomplete or invalid quarantined human rating")
+                assigned.add(human)
+        if len(review_ids)!=isolated.TOTAL or len(assigned)!=1:
+            raise ValueError("quarantine reviewer identity/row count incomplete")
+        reviewer_ids.append(next(iter(assigned)))
+    if reviewer_ids[0]==reviewer_ids[1]:
+        raise ValueError("quarantined reviewer identities are not distinct")
     custody=audit_custody(packet_dir,inner,source=source)
     if (not custody["original_source_columns_intact"] or
         not custody["reviewer_batch_privacy_permissions_verified"] or
