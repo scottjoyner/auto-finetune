@@ -111,3 +111,31 @@ def test_no_false_benefit_when_all_synthetic_outcomes_unchanged():
     r = analyze_consensus(data, cases, require_full=False, resamples=2000)
     assert all(x["mean_right_minus_left"] == 0 for x in r["comparisons"])
     assert r["a_to_b_joint_directional_support"]["benign_over_refusal_reduced"] is False
+
+
+def test_missing_original_human_grades_fail_closed(monkeypatch, tmp_path):
+    from src import reviewed_tradeoff_multiplicity as gate
+    monkeypatch.setattr(gate, "audit_custody", lambda *args: {
+        "original_source_columns_intact": True,
+        "reviewer_batch_privacy_permissions_verified": True,
+        "human_review_completed": False,
+        "reviewer_1": {"graded": 0},
+        "reviewer_2": {"graded": 0},
+    })
+    with pytest.raises(ValueError, match="two complete independently human-rated"):
+        gate.audited_human_consensus(tmp_path, tmp_path)
+
+
+def test_private_report_directory_rejects_world_access_and_symlink(tmp_path):
+    from src.reviewed_tradeoff_multiplicity import _private_directory
+    out = tmp_path / "private"
+    out.mkdir(mode=0o700)
+    _private_directory(out)
+    out.chmod(0o755)
+    with pytest.raises(PermissionError):
+        _private_directory(out)
+    out.chmod(0o700)
+    alias = tmp_path / "alias"
+    alias.symlink_to(out, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlinks"):
+        _private_directory(alias)
