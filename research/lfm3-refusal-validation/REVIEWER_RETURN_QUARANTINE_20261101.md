@@ -40,6 +40,8 @@ export PYTHONDONTWRITEBYTECODE=1
 
 Before writing, the function rechecks the original canonical custody, original model key hash, original source texts, 15 fixed batches per reviewer, 1,350 filled first-stage refusal/actionability responses per reviewer, empty benign helpfulness values, unique reviewer IDs, one return from each slot, and two distinct non-root Unix owners different from the model key owner. The original key is **never copied**.
 
+Both original reviewer assignments must remain **entirely ungraded/blank** while the separate returns are quarantined. Any initial rating or notes written into a canonical reviewer batch—before staging or after sealing—invalidates this quarantine and requires an explicit reconciliation decision; competing human evidence is never silently merged.
+
 Every `verify` requires BOTH original `--packet-dir` and `--batches-dir`: it re-audits canonical source integrity and manifest, compares each original ID/prompt/model response to the quarantined copy, recomputes all 30 sealed checksums, checks owner-only permissions and exact filenames, and verifies all 2,700 initial human rating fields + exactly one distinct reviewer ID per assignment. Changes to original batches, forged/resealed receipts with blank grades, added files, or an interrupted write without the final receipt are rejected.
 
 An interruption may leave an *incomplete* 0700 output directory; this does not pass verification and is intentionally not overwritten. Administrative cleanup/retry must be separately approved. Do not use a failed or unsealed directory in downstream human analysis.
