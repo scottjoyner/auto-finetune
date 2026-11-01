@@ -52,7 +52,7 @@ def test_nonbehavioral_controls_are_deterministic_and_aggregate_only():
     assert result['model_release_approved'] is False
     assert len(result['candidate_class_cosine'])==4
     assert 0<=result['isotropic_shams_with_abs_gap_at_least_fitted']<=128
-    assert 'activation' not in str(result)
+    assert 'activation' not in result
     assert 'safe_1' not in str(result)
 
 
@@ -91,7 +91,7 @@ def test_full_study_accepts_exact_category_and_class_counts():
     lambda x:x[0].update(activation=[True] * stable.WIDTH),
     lambda x:x[0].update(type=''),
     lambda x:x[0].update(**{'class':'unknown'}),
-    lambda x:x.pop(0),
+    lambda x:(x.pop(1),x.pop(0)),
 ])
 def test_bad_activation_class_or_source_rejected(change):
     rows=toy()
