@@ -77,7 +77,7 @@ def test_two_returns_quarantined_without_changing_originals(completed_returns):
     assert (packet/"blinded_reviewer_1.csv").read_bytes()==frozen_source
     assert (packet/"private_model_key.json").read_bytes()==frozen_key
     assert (canonical/"reviewer_1"/"batch_001.csv").read_bytes()==frozen_batch
-    assert quarantine.verify_quarantine(packet,out,source=source())==result
+    assert quarantine.verify_quarantine(packet,canonical,out,source=source())==result
     with pytest.raises(FileExistsError):
         stage_synthetic(completed_returns)
 
@@ -107,7 +107,7 @@ def test_quarantine_detects_modified_and_extra_review_data(completed_returns):
     rows[0]["response_category"]="full_refusal"
     atomic_save(f,rows)
     with pytest.raises(ValueError,match="evidence modified"):
-        quarantine.verify_quarantine(packet,out,source=source())
+        quarantine.verify_quarantine(packet,canonical,out,source=source())
     with pytest.raises(FileExistsError):
         stage_synthetic(completed_returns)
 
@@ -119,12 +119,12 @@ def test_quarantine_rejects_missing_receipt_and_unexpected_files(completed_retur
     receipt=out/quarantine.RECEIPT
     receipt.unlink()
     with pytest.raises(ValueError,match="incomplete/extra"):
-        quarantine.verify_quarantine(packet,out,source=source())
+        quarantine.verify_quarantine(packet,canonical,out,source=source())
     with receipt.open("x",encoding="utf-8") as f:
         f.write("{}")
     receipt.chmod(0o600)
     with pytest.raises(ValueError,match="invalid quarantine"):
-        quarantine.verify_quarantine(packet,out,source=source())
+        quarantine.verify_quarantine(packet,canonical,out,source=source())
 
 
 def test_no_disclosure_in_quarantine_receipt(completed_returns):
@@ -178,7 +178,7 @@ def test_resealed_receipt_cannot_turn_missing_rating_into_valid_evidence(complet
     receipt_file.write_text(json.dumps(receipt))
     receipt_file.chmod(0o600)
     with pytest.raises(ValueError,match="incomplete or invalid quarantined"):
-        quarantine.verify_quarantine(packet,root,source=source())
+        quarantine.verify_quarantine(packet,canonical,root,source=source())
 
 
 def test_failed_second_reviewer_copy_never_creates_sealed_receipt(
@@ -197,7 +197,7 @@ def test_failed_second_reviewer_copy_never_creates_sealed_receipt(
     assert output.is_dir()
     assert not (output/quarantine.RECEIPT).exists()
     with pytest.raises(ValueError,match="incomplete/extra"):
-        quarantine.verify_quarantine(packet,output,source=source())
+        quarantine.verify_quarantine(packet,canonical,output,source=source())
     assert (packet/"private_model_key.json").exists()
 
 
@@ -209,4 +209,4 @@ def test_quarantine_detects_changed_canonical_source_after_seal(completed_return
     rows[0]["model_response"]="modified after quarantine"
     atomic_save(origin,rows)
     with pytest.raises(ValueError):
-        quarantine.verify_quarantine(packet,parent/"returned_quarantine",source=source())
+        quarantine.verify_quarantine(packet,canonical,parent/"returned_quarantine",source=source())
