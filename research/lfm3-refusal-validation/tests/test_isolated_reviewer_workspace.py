@@ -183,7 +183,7 @@ def test_return_admission_requires_real_first_stage_completion(originals,monkeyp
     def fake_owner(path,*,directory=False):
         info=real(path,directory=directory)
         path=Path(path)
-        if path==workspace:
+        if path==workspace or path.parent==workspace:
             return SimpleNamespace(st_uid=info.st_uid+1)
         return info
     monkeypatch.setattr(stage,"_check_private_path",fake_owner)
