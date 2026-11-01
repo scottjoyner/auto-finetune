@@ -116,7 +116,8 @@ def test_symlink_or_world_accessible_correction_dir_rejected(tmp_path,completed)
     with pytest.raises(ValueError,match="symbolic-link"):
         read_requests(packet,batches)
     (packet/DIRECTORY).unlink()
-    (packet/DIRECTORY).mkdir(mode=0o755)
+    (packet/DIRECTORY).mkdir(mode=0o700)
+    (packet/DIRECTORY).chmod(0o755)  # explicit because fixture may set restrictive umask
     with pytest.raises(PermissionError):
         read_requests(packet,batches)
 
