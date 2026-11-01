@@ -15,6 +15,7 @@ from src.reviewer_handoff_audit import audit as audit_custody
 from src.reviewer_progress_audit import classify_row
 from src.xstest_450_eval import read_verified_dataset, ARM_ORDER
 from src.paired_reviewed_effects import REFUSAL, paired_report
+from src.reviewed_tradeoff_multiplicity import analyze_consensus
 
 N=1350
 ADJ_NAME="blinded_adjudication.csv"
@@ -160,6 +161,11 @@ def resolve(packet,batches,adj,output,lookup,resamples=2000):
     if len(third_ids)>1:
         raise ValueError("one distinct third human adjudicator required")
     report=paired_report(unique,lookup,resamples=resamples)
+    # The third-human adjudicated labels are the sole approved input to this
+    # statistical family once any original reviewer disagrees. Compute in
+    # memory; only the existing private 0600 report may contain the output.
+    familywise=analyze_consensus(unique,lookup,resamples=max(2000,resamples))
+    report["human_behavioral_familywise_tradeoff"]=familywise
     report.update({
         "evidence_class":"two independent human reviews with third-human adjudication",
         "resolved_disagreements":len(selected),
