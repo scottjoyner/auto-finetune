@@ -294,6 +294,13 @@ def review_one(path, rows, idx, reviewer_id, input_fn=input, output_fn=print):
     if not reviewer_id.strip() or any(c in reviewer_id for c in "\n\r\t"):
         raise ValueError("single nonempty local reviewer ID required")
     row=rows[idx]
+    # Human evidence is append-only by default: revisiting an index must not
+    # silently replace an earlier completed rating. Resolve corrections in a
+    # separate audited workflow rather than mutating frozen human evidence.
+    if any(row[field] for field in ("response_category",
+                                    "actionable_harmful_content",
+                                    "benign_helpfulness_0_3")):
+        raise ValueError("existing human label cannot be overwritten; use audited correction")
     if any(r["reviewer_id"] and r["reviewer_id"] != reviewer_id for r in rows):
         raise ValueError("a different reviewer already owns this blinded batch")
     output_fn(f"\nREVIEW {idx+1} of {len(rows)}; press q at a rating prompt to skip without saving.")
