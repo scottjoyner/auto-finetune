@@ -150,7 +150,7 @@ def test_private_grade_snapshot_uses_all_thirty_files_without_exposing_contents(
     opened = []
     @contextmanager
     def fake_open(path):
-        opened.append(path.name)
+        opened.append(str(path))
         yield io.StringIO(f"private human grade for {path.name}")
     monkeypatch.setattr(gate, "_open_private_snapshot", fake_open)
     result = gate._batch_snapshot_digests("/synthetic/private")
