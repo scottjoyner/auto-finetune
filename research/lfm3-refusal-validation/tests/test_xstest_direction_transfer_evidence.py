@@ -30,7 +30,7 @@ def test_actual_evidence_is_hash_pinned_and_private_free():
     assert r['model_release_approved'] is False
     assert r['raw_prompts_or_activations_exported'] is False
     forbidden=('pair_deltas','fitted_direction": [','review_id',
-               'selection_ids','source_id','raw_response','raw_prompt',
+               'selection_ids','source_id','"raw_response":','"raw_prompt":',
                '"activation":', '"prompt":', '"response":')
     assert not any(token in raw for token in forbidden)
 
