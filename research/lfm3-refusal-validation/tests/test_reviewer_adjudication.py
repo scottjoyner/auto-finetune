@@ -103,6 +103,8 @@ def test_adjudicator_must_be_distinct_and_complete(tmp_path,completed):
     assert report["distinct_original_reviewer_id_strings"]==2
     assert report["reviewer_os_principal_isolation_verified"] is False
     assert report["independent_human_identity_attestations_verified"] is False
+    assert "independent humans/OS access not yet verified" in report["evidence_class"]
+    assert "actual human independence unverified" in report["review_mode"]
     assert report["both_reviewer_folders_same_unix_principal"] is True
     assert "model_response" not in str(report)
     assert "human-1" not in str(report)
