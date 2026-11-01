@@ -124,3 +124,14 @@ def test_gate_blocks_model_load(monkeypatch,tmp_path):
     monkeypatch.setattr(m,'load_local_model',lambda *_:(_ for _ in ()).throw(AssertionError('model must not load')))
     with pytest.raises(RuntimeError,match='disk blocked'):
         m.main()
+
+
+def test_even_matched_median_averages_both_central_order_statistics():
+    p=[
+        ('definitions',vec(0,1),vec(1,0),3),
+        ('definitions',vec(1,0),vec(0,1),3),
+    ]
+    r=matched._paired_stats(p,vec(1,0))
+    assert r['median_signed_pair_delta']==0
+    assert r['mean_signed_unsafe_minus_safe_cosine']==0
+    assert r['positive_matched_pair_count']==1
