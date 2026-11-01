@@ -180,6 +180,25 @@ def _private_directory(path):
 
 
 
+
+def _batch_snapshot_digests(batches_dir):
+    """Fingerprint all 30 exact opened private review files, no content export.
+
+    The source terminal reader validates owner-only private regular files and
+    binds reads to a checked inode. These digests stay in process; they are
+    never included in the published aggregate or CLI status.
+    """
+    fingerprints = []
+    for reviewer in (1, 2):
+        for batch in range(1, 16):
+            path = (Path(batches_dir) / f"reviewer_{reviewer}" /
+                    f"batch_{batch:03d}.csv")
+            with _open_private_snapshot(path) as stream:
+                fingerprint = hashlib.sha256(stream.read().encode("utf-8")).hexdigest()
+            fingerprints.append(fingerprint)
+    return tuple(fingerprints)
+
+
 def audited_human_consensus(packet_dir, batches_dir):
     """Require verified original source + complete human batch records.
 
@@ -193,6 +212,7 @@ def audited_human_consensus(packet_dir, batches_dir):
             or any(custody.get(f"reviewer_{i}", {}).get("graded") != 1350
                    for i in (1, 2))):
         raise ValueError("two complete independently human-rated source-bound sheets required")
+    source_digests_before = _batch_snapshot_digests(batches_dir)
     # Bind the actual opened mapping bytes to the immutable source manifest,
     # rather than trusting a prior pathname-only audit after it can change.
     with _open_private_snapshot(Path(packet_dir) / "private_model_key.json") as stream:
@@ -220,7 +240,7 @@ def audited_human_consensus(packet_dir, batches_dir):
     # Reattest to reject ordinary source drift during collection. This
     # cannot provide an atomic snapshot against concurrent hostile writes.
     repeat = audit_custody(packet_dir, batches_dir)
-    if repeat != custody:
+    if repeat != custody or _batch_snapshot_digests(batches_dir) != source_digests_before:
         raise ValueError("human-review sources changed during analysis")
     return annotations, benchmark
 
