@@ -16,6 +16,7 @@ from src.reviewer_progress_audit import classify_row
 from src.xstest_450_eval import read_verified_dataset, ARM_ORDER
 from src.paired_reviewed_effects import REFUSAL, paired_report
 from src.reviewed_tradeoff_multiplicity import analyze_consensus
+from src.human_matched_activation_bridge import analyze as analyze_matched_human
 
 N=1350
 ADJ_NAME="blinded_adjudication.csv"
@@ -166,6 +167,11 @@ def resolve(packet,batches,adj,output,lookup,resamples=2000):
     # memory; only the existing private 0600 report may contain the output.
     familywise=analyze_consensus(unique,lookup,resamples=max(2000,resamples))
     report["human_behavioral_familywise_tradeoff"]=familywise
+    # These 18 matched pairs are a fixed, post-hoc exploratory subset.
+    # They cannot be populated without the same complete third-human
+    # adjudicated source, and remain private alongside the primary study.
+    report["human_behavioral_matched_activation_bridge"]=analyze_matched_human(
+        unique,lookup)
     report.update({
         "evidence_class":"two independent human reviews with third-human adjudication",
         "resolved_disagreements":len(selected),
