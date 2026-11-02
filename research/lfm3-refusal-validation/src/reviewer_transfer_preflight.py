@@ -28,15 +28,40 @@ EMPTY=("reviewer_id","response_category","actionable_harmful_content",
 EXTRA_BYTES=1024*1024
 
 
+def _local_account_records():
+    """Read ONLY /etc/passwd. NSS-only/LDAP identities are not local accounts.
+
+    This is not a human-identity or consent check. Separate approval and
+    runtime privilege/access verification remain required.
+    """
+    records={}
+    for line in Path("/etc/passwd").read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#"):
+            continue
+        fields=line.split(":")
+        if len(fields)!=7 or not fields[2].isdigit() or not fields[3].isdigit():
+            raise ValueError("malformed local Unix account registry entry")
+        uid=int(fields[2])
+        records.setdefault(uid,[]).append((fields[0],fields[6]))
+    return records
+
+
 def _account(uid):
     if type(uid) is not int or uid<=0:
         raise PermissionError("distinct non-root actual local human account UID required")
+    records=_local_account_records().get(uid,[])
+    if len(records)!=1:
+        raise PermissionError("target reviewer UID must have exactly one local /etc/passwd account")
     try:
         u=pwd.getpwuid(uid)
     except KeyError as exc:
         raise PermissionError("target reviewer account does not exist on this host") from exc
-    if u.pw_uid!=uid or u.pw_shell.rsplit("/",1)[-1] in ("nologin","false") or not u.pw_shell:
-        raise PermissionError("local reviewer account is not interactive")
+    name,shell=records[0]
+    if (u.pw_uid!=uid or u.pw_name!=name or u.pw_shell!=shell or
+        not shell.startswith("/") or
+        shell.rsplit("/",1)[-1] in ("nologin","false","sync") or
+        not shell):
+        raise PermissionError("local reviewer account is not interactive or NSS disagrees")
     return u
 
 
