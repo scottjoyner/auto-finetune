@@ -36,8 +36,12 @@ def setup(originals,monkeypatch):
     def named_account(uid):
         if uid not in (10001,10002):
             raise KeyError(uid)
-        return SimpleNamespace(pw_uid=uid,pw_shell="/bin/bash")
+        return SimpleNamespace(pw_uid=uid,pw_name=f"reviewer-{uid}",pw_shell="/bin/bash")
     monkeypatch.setattr(transfer.pwd,"getpwuid",named_account)
+    monkeypatch.setattr(transfer,"_local_account_records",lambda:{
+        10001:[("reviewer-10001","/bin/bash")],
+        10002:[("reviewer-10002","/bin/bash")],
+    })
     return packet,batches,one,two,first,second,storage
 
 
@@ -73,7 +77,7 @@ def test_shared_target_uid_and_source_key_owner_rejected(setup,monkeypatch):
 
 
 def test_missing_target_account_fails_closed(setup):
-    with pytest.raises(PermissionError,match="does not exist"):
+    with pytest.raises(PermissionError,match="exactly one local"):
         run(setup,first_uid=12345678)
 
 
@@ -147,4 +151,50 @@ def test_noninteractive_os_account_not_acceptable(setup,monkeypatch):
     monkeypatch.setattr(transfer.pwd,"getpwuid",lambda uid:
         SimpleNamespace(pw_uid=uid,pw_shell="/usr/sbin/nologin"))
     with pytest.raises(PermissionError,match="not interactive"):
+        run(setup)
+
+
+
+def test_nss_remote_only_uid_is_not_a_locally_provisioned_account(setup,monkeypatch):
+    monkeypatch.setattr(transfer,"_local_account_records",lambda: {
+        10001:[("reviewer-10001","/bin/bash")]
+    })
+    with pytest.raises(PermissionError,match="exactly one local"):
+        run(setup)
+
+
+def test_duplicate_local_uid_account_entries_fail_closed(setup,monkeypatch):
+    monkeypatch.setattr(transfer,"_local_account_records",lambda: {
+        10001:[("reviewer-10001","/bin/bash"),("alias-reviewer","/bin/bash")],
+        10002:[("reviewer-10002","/bin/bash")],
+    })
+    with pytest.raises(PermissionError,match="exactly one local"):
+        run(setup)
+
+
+def test_local_nss_username_mismatch_rejected(setup,monkeypatch):
+    monkeypatch.setattr(transfer,"_local_account_records",lambda: {
+        10001:[("other-human-account","/bin/bash")],
+        10002:[("reviewer-10002","/bin/bash")],
+    })
+    with pytest.raises(PermissionError,match="NSS disagrees"):
+        run(setup)
+
+
+def test_local_uid_with_noninteractive_shell_rejected(setup,monkeypatch):
+    monkeypatch.setattr(transfer,"_local_account_records",lambda: {
+        10001:[("reviewer-10001","/usr/sbin/nologin")],
+        10002:[("reviewer-10002","/bin/bash")],
+    })
+    monkeypatch.setattr(transfer.pwd,"getpwuid",lambda uid:
+        SimpleNamespace(pw_uid=uid,pw_name=f"reviewer-{uid}",
+            pw_shell="/usr/sbin/nologin" if uid==10001 else "/bin/bash"))
+    with pytest.raises(PermissionError,match="not interactive"):
+        run(setup)
+
+
+def test_duplicate_nss_vs_local_shell_mapping_rejected(setup,monkeypatch):
+    monkeypatch.setattr(transfer.pwd,"getpwuid",lambda uid:
+        SimpleNamespace(pw_uid=uid,pw_name=f"reviewer-{uid}",pw_shell="/bin/zsh"))
+    with pytest.raises(PermissionError,match="NSS disagrees"):
         run(setup)
