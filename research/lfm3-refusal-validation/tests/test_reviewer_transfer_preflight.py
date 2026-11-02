@@ -64,9 +64,10 @@ def test_intact_dual_export_targets_pass_only_readiness_contract(setup):
     assert not setup[4].exists() and not setup[5].exists()
 
 
-def test_shared_target_uid_and_source_key_owner_rejected(setup):
+def test_shared_target_uid_and_source_key_owner_rejected(setup,monkeypatch):
     with pytest.raises(PermissionError,match="share one Unix account"):
         run(setup,second_uid=10001)
+    monkeypatch.setattr(transfer,"_account",lambda uid:SimpleNamespace(pw_uid=uid,pw_shell="/bin/bash"))
     with pytest.raises(PermissionError,match="model-key UID"):
         run(setup,first_uid=os.getuid())
 
@@ -107,10 +108,8 @@ def test_existing_destination_never_overwritten(setup):
 
 def test_target_parent_cannot_be_inside_original_staging(setup):
     one=setup[2]
-    new_parent=one/"nested"
-    new_parent.mkdir(mode=0o700)
     with pytest.raises((ValueError,PermissionError),match="owner|overlap"):
-        run(setup,first_destination=new_parent/"new-review")
+        run(setup,first_destination=one/"new-review")
 
 
 def test_target_destination_symlink_ancestor_rejected(setup):
