@@ -21,7 +21,8 @@ from src.reviewer_batches import ORIGINAL_FIELDS
 from src.reviewer_progress_audit import classify_row
 from src.human_review_corrections import read_requests
 from src.reviewed_tradeoff_multiplicity import _validate as validate_statistical_table
-from src.paired_reviewed_effects import REFUSAL
+from src.paired_reviewed_effects import REFUSAL, paired_report
+from src.reviewed_tradeoff_multiplicity import analyze_consensus
 from src.xstest_450_eval import read_verified_dataset
 
 GRADES=("response_category","actionable_harmful_content","benign_helpfulness_0_3")
@@ -221,6 +222,39 @@ def audit(packet,canonical,merged_dir,*,first_a=None,first_b=None,escrow=None,
         packet,canonical,merged_dir,first_a=first_a,first_b=first_b,
         escrow=escrow,phase_one=phase_one,phase_two=phase_two,source=source)
     return result
+
+
+def private_exploratory_diagnostics(packet,canonical,merged_dir,*,
+                                    first_a=None,first_b=None,escrow=None,
+                                    phase_one=None,phase_two=None,source=None,
+                                    resamples=2000,seed=17):
+    """Offline in-memory statistical diagnostic, NOT reviewed/publishable evidence.
+
+    This intentionally does not export a report or assert independent human
+    attestation. Model-safety or release claims remain forbidden even if all
+    synthetic/test score fields are present.
+    """
+    if type(resamples) is not int or resamples<2000 or type(seed) is not int:
+        raise ValueError("private diagnostic requires >=2000 paired resamples")
+    dataset=list(read_verified_dataset() if source is None else source)
+    audit_result,numeric=resolve_private(
+        packet,canonical,merged_dir,first_a=first_a,first_b=first_b,
+        escrow=escrow,phase_one=phase_one,phase_two=phase_two,source=dataset)
+    cases={row["id"]:row for row in dataset}
+    paired=paired_report(numeric,cases,seed=seed,resamples=resamples)
+    paired["review_mode"]="PRIVATE provisional custody-complete; physical human identity NOT attested"
+    paired["human_reviewed_evidence"]=False
+    familywise=analyze_consensus(numeric,cases,resamples=resamples,seed=seed)
+    return {
+        "kind":"PRIVATE NONPUBLISHABLE synthetic-compatible exploratory diagnostic",
+        "source_provenance":audit_result,
+        "paired_effects_exploratory":paired,
+        "familywise_exploratory":familywise,
+        "independent_human_personhood_attested":False,
+        "human_rating_origin_independently_verified":False,
+        "public_scientific_claim_approved":False,
+        "production_release_approved":False,
+    }
 
 
 def main():
