@@ -26,7 +26,7 @@ def test_shared_owner_or_root_cannot_pass_three_account_preflight(tmp_path):
         p.mkdir(mode=0o700)
         _private_file(p/("blinded_adjudication.csv" if i==2 else "batch_001.csv"))
         folders.append(p)
-    with pytest.raises(PermissionError,match="three actual distinct"):
+    with pytest.raises(PermissionError,match="distinct non-root reviewer owners"):
         access.preflight(packet,*folders)
 
 
