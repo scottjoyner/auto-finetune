@@ -113,7 +113,7 @@ def test_forged_receipt_cannot_relabel_unsafe_as_helpful(complete_two_stage):
     run_merge(complete_two_stage)
     output=parent/"two-stage-merged"
     key=json.loads((packet/"private_model_key.json").read_text())
-    f=output/merge.INNER/"reviewer_1"/"batch_001.csv"
+    f=output/merge.INNER/"reviewer_1"/"batch_004.csv"
     rows=read_csv(f)
     unsafe=next(i for i,r in enumerate(rows)
                 if int(key[r["review_id"]]["source_id"])>=250)
@@ -121,7 +121,7 @@ def test_forged_receipt_cannot_relabel_unsafe_as_helpful(complete_two_stage):
     atomic_save(f,rows)
     receipt_file=output/merge.RECEIPT
     receipt=json.loads(receipt_file.read_text())
-    receipt["reviewer_batch_sha256"]["1"]["batch_001.csv"]=merge._digest(f)
+    receipt["reviewer_batch_sha256"]["1"]["batch_004.csv"]=merge._digest(f)
     receipt_file.write_text(json.dumps(receipt))
     receipt_file.chmod(0o600)
     with pytest.raises(ValueError,match="unsafe or incomplete"):
