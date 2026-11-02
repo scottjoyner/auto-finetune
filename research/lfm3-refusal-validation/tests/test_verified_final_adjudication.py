@@ -59,7 +59,7 @@ def test_complete_private_preview_is_unattested_and_never_public(resolved):
 
 def test_missing_third_human_return_is_rejected(resolved):
     pos,kw=inputs(resolved)
-    with pytest.raises(ValueError,match="require both original reviewer workspaces"):
+    with pytest.raises(ValueError,match="requires both original reviewer-owned workspaces"):
         final.audit(*pos,source=source())
 
 def test_incomplete_third_human_rating_is_rejected(resolved):
@@ -98,7 +98,7 @@ def test_unanimous_reviews_require_no_adjudicator(complete_two_stage):
     atomic_save(f,rows)
     output=parent/"two-stage-merged"
     merged.stage(packet,canonical,stage_a,help_a,stage_b,help_b,output,source=source())
-    report,table=final.resolve_private(packet,canonical,output,source=source())
+    report,table=final.resolve_private(packet,canonical,output,first_a=stage_a,first_b=stage_b,source=source())
     assert len(table)==1350
     assert report["first_two_reviewer_agreements"]==1350
     assert report["third_human_disputes_resolved"]==0
@@ -106,7 +106,7 @@ def test_unanimous_reviews_require_no_adjudicator(complete_two_stage):
     assert report["independent_human_personhood_attested"] is False
     assert report["production_release_approved"] is False
     with pytest.raises(ValueError,match="artifacts provided for zero disputes"):
-        final.audit(packet,canonical,output,source=source(),phase_one=stage_a)
+        final.audit(packet,canonical,output,first_a=stage_a,first_b=stage_b,source=source(),phase_one=stage_a)
 
 
 def test_pending_corrections_block_final_even_when_reviewers_agree(complete_two_stage,monkeypatch):
@@ -120,7 +120,7 @@ def test_pending_corrections_block_final_even_when_reviewers_agree(complete_two_
     merged.stage(packet,canonical,stage_a,help_a,stage_b,help_b,path,source=source())
     monkeypatch.setattr(final,"read_requests",lambda *_: ({"test-request"},{}))
     with pytest.raises(ValueError,match="untransported human correction"):
-        final.audit(packet,canonical,path,source=source())
+        final.audit(packet,canonical,path,first_a=stage_a,first_b=stage_b,source=source())
 
 
 def test_private_familywise_diagnostics_are_marked_nonpublishable(resolved):
@@ -134,3 +134,13 @@ def test_private_familywise_diagnostics_are_marked_nonpublishable(resolved):
     assert r["production_release_approved"] is False
     with pytest.raises(ValueError,match="2000 paired resamples"):
         final.private_exploratory_diagnostics(*pos,**kw,resamples=1000)
+
+
+def test_modified_original_reviewer_rating_invalidates_sealed_final_source(resolved):
+    pos,kw=inputs(resolved)
+    target=kw["first_a"]/"batch_002.csv"
+    rows=read_csv(target)
+    rows[0]["response_category"]="full_refusal"
+    atomic_save(target,rows)
+    with pytest.raises(ValueError,match="original reviewer-owned human judgments differ"):
+        final.audit(*pos,**kw)
