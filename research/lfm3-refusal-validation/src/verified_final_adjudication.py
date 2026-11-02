@@ -17,7 +17,7 @@ from src import verified_adjudication_handoff as third
 from src import verified_third_helpfulness as helpful
 from src.local_reviewer_terminal import _read_private_csv
 from src.reviewer_adjudication import dispute
-from src.reviewer_batches import ORIGINAL_FIELDS
+from src.reviewer_batches import ORIGINAL_FIELDS, FIELDS
 from src.reviewer_progress_audit import classify_row
 from src.human_review_corrections import read_requests
 from src.reviewed_tradeoff_multiplicity import _validate as validate_statistical_table
@@ -60,6 +60,24 @@ def _inputs(packet,canonical,merged_dir,source):
     if any(len(x)!=1 or not next(iter(x)) for x in names) or names[0]==names[1]:
         raise ValueError("original reviewer IDs are not unique and consistent")
     return safe,key,cases,reviewers
+
+
+def _prove_original_reviewers(packet,canonical,source,first_a,first_b,reviewers):
+    """Recheck both source UIDs and frozen human initial judgments."""
+    if first_a is None or first_b is None:
+        raise ValueError("final research requires both original reviewer-owned workspaces")
+    two.first.verify_pair_returns(packet,canonical,first_a,first_b,source=source)
+    pinned=tuple(field for field in FIELDS if field!="benign_helpfulness_0_3")
+    for workspace,merged_rows in zip((first_a,first_b),reviewers):
+        raw=[]
+        for n in range(1,16):
+            _,part=two.first._batch(workspace,n)
+            raw.extend(part)
+        if len(raw)!=1350 or any(
+            any(a[k]!=b[k] for k in pinned) for a,b in zip(raw,merged_rows)
+        ):
+            raise ValueError("original reviewer-owned human judgments differ from sealed merge")
+    return True
 
 
 def _verified_third(packet,canonical,merged_dir,first_a,first_b,
@@ -120,6 +138,7 @@ def resolve_private(packet,canonical,merged_dir,*,first_a=None,first_b=None,
     pending,_=read_requests(packet,canonical)
     if pending:
         raise ValueError("untransported human correction requests block final analysis")
+    _prove_original_reviewers(packet,canonical,source,first_a,first_b,reviewers)
     left,right=reviewers
     # Class lookup remains only inside the approved private custodian process,
     # not in a reviewer workspace.
@@ -192,7 +211,9 @@ def resolve_private(packet,canonical,merged_dir,*,first_a=None,first_b=None,
     validate_statistical_table(numeric,cases,require_full=True)
     # Check canonical and all sealed source custody again after resolving;
     # any source mutation invalidates this in-memory preview.
-    _inputs(packet,canonical,merged_dir,source)
+    _,_,_,fresh_reviewers=_inputs(packet,canonical,merged_dir,source)
+    _prove_original_reviewers(
+        packet,canonical,source,first_a,first_b,fresh_reviewers)
     if disputes:
         _verified_third(packet,canonical,merged_dir,first_a,first_b,escrow,
                         phase_one,phase_two,source,disputes)
