@@ -149,7 +149,7 @@ def test_partial_canonical_review_rejected_without_export_or_copy(setup):
 
 def test_noninteractive_os_account_not_acceptable(setup,monkeypatch):
     monkeypatch.setattr(transfer.pwd,"getpwuid",lambda uid:
-        SimpleNamespace(pw_uid=uid,pw_shell="/usr/sbin/nologin"))
+        SimpleNamespace(pw_uid=uid,pw_name=f"reviewer-{uid}",pw_shell="/usr/sbin/nologin"))
     with pytest.raises(PermissionError,match="not interactive"):
         run(setup)
 
