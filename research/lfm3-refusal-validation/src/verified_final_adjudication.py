@@ -110,7 +110,6 @@ def resolve_private(packet,canonical,merged_dir,*,first_a=None,first_b=None,
     it nor statistics derived from it are approved for publication.
     """
     source=list(read_verified_dataset() if source is None else source)
-    before=_input_hashes(merged_dir,phase_one,phase_two)
     safe,key,cases,reviewers=_inputs(packet,canonical,merged_dir,source)
     left,right=reviewers
     # Class lookup remains only inside the approved private custodian process,
@@ -135,6 +134,8 @@ def resolve_private(packet,canonical,merged_dir,*,first_a=None,first_b=None,
         # model ratings when the first two raters agreed.
         raise ValueError("third-human adjudication artifacts provided for zero disputes")
 
+    before=_input_hashes(merged_dir,phase_one if disputes else None,
+                         phase_two if disputes else None)
     numeric={}
     chosen=Counter()
     for a,b in zip(left,right):
