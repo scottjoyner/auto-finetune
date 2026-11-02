@@ -198,3 +198,20 @@ def test_duplicate_nss_vs_local_shell_mapping_rejected(setup,monkeypatch):
         SimpleNamespace(pw_uid=uid,pw_name=f"reviewer-{uid}",pw_shell="/bin/zsh"))
     with pytest.raises(PermissionError,match="NSS disagrees"):
         run(setup)
+
+
+def test_local_nonexistent_or_unexecutable_reviewer_shell_denied(setup,monkeypatch,tmp_path):
+    bad=tmp_path/"not-a-login-shell"
+    bad.write_text("#!/bin/sh\nexit 0\n")
+    bad.chmod(0o600)
+    for shell in ("/nonexistent/not-a-shell",str(bad)):
+        monkeypatch.setattr(transfer,"_local_account_records",lambda shell=shell: {
+            10001:[("reviewer-10001",shell)],
+            10002:[("reviewer-10002","/bin/bash")],
+        })
+        def mock(uid,shell=shell):
+            return SimpleNamespace(pw_uid=uid,pw_name=f"reviewer-{uid}",
+                pw_shell=shell if uid==10001 else "/bin/bash")
+        monkeypatch.setattr(transfer.pwd,"getpwuid",mock)
+        with pytest.raises(PermissionError,match="not interactive"):
+            run(setup)
