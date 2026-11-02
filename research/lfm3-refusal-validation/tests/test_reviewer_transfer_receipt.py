@@ -250,3 +250,26 @@ def test_stage_changes_after_synthetic_transfer_rejected(copied):
     atomic_save(f,rows)
     with pytest.raises(ValueError):
         valid_copy(copied)
+
+
+def test_owner_without_write_access_cannot_receive_review_work(copied):
+    stage,receipt,d1,d2=copied
+    f=d2/"batch_002.csv"
+    f.chmod(0o400)
+    with pytest.raises(PermissionError,match="readable/writable"):
+        valid_copy(copied)
+
+
+def test_reviewer_directory_must_be_owner_traversable_and_editable(copied):
+    stage,receipt,d1,d2=copied
+    d1.chmod(0o500)
+    with pytest.raises(PermissionError,match="0700"):
+        valid_copy(copied)
+
+
+def test_source_snapshot_rejects_insecure_file_mode_even_when_contents_same(stage):
+    receipt=snapshot(stage)
+    f=stage[2]/"batch_001.csv"
+    f.chmod(0o400)
+    with pytest.raises(PermissionError,match="readable/writable"):
+        verified(stage,receipt)
