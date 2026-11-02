@@ -154,3 +154,51 @@ def test_actual_uid_result_cannot_assert_human_personhood(tmp_path):
     assert "synthetic public harmless" not in serialized
     assert result["independent_real_person_attestation"] is False
     assert result["model_release_authorized"] is False
+
+
+def test_two_original_account_preflight_without_third_human(tmp_path,monkeypatch):
+    packet=tmp_path/"packet"
+    packet.mkdir(mode=0o700)
+    key=_private_file(packet/"private_model_key.json")
+    dirs=[]
+    for i in range(2):
+        root=tmp_path/f"human-{i}"
+        root.mkdir(mode=0o700)
+        _private_file(root/"batch_001.csv")
+        dirs.append(root)
+    base=access._private
+    def fake_owners(path,*,directory=False):
+        st=base(path,directory=directory)
+        p=Path(path)
+        uid=10000 if p==packet or p==key else (
+            10001 if p==dirs[0] or p.parent==dirs[0] else 10002)
+        return SimpleNamespace(st_uid=uid,st_mode=st.st_mode,st_nlink=st.st_nlink)
+    monkeypatch.setattr(access,"_private",fake_owners)
+    result=access.preflight(packet,*dirs)
+    assert result["two_distinct_non_root_reviewer_unix_owners"] is True
+    assert result["third_adjudicator_account_present"] is False
+    assert result["three_distinct_non_root_reviewer_unix_owners"] is False
+    assert result["kernel_denial_probes_executed"] is False
+    assert result["real_independent_human_identities_attested"] is False
+
+
+def test_first_original_account_real_kernel_denial_of_other_and_key(tmp_path):
+    uid=os.getuid()
+    own=_private_file(tmp_path/"my-blinded-batch")
+    other=_private_file(tmp_path/"other-private-batch",mode=0o000)
+    key=_private_file(tmp_path/"private-key",mode=0o000)
+    result=access.probe(1,uid,own,other,None,key)
+    assert result["other_reviewer_samples_tested"]==1
+    assert result["one_other_reviewer_sample_open_denied"] is True
+    assert result["both_other_reviewer_samples_open_denied"] is False
+    assert result["model_key_open_denied"] is True
+    assert result["admin_witnessed_preflight_and_process"] is False
+
+
+def test_third_account_cannot_skip_either_original_reviewer_denial(tmp_path):
+    uid=os.getuid()
+    own=_private_file(tmp_path/"my-blinded-batch")
+    other=_private_file(tmp_path/"other-private-batch",mode=0o000)
+    key=_private_file(tmp_path/"private-key",mode=0o000)
+    with pytest.raises(ValueError,match="both original reviewer"):
+        access.probe(3,uid,own,other,None,key)
