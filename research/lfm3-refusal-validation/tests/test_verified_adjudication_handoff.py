@@ -7,6 +7,7 @@ from src import verified_adjudication_handoff as handoff
 from src import isolated_two_stage_merge as merged
 from src.local_reviewer_terminal import atomic_save
 from src.reviewer_batches import read_csv
+from tests.test_reviewer_return_quarantine import completed_returns
 from tests.test_isolated_two_stage_merge import complete_two_stage,run_merge
 from tests.test_reviewer_handoff_audit import source
 
