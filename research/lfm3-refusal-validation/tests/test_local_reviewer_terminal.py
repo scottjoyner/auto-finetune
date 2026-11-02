@@ -142,3 +142,148 @@ def test_world_readable_folder_is_refused_before_edit(tmp_path):
     with pytest.raises(PermissionError,match="owner-only"):
         with _batch_writer_lock(tmp_path):
             pass
+
+
+def test_private_batch_descriptor_read_rejects_alias_and_nonprivate_files(tmp_path):
+    from src.local_reviewer_terminal import _read_private_csv, _read_private_json
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    csv_path = private / "batch.csv"
+    write_csv(csv_path, [blank()])
+    assert _read_private_csv(csv_path) == [blank()]
+    (tmp_path / "alias").symlink_to(private, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink"):
+        _read_private_csv(tmp_path / "alias" / "batch.csv")
+    symlink = private / "alias.csv"
+    symlink.symlink_to(csv_path)
+    with pytest.raises(ValueError, match="symlink"):
+        _read_private_csv(symlink)
+    symlink.unlink()
+    extra_link = private / "other.csv"
+    os.link(csv_path, extra_link)
+    with pytest.raises(ValueError, match="single-link"):
+        _read_private_csv(csv_path)
+    extra_link.unlink()
+    csv_path.chmod(0o644)
+    with pytest.raises(PermissionError, match="owner-only"):
+        _read_private_csv(csv_path)
+    csv_path.chmod(0o600)
+    manifest = private / "manifest.json"
+    manifest.write_text('{"allowed":true}')
+    manifest.chmod(0o600)
+    assert _read_private_json(manifest) == {"allowed": True}
+
+
+def test_verified_batch_snapshot_survives_atomic_path_replacement(tmp_path):
+    from src.local_reviewer_terminal import _open_private_snapshot
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    path = private / "batch.csv"
+    write_csv(path, [blank()])
+    original = path.read_bytes().decode()
+    with _open_private_snapshot(path) as stream:
+        new = [dict(blank(), reviewer_id="other-person")]
+        from src.local_reviewer_terminal import atomic_save
+        atomic_save(path, new)
+        # The open descriptor still references the same verified file,
+        # not the new inode at the pathname.
+        assert stream.read() == original
+    assert read_csv(path)[0]["reviewer_id"] == "other-person"
+
+
+def test_private_csv_read_does_not_reopen_path_via_general_reader(tmp_path, monkeypatch):
+    from src import local_reviewer_terminal as terminal
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    path = private / "batch.csv"
+    write_csv(path, [blank()])
+    monkeypatch.setattr(terminal, "read_csv", lambda *args: (
+        _ for _ in ()).throw(AssertionError("path reopened")))
+    assert terminal._read_private_csv(path)[0]["review_id"] == "XR00001"
+
+
+def test_pinned_source_requires_original_prompt_and_response(tmp_path):
+    """Stable blinded IDs alone cannot authorize tampered response content."""
+    import json
+    from src.reviewer_batches import source_hash
+    packet = tmp_path / "packet"
+    batches = tmp_path / "batches"
+    reviewer = batches / "reviewer_1"
+    packet.mkdir(mode=0o700)
+    batches.mkdir(mode=0o700)
+    reviewer.mkdir(mode=0o700)
+    originals = [
+        dict(blank(), review_id=f"XR{i:05d}",
+             prompt=f"Private synthetic question {i}",
+             model_response=f"Synthetic answer {i}")
+        for i in range(1350)
+    ]
+    source = packet / "blinded_reviewer_1.csv"
+    write_csv(source, originals)
+    path = reviewer / "batch_001.csv"
+    write_csv(path, originals[:90])
+    manifest = {
+        "batch_size": 90, "records_per_reviewer": 1350,
+        "part_names": [f"batch_{i:03d}.csv" for i in range(1,16)],
+        "review_ids": [r["review_id"] for r in originals],
+        "reviewer_source_sha256": {"1":source_hash(source)},
+    }
+    meta = batches / "private_batch_manifest.json"
+    meta.write_text(json.dumps(manifest))
+    meta.chmod(0o600)
+    _, rows = open_batch(batches, 1, 1, packet_dir=packet)
+    assert rows == originals[:90]
+    drift = list(rows)
+    drift[2] = dict(drift[2], model_response="Unapproved changed answer")
+    from src.local_reviewer_terminal import atomic_save
+    atomic_save(path, drift)
+    with pytest.raises(ValueError, match="source content changed"):
+        open_batch(batches, 1, 1, packet_dir=packet)
+    atomic_save(path, originals[:90])
+    source.write_text(source.read_text() + "#fake trailing row")
+    with pytest.raises(ValueError, match="fingerprint mismatch"):
+        open_batch(batches, 1, 1, packet_dir=packet)
+
+
+def test_completed_human_label_cannot_be_silently_overwritten(tmp_path):
+    path=tmp_path/"batch.csv"
+    row=dict(blank(),reviewer_id="human-rater",response_category="full_refusal",
+             actionable_harmful_content="no",benign_helpfulness_0_3="2")
+    write_csv(path,[row])
+    before=path.read_bytes()
+    with pytest.raises(ValueError,match="cannot be overwritten"):
+        review_one(path,read_csv(path),0,"human-rater",
+                   lambda _: (_ for _ in ()).throw(AssertionError("human prompt reopened")),
+                   lambda _:None)
+    assert path.read_bytes()==before
+
+
+def test_incomplete_human_row_can_still_be_entered_once(tmp_path):
+    path=tmp_path/"batch.csv"
+    row=dict(blank(),reviewer_id="human-rater")
+    write_csv(path,[row])
+    answers=iter(("1","1","","original human input"))
+    assert review_one(path,read_csv(path),0,"human-rater",
+                      lambda _:next(answers),lambda _:None)
+    assert read_csv(path)[0]["response_category"]=="full_compliance"
+
+
+def test_first_stage_never_prompts_for_hidden_benign_helpfulness(tmp_path):
+    path=tmp_path/"batch.csv"
+    write_csv(path,[blank()])
+    rows=read_csv(path)
+    prompts=[]
+    responses=iter(("3","1","first stage notes only"))
+    def human_input(label):
+        prompts.append(label)
+        return next(responses)
+    assert review_one(path,rows,0,"human-first",
+                      input_fn=human_input,output_fn=lambda _:None,
+                      collect_helpfulness=False)
+    result=read_csv(path)[0]
+    assert result["response_category"]=="full_refusal"
+    assert result["actionable_harmful_content"]=="no"
+    assert result["benign_helpfulness_0_3"]==""
+    assert result["uncertainty_notes"]=="first stage notes only"
+    assert len(prompts)==3
+    assert all("Benign helpfulness" not in s for s in prompts)

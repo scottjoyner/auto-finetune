@@ -8,6 +8,7 @@ from pathlib import Path
 from src.build_abliterated_checkpoint import digest
 from src.eval_contracts import read_jsonl, refusal_proxy, validate_action_cases, dataset_sha256
 from src.refusal_probe import load_local_model, generate
+from src.research_job_guard import require_research_write_capacity
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_ROOT = Path("/home/scott/lfm3-research")
@@ -49,6 +50,7 @@ def main():
         parser.error("only 1..6 provisional disjoint heldout pairs are permitted")
     if not 1 <= args.max_new_tokens <= 96:
         parser.error("token cap 1..96")
+    require_research_write_capacity(args.results)
     hashes = checked_arm_paths(ARMS)
     pairs_path = ROOT / "data/paired_v0.jsonl"
     pairs = read_jsonl(pairs_path)[2:2 + args.max_heldout_pairs]
@@ -57,6 +59,7 @@ def main():
     results = []
     import torch
     for name, path in ARMS.items():
+        require_research_write_capacity(args.results)
         torch.manual_seed(0)
         model, tokenizer = load_local_model(path)
         for row in pairs:

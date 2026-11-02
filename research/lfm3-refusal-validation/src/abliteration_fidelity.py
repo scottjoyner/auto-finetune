@@ -15,6 +15,7 @@ from safetensors.torch import load_file
 from src.refusal_probe import encode, load_local_model, hidden_by_layer
 from src.eval_contracts import read_jsonl, dataset_sha256
 from src.three_checkpoint_eval import ARMS, checked_arm_paths
+from src.research_job_guard import require_research_write_capacity
 
 ROOT = Path(__file__).resolve().parents[1]
 PAIRS = ROOT / "data" / "paired_v0.jsonl"
@@ -55,6 +56,7 @@ def main():
     p.add_argument("--output", type=Path,
                    default=ROOT / "results/abliteration_fidelity_private.json")
     args = p.parse_args()
+    require_research_write_capacity(args.output)
     os.umask(0o077)
     models = checked_arm_paths(ARMS)
     ref = load_file(str(DIRECTIONS), device="cpu")
@@ -66,6 +68,7 @@ def main():
     # Layer zero intentionally omitted where its calibration contrast is zero.
     measurements = {}
     for name in ("A_original_posttrained", "B_M1_abliterated_smoke"):
+        require_research_write_capacity(args.output)
         model, tok = load_local_model(ARMS[name])
         capture = {i:[] for i in range(24) if f"layer_{i}" in ref}
         for pair in selected:
@@ -93,6 +96,7 @@ def main():
         "detailed_private_layers":measurements,
         "warning":"Activation direction is only a two-pair contrast. Ratios are NOT refusal or safety efficacy.",
     }
+    require_research_write_capacity(args.output)
     args.output.parent.mkdir(exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+"\n")
     os.chmod(args.output,0o600)

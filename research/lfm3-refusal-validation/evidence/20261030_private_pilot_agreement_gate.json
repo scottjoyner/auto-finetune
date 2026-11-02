@@ -1,0 +1,24 @@
+{
+  "evidence_class": "private pilot inter-reviewer reliability readiness, no human outcome",
+  "observed_at_edt": "2026-10-30T21:38:10-04:00",
+  "human_review_pilot_source_prompts": 32,
+  "blinded_responses_per_reviewer": 96,
+  "reviewer_1_completed": 0,
+  "reviewer_2_completed": 0,
+  "agreement_cli_exit_when_incomplete": 2,
+  "independent_human_agreement_report_created": false,
+  "automatically_generated_human_grades": false,
+  "refusal_safety_rate_inferred": false,
+  "model_release_approved": false,
+  "root_unprivileged_available_gib": 3.026,
+  "root_reserved_or_unprivileged_unavailable_gib": 44.658,
+  "root_reserve_policy_modified": false,
+  "temp_files_deleted": false,
+  "large_model_inference_started": false,
+  "limitations": [
+    "Pilot is purposive, not representative",
+    "Requires two real independent humans to grade every selected response",
+    "Raw response text, reviewer IDs, and per-source mapping are not in this evidence file",
+    "ext4 unprivileged-unavailable blocks are not guaranteed usable by unprivileged writes"
+  ]
+}

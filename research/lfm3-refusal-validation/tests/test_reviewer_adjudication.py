@@ -10,8 +10,9 @@ from tests.test_reviewer_batches import create_packet
 
 
 def lookup():
-    return {str(i):{"id":str(i),"class":"safe" if i<250 else "unsafe"}
-            for i in range(450)}
+    # Fully source-index matched synthetic 450-prompt fixture, never real grades.
+    from tests.test_human_matched_activation_bridge import fake_benchmark
+    return fake_benchmark()
 
 
 @pytest.fixture()
@@ -99,11 +100,35 @@ def test_adjudicator_must_be_distinct_and_complete(tmp_path,completed):
     report=json.loads(destination.read_text())
     assert report["automatic_grading"] is False
     assert report["release_authorized"] is False
+    assert report["distinct_original_reviewer_id_strings"]==2
+    assert report["reviewer_os_principal_isolation_verified"] is False
+    assert report["independent_human_identity_attestations_verified"] is False
+    assert "independent humans/OS access not yet verified" in report["evidence_class"]
+    assert "actual human independence unverified" in report["review_mode"]
+    assert report["both_reviewer_folders_same_unix_principal"] is True
     assert "model_response" not in str(report)
     assert "human-1" not in str(report)
     assert "independent-third" not in str(report)
     assert str(tmp_path) not in str(report)
     assert "third human" in report["review_mode"]
+    familywise=report["human_behavioral_familywise_tradeoff"]
+    assert len(familywise["comparisons"]) == 12
+    assert familywise["n_original_benchmark_prompts"] == 450
+    assert familywise["reviewed_model_prompt_pairs"] == 1350
+    assert familywise["new_model_generations"] == 0
+    assert familywise["new_weight_edits"] == 0
+    assert familywise["model_release_approved"] is False
+    assert familywise["automatically_generated_labels"] == 0
+    assert "independent-third" not in str(familywise)
+    matched=report["human_behavioral_matched_activation_bridge"]
+    assert matched["source_prompt_pairs"]==18
+    assert matched["source_reviewed_model_prompt_pairs"]==1350
+    assert len(matched["matched_cross_arm_differences"])==15
+    assert matched["automatic_model_grades"]==0
+    assert matched["exploratory_family_selection_post_hoc"] is True
+    assert matched["checkpoint_release_approved"] is False
+    assert "independent-third" not in str(matched)
+
     with pytest.raises(FileExistsError):
         resolve(packet,batches,out,destination,lookup(),resamples=200)
 
@@ -181,3 +206,9 @@ def test_completed_consensus_needs_no_third_human(tmp_path,completed):
     result=resolve(packet,batches,out,tmp_path/"final.json",lookup(),resamples=200)
     assert result["third_human_required"] is False
     assert result["adjudicated_disputes"]==0
+    report=json.loads((tmp_path/"final.json").read_text())
+    assert report["human_behavioral_familywise_tradeoff"]["automatically_generated_labels"]==0
+    assert report["human_behavioral_familywise_tradeoff"]["model_release_approved"] is False
+    assert report["human_behavioral_matched_activation_bridge"]["source_prompt_pairs"]==18
+    assert report["human_behavioral_matched_activation_bridge"]["checkpoint_release_approved"] is False
+

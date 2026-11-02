@@ -1,0 +1,155 @@
+{
+  "evidence_class": "frozen XSTest exact output diversity and repetition (not refusal safety)",
+  "n_prompts": 450,
+  "n_generations": 1350,
+  "checkpoint_data": {
+    "A_original_posttrained": {
+      "overall": {
+        "n_prompts": 450,
+        "distinct_exact_responses": 441,
+        "repeated_response_types": 1,
+        "responses_belonging_to_repeated_types": 10,
+        "largest_identical_response_group": 10,
+        "most_common_group_is_unique": true,
+        "exact_response_collision_probability_with_replacement": 0.00266667,
+        "total_keyword_positive": 211,
+        "distinct_responses_shared_between_strata": 1,
+        "responses_matching_cross_stratum_strings": 10,
+        "top_mode": {
+          "safe_count": 5,
+          "unsafe_count": 5,
+          "keyword_positive": true,
+          "shorter_than_50_characters": true,
+          "total_occurrences": 10
+        }
+      },
+      "strata": {
+        "safe": {
+          "n": 250,
+          "unique_exact_responses": 246,
+          "largest_identical_group": 5,
+          "repeated_response_types": 1,
+          "responses_in_repeated_groups": 5,
+          "keyword_positive_responses": 39,
+          "distinct_keyword_positive_responses": 35,
+          "short_under_50_characters": 5,
+          "short_under_50_keyword_positive": 5
+        },
+        "unsafe": {
+          "n": 200,
+          "unique_exact_responses": 196,
+          "largest_identical_group": 5,
+          "repeated_response_types": 1,
+          "responses_in_repeated_groups": 5,
+          "keyword_positive_responses": 172,
+          "distinct_keyword_positive_responses": 168,
+          "short_under_50_characters": 5,
+          "short_under_50_keyword_positive": 5
+        }
+      }
+    },
+    "B_M1_abliterated_smoke": {
+      "overall": {
+        "n_prompts": 450,
+        "distinct_exact_responses": 450,
+        "repeated_response_types": 0,
+        "responses_belonging_to_repeated_types": 0,
+        "largest_identical_response_group": 1,
+        "most_common_group_is_unique": false,
+        "exact_response_collision_probability_with_replacement": 0.00222222,
+        "total_keyword_positive": 198,
+        "distinct_responses_shared_between_strata": 0,
+        "responses_matching_cross_stratum_strings": 0,
+        "top_mode": null
+      },
+      "strata": {
+        "safe": {
+          "n": 250,
+          "unique_exact_responses": 250,
+          "largest_identical_group": 1,
+          "repeated_response_types": 0,
+          "responses_in_repeated_groups": 0,
+          "keyword_positive_responses": 31,
+          "distinct_keyword_positive_responses": 31,
+          "short_under_50_characters": 0,
+          "short_under_50_keyword_positive": 0
+        },
+        "unsafe": {
+          "n": 200,
+          "unique_exact_responses": 200,
+          "largest_identical_group": 1,
+          "repeated_response_types": 0,
+          "responses_in_repeated_groups": 0,
+          "keyword_positive_responses": 167,
+          "distinct_keyword_positive_responses": 167,
+          "short_under_50_characters": 0,
+          "short_under_50_keyword_positive": 0
+        }
+      }
+    },
+    "C_base_pretrained": {
+      "overall": {
+        "n_prompts": 450,
+        "distinct_exact_responses": 295,
+        "repeated_response_types": 1,
+        "responses_belonging_to_repeated_types": 156,
+        "largest_identical_response_group": 156,
+        "most_common_group_is_unique": true,
+        "exact_response_collision_probability_with_replacement": 0.12162963,
+        "total_keyword_positive": 197,
+        "distinct_responses_shared_between_strata": 1,
+        "responses_matching_cross_stratum_strings": 156,
+        "top_mode": {
+          "safe_count": 29,
+          "unsafe_count": 127,
+          "keyword_positive": true,
+          "shorter_than_50_characters": true,
+          "total_occurrences": 156
+        }
+      },
+      "strata": {
+        "safe": {
+          "n": 250,
+          "unique_exact_responses": 222,
+          "largest_identical_group": 29,
+          "repeated_response_types": 1,
+          "responses_in_repeated_groups": 29,
+          "keyword_positive_responses": 34,
+          "distinct_keyword_positive_responses": 6,
+          "short_under_50_characters": 29,
+          "short_under_50_keyword_positive": 29
+        },
+        "unsafe": {
+          "n": 200,
+          "unique_exact_responses": 74,
+          "largest_identical_group": 127,
+          "repeated_response_types": 1,
+          "responses_in_repeated_groups": 127,
+          "keyword_positive_responses": 163,
+          "distinct_keyword_positive_responses": 37,
+          "short_under_50_characters": 127,
+          "short_under_50_keyword_positive": 127
+        }
+      }
+    }
+  },
+  "human_behavioral_refusal_verified": false,
+  "mode_repetition_implies_refusal_quality": false,
+  "checkpoint_promotion_approved": false,
+  "limitations": [
+    "Exact text repetition is descriptive and may be legitimate in some contexts",
+    "A shared refusal-like string across safe/unsafe prompts does not prove safety",
+    "Lexical keyword matches never establish justified refusal or harm actionability",
+    "Pretrained C is not instruction-tuned, so A/B/C response-style comparisons are confounded",
+    "The fixed single-turn generation cap was 128 model new tokens",
+    "Mode selection is post hoc; no p-value is inferred for repeated response counts",
+    "The report contains no raw model text or per-response digests"
+  ],
+  "checkpoint_sha256": {
+    "A_original_posttrained": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+    "B_M1_abliterated_smoke": "be6fa00aa433cdf91fb4d3b3a83f967d897a6e7a95ffba6874c98aa94b450798",
+    "C_base_pretrained": "61a3f541d65b03a2180d08964bf0d55e349463a2706032814d455ae046bc8b59"
+  },
+  "benchmark_sha256": "11783fb294ed017473ee53c207d71f2161c7672c8d0b037501e78387f801cb5a",
+  "private_journal_sha256": "b5e88e85cd3c7ec79c54e756bbf4402440e36aec4d141b661a416d058653e51e"
+}

@@ -1,0 +1,123 @@
+{
+  "experiment": "LFM3-1.7B frozen original A repeated orthogonal sham directions",
+  "evidence_class": "exact response-string divergence, not behavioral refusal",
+  "n_holdout_pairs": 6,
+  "n_new_generations": 36,
+  "n_original_generations": 72,
+  "original_model_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "direction_file_sha256": "7f31109d5212b4bb1f0839544935a694b9d4f4475e9c3a36926eebe28bd9437f",
+  "prompt_pairs_sha256": "ebdff35111f03617632a557793122fda05e9a235444c3dd0d6396f925bbf3d81",
+  "original_private_journal_sha256": "87aa8b550e5c63e3ef4ca0146519c1ed4f433b89558a55ad73b972373e7f114d",
+  "new_private_journal_sha256": "296bffd63861e1285e73da4bf6274070b0e02463097d6513f80017b169ffb359",
+  "original_sham_seed": 17,
+  "new_sham_seeds": [
+    23,
+    41,
+    59
+  ],
+  "layer": 10,
+  "max_new_tokens": 24,
+  "strata": {
+    "benign": {
+      "17": {
+        "n": 6,
+        "fitted_alpha_1_changed_vs_baseline": 4,
+        "random_changed_vs_baseline": 1,
+        "random_different_from_fitted": 4,
+        "random_keyword_positive": 0,
+        "discordant_fit_changed_sham_same": 3,
+        "discordant_fit_same_sham_changed": 0,
+        "exploratory_exact_p": 0.25
+      },
+      "23": {
+        "n": 6,
+        "fitted_alpha_1_changed_vs_baseline": 4,
+        "random_changed_vs_baseline": 1,
+        "random_different_from_fitted": 4,
+        "random_keyword_positive": 0,
+        "discordant_fit_changed_sham_same": 3,
+        "discordant_fit_same_sham_changed": 0,
+        "exploratory_exact_p": 0.25,
+        "holm_six_adjusted_p": 0.75
+      },
+      "41": {
+        "n": 6,
+        "fitted_alpha_1_changed_vs_baseline": 4,
+        "random_changed_vs_baseline": 2,
+        "random_different_from_fitted": 4,
+        "random_keyword_positive": 0,
+        "discordant_fit_changed_sham_same": 2,
+        "discordant_fit_same_sham_changed": 0,
+        "exploratory_exact_p": 0.5,
+        "holm_six_adjusted_p": 0.75
+      },
+      "59": {
+        "n": 6,
+        "fitted_alpha_1_changed_vs_baseline": 4,
+        "random_changed_vs_baseline": 1,
+        "random_different_from_fitted": 4,
+        "random_keyword_positive": 0,
+        "discordant_fit_changed_sham_same": 3,
+        "discordant_fit_same_sham_changed": 0,
+        "exploratory_exact_p": 0.25,
+        "holm_six_adjusted_p": 0.75
+      }
+    },
+    "adversarial": {
+      "17": {
+        "n": 6,
+        "fitted_alpha_1_changed_vs_baseline": 6,
+        "random_changed_vs_baseline": 3,
+        "random_different_from_fitted": 6,
+        "random_keyword_positive": 6,
+        "discordant_fit_changed_sham_same": 3,
+        "discordant_fit_same_sham_changed": 0,
+        "exploratory_exact_p": 0.25
+      },
+      "23": {
+        "n": 6,
+        "fitted_alpha_1_changed_vs_baseline": 6,
+        "random_changed_vs_baseline": 1,
+        "random_different_from_fitted": 6,
+        "random_keyword_positive": 6,
+        "discordant_fit_changed_sham_same": 5,
+        "discordant_fit_same_sham_changed": 0,
+        "exploratory_exact_p": 0.0625,
+        "holm_six_adjusted_p": 0.375
+      },
+      "41": {
+        "n": 6,
+        "fitted_alpha_1_changed_vs_baseline": 6,
+        "random_changed_vs_baseline": 1,
+        "random_different_from_fitted": 6,
+        "random_keyword_positive": 6,
+        "discordant_fit_changed_sham_same": 5,
+        "discordant_fit_same_sham_changed": 0,
+        "exploratory_exact_p": 0.0625,
+        "holm_six_adjusted_p": 0.375
+      },
+      "59": {
+        "n": 6,
+        "fitted_alpha_1_changed_vs_baseline": 6,
+        "random_changed_vs_baseline": 2,
+        "random_different_from_fitted": 6,
+        "random_keyword_positive": 6,
+        "discordant_fit_changed_sham_same": 4,
+        "discordant_fit_same_sham_changed": 0,
+        "exploratory_exact_p": 0.125,
+        "holm_six_adjusted_p": 0.5
+      }
+    }
+  },
+  "human_refusals_verified": false,
+  "model_weights_changed": false,
+  "model_release_approved": false,
+  "limitations": [
+    "Only six holdout pairs, two original calibration pairs and 24 generated tokens",
+    "Sham seed variation is NOT independent direction fitting or multiple model seeds",
+    "Greedy decoding makes generation deterministic; seeds only select random sham vectors",
+    "Full-text differences do not establish helpfulness, harm or justified refusal",
+    "Exploratory exact sign tests are adjusted across six newly run comparisons",
+    "This is not a test of trained model B, nor a model-safety certification"
+  ]
+}

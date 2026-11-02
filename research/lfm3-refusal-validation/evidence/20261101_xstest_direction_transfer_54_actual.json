@@ -1,0 +1,58 @@
+{
+  "evidence_class": "independent-corpus exploratory activation-class separation; not refusal",
+  "dataset": "pinned XSTest 450, separate from original eight calibration pairs",
+  "dataset_sha256": "11783fb294ed017473ee53c207d71f2161c7672c8d0b037501e78387f801cb5a",
+  "source_model_sha256": "135922caef64e81e52af88ede8b7c3ddaa9d6da220a9737fb3065275dbfb4330",
+  "source_direction_sha256": "7f31109d5212b4bb1f0839544935a694b9d4f4475e9c3a36926eebe28bd9437f",
+  "sampling": "stratified, three per each of 18 source categories, seed 9417",
+  "prompt_count": 54,
+  "category_count": 18,
+  "safe_prompts": 30,
+  "unsafe_prompts": 24,
+  "layer": 10,
+  "activation_width": 2048,
+  "candidate_class_cosine": {
+    "original_M1_fitted": {
+      "mean_safe_cosine": 0.002473,
+      "mean_unsafe_cosine": 0.146597,
+      "unsafe_minus_safe_cosine": 0.144124
+    },
+    "equal_unit_weight": {
+      "mean_safe_cosine": 0.032797,
+      "mean_unsafe_cosine": 0.158387,
+      "unsafe_minus_safe_cosine": 0.12559
+    },
+    "calibrator_1_only": {
+      "mean_safe_cosine": 0.102736,
+      "mean_unsafe_cosine": 0.1353,
+      "unsafe_minus_safe_cosine": 0.032564
+    },
+    "calibrator_2_only": {
+      "mean_safe_cosine": -0.054169,
+      "mean_unsafe_cosine": 0.099248,
+      "unsafe_minus_safe_cosine": 0.153417
+    }
+  },
+  "isotropic_sham_seed_first": 31000,
+  "isotropic_sham_count": 128,
+  "isotropic_sham_abs_class_gap_median": 0.005333,
+  "isotropic_sham_abs_class_gap_max": 0.02001,
+  "isotropic_shams_with_abs_gap_at_least_fitted": 0,
+  "isotropic_shams_are_null_distribution": false,
+  "candidate_selection_posthoc": true,
+  "new_model_forward_passes": 54,
+  "model_generations": 0,
+  "model_weights_changed": false,
+  "human_refusal_grades": 0,
+  "model_release_approved": false,
+  "raw_prompts_or_activations_exported": false,
+  "limitations": [
+    "Class separation is not refusal prediction or a safety/utility outcome",
+    "XSTest class groups differ in topic, content and prompt length; not matched pairs",
+    "Source was used previously for A/B/C responses; this is new activation geometry, not virgin benchmark data",
+    "Only three examples per category, no causal effect or generalization claim",
+    "Isotropic sham comparison is descriptive and does not constitute a valid model-behavior null",
+    "Balanced direction was selected post hoc on the original six held-out contrasts",
+    "Source selection and source weights verified by SHA-256 before capture"
+  ]
+}

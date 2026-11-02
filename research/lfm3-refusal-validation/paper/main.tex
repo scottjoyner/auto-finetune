@@ -225,6 +225,93 @@ private responses are now available for two independent
 model-blinded human reviewers, but annotation has not begun.
 No safety or capability-effectiveness conclusion follows.
 
+\subsection{Exact-response diversity and short-output confounding}
+A post-hoc, full-journal diagnostic finds substantial variation in
+response diversity across the three checkpoints. The table counts
+\emph{exact strings}, not behavioral refusal events:
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+Arm & Distinct /450 & Max repeat & Shared across strata
+    & Unique unsafe kw. \\
+\midrule
+A & 441 & 10 & 10 & 168 \\
+B & 450 & 1 & 0 & 167 \\
+C & 295 & 156 & 156 & 37 \\
+\bottomrule
+\end{tabular}
+\end{center}
+The single most common response from C is a short,
+keyword-positive string repeated 156 times: 29 benign and
+127 unsafe prompts. Thus 127 of C's 163 unsafe keyword-positive
+answers share identical text. Among unsafe prompts, median
+whitespace-word counts were 67 for A, 93 for B, and 8 for C.
+These findings suggest substantial response-formula repetition for
+the pretrained base under a post-training chat template. They
+do not establish why it occurs, nor whether an individual refusal
+is appropriate. Counting distinct keyword-positive strings is
+a \emph{diversity diagnostic}, not a replacement behavioral
+refusal rate. Raw text and per-response hashes remain private.
+Both post-hoc audits leave the original 1,350 generations and
+all A/B/C weights unchanged. Independent human scoring is required.
+
+\subsection{Observed latency and repeated short-output confounding}
+The frozen full-XSTest journal includes elapsed time for each
+of 1,350 CPU BF16 prompt-response generations, but contains no
+per-token decode timing, generated-token count, or finish reason.
+Median recorded elapsed seconds for benign prompts were
+14.9825 (A), 15.8860 (B), and 15.5300 (C); for unsafe prompts,
+the medians were 11.7500 (A), 15.7000 (B), and 2.6165 (C).
+The surprisingly low C unsafe median coincided with a strong
+post-hoc repetition effect: its 127 identical short unsafe answers
+had median elapsed time 2.523 seconds, compared with 15.456
+seconds for its 73 other unsafe responses. The same repeated
+answer occurred 29 times among benign prompts, with median
+elapsed time 2.514 seconds versus 15.620 seconds for its 221
+other benign answers. Thus the apparent unsafe response-time
+advantage is substantially confounded by short, repeated text.
+
+Six exploratory within-prompt timing-direction sign tests
+(three checkpoint contrasts in each stratum) were also
+Holm-adjusted. These comparisons describe logged elapsed
+time, not controlled hardware throughput or refusal efficacy.
+Checkpoint tests were not randomized or matched by generated
+token length; no claim of improved tokens per second, causal
+architecture efficiency, or human-verified refusal follows.
+
+A further frozen-journal matched-prompt audit stratified by whether
+C emitted the same modal repeated string, without releasing
+that text. For unsafe prompts with C's repeated output,
+C finished before A on 126/127 matched prompts, with median
+within-prompt elapsed-time difference C-minus-A of
+$-8.55$ seconds. In the remaining 73 unsafe prompts,
+C finished before A on only 32 and after A on 41,
+with median difference $+0.165$ seconds; the
+Holm-adjusted exact two-sided sign-test $p$ value across
+eight post-hoc comparisons is approximately $0.349$ for
+this nonrepeated unsafe C/A subset. Among benign prompts,
+C was faster than A on 26/29 repeated-output cases, but
+only 45/221 of the other cases, where the median difference
+was $+0.607$ seconds. These are outcomes conditioned on
+C's own observed response text, not causally identified
+architecture-speed differences. No human refusal quality,
+token-normalized throughput, or cross-run equivalence can
+be inferred from these exploratory subsets.
+
+An additional source-verified whitespace-word-length overlap audit
+tested 0-, 5-, 10- and 20-word absolute differences in responses
+to the same prompts. Among 127 unsafe prompts with C's repeated
+stock response, only 3 (2.4\%) had C/A answers within five
+whitespace words, and only 5 (3.9\%) within twenty words.
+For C's 73 other unsafe responses, the twenty-word tolerance
+retained 48 prompts: C was faster than A on 21 and slower
+on 27, with median paired C-minus-A elapsed time $+0.072$
+seconds. Both the outcome-selected groups and the
+overlap thresholds are post-hoc; whitespace words are not
+model tokens. The pronounced coverage loss makes any
+token-normalized speed conclusion from this sample especially
+unsupported. The public aggregate records exact denominators
+without publishing raw generated text.
 
 \subsection{Exploratory exact matched lexical-proxy inference}
 As a sensitivity analysis, the frozen 450-by-three lexical-proxy

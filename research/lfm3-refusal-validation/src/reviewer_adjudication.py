@@ -15,6 +15,10 @@ from src.reviewer_handoff_audit import audit as audit_custody
 from src.reviewer_progress_audit import classify_row
 from src.xstest_450_eval import read_verified_dataset, ARM_ORDER
 from src.paired_reviewed_effects import REFUSAL, paired_report
+from src.reviewed_tradeoff_multiplicity import analyze_consensus
+from src.human_matched_activation_bridge import analyze as analyze_matched_human
+from src.human_review_corrections import read_requests
+from src.reviewer_principal_audit import audit as audit_principal_access
 
 N=1350
 ADJ_NAME="blinded_adjudication.csv"
@@ -63,7 +67,11 @@ def sources(packet,batches,lookup):
         raise ValueError("two independent original reviewer identities required")
     if any(a["review_id"]!=b["review_id"] for a,b in zip(*original)):
         raise ValueError("original blinded source order mismatch")
-    return key,original,reviewers,snapshots
+    requested, correction_snapshots=read_requests(packet,batches)
+    if not requested.issubset(key):
+        raise ValueError("correction request outside verified original review set")
+    snapshots.update(correction_snapshots)
+    return key,original,reviewers,snapshots,requested
 
 
 def dispute(a,b,is_safe):
@@ -77,15 +85,16 @@ def queue(packet,batches,output,lookup):
     output=Path(output)
     if output.exists():
         raise FileExistsError("adjudication handoff already exists")
-    key,original,reviewers,snapshots=sources(packet,batches,lookup)
+    key,original,reviewers,snapshots,requested=sources(packet,batches,lookup)
     selected=[]
     for a,b in zip(*original):
-        if dispute(a,b,lookup[key[a["review_id"]]["source_id"]]["class"]=="safe"):
+        if dispute(a,b,lookup[key[a["review_id"]]["source_id"]]["class"]=="safe") or a["review_id"] in requested:
             selected.append({k:a[k] if k in ORIGINAL_FIELDS else "" for k in FIELDS})
     manifest={
         "kind":"human-only third-party blinded adjudication",
         "source_fingerprints":snapshots,
         "disputed_review_ids":[r["review_id"] for r in selected],
+        "human_correction_requested_review_ids":sorted(requested),
         "source_review_count":N,
         "model_identity_disclosed_to_adjudicator":False,
         "auto_graded_count":0,
@@ -98,6 +107,7 @@ def queue(packet,batches,output,lookup):
     path.write_text(json.dumps(manifest,indent=2)+"\n")
     path.chmod(0o600)
     return {"source_review_pairs":N,"disputed_to_independent_human":len(selected),
+            "human_correction_requests_to_adjudicate":len(requested),
             "third_human_grades":0,"model_identity_unblinded":False,
             "release_approved":False}
 
@@ -114,12 +124,14 @@ def resolve(packet,batches,adj,output,lookup,resamples=2000):
        manifest.get("model_identity_disclosed_to_adjudicator") is not False or \
        manifest.get("release_approved") is not False:
         raise ValueError("invalid adjudication manifest")
-    key,original,reviewers,snapshots=sources(packet,batches,lookup)
+    key,original,reviewers,snapshots,requested=sources(packet,batches,lookup)
     if manifest.get("source_fingerprints")!=snapshots:
         raise ValueError("original human review changed after adjudication queue created")
+    if manifest.get("human_correction_requested_review_ids")!=sorted(requested):
+        raise ValueError("human correction request added or removed after adjudication queue")
     selected=[]
     for a,b in zip(*original):
-        if dispute(a,b,lookup[key[a["review_id"]]["source_id"]]["class"]=="safe"):
+        if dispute(a,b,lookup[key[a["review_id"]]["source_id"]]["class"]=="safe") or a["review_id"] in requested:
             selected.append(a["review_id"])
     if manifest.get("disputed_review_ids")!=selected:
         raise ValueError("disagreement list differs from frozen manifest")
@@ -145,8 +157,8 @@ def resolve(packet,batches,adj,output,lookup,resamples=2000):
                 raise ValueError("third adjudicator identity must differ from original reviewers")
             third_ids.add(grader)
         else:
-            if dispute(a,b,is_safe):
-                raise ValueError("disputed case omitted from adjudication")
+            if dispute(a,b,is_safe) or rid in requested:
+                raise ValueError("disputed or correction-requested case omitted from adjudication")
             reviewed=a
         k=(info["source_id"],info["arm"])
         if k in unique:
@@ -159,15 +171,37 @@ def resolve(packet,batches,adj,output,lookup,resamples=2000):
         }
     if len(third_ids)>1:
         raise ValueError("one distinct third human adjudicator required")
+    dispute_count=sum(
+        dispute(a,b,lookup[key[a["review_id"]]["source_id"]]["class"]=="safe")
+        for a,b in zip(*original))
     report=paired_report(unique,lookup,resamples=resamples)
+    # The third-human adjudicated labels are the sole approved input to this
+    # statistical family once any original reviewer disagrees. Compute in
+    # memory; only the existing private 0600 report may contain the output.
+    familywise=analyze_consensus(unique,lookup,resamples=max(2000,resamples))
+    report["human_behavioral_familywise_tradeoff"]=familywise
+    # These 18 matched pairs are a fixed, post-hoc exploratory subset.
+    # They cannot be populated without the same complete third-human
+    # adjudicated source, and remain private alongside the primary study.
+    report["human_behavioral_matched_activation_bridge"]=analyze_matched_human(
+        unique,lookup)
+    principal_audit=audit_principal_access(
+        packet,batches,source=list(lookup.values()))
     report.update({
-        "evidence_class":"two independent human reviews with third-human adjudication",
-        "resolved_disagreements":len(selected),
+        "evidence_class":"two distinct reviewer ID strings; independent humans/OS access not yet verified",
+        "resolved_disagreements":dispute_count,
+        "adjudicated_human_correction_requests":len(requested),
         "adjudication_required":bool(selected),
-        "independent_original_reviewers":2,
+        "distinct_original_reviewer_id_strings":2,
+        "reviewer_os_principal_isolation_verified":
+            principal_audit["independent_reviewer_access_verified"],
+        "independent_human_identity_attestations_verified":
+            principal_audit["physical_independence_of_two_humans_verified"],
+        "both_reviewer_folders_same_unix_principal":
+            principal_audit["reviewers_share_one_unix_uid"],
         "third_human_adjudicator_required_for_disagreements":True,
         "original_review_fingerprints_verified":True,
-        "review_mode":"two independent humans plus third human for every disagreement or unresolved response",
+        "review_mode":"two original reviewer IDs plus third human for every disagreement or correction request; actual human independence unverified",
         "automatic_grading":False,
         "release_authorized":False,
         "external_independent_review_complete":False,
@@ -178,7 +212,9 @@ def resolve(packet,batches,adj,output,lookup,resamples=2000):
         f.write(json.dumps(report,indent=2)+"\n")
     output.chmod(0o600)
     return {"reviewed_case_model_pairs":len(unique),
-            "adjudicated_disputes":len(selected),"third_human_required":bool(selected),
+            "adjudicated_disputes":dispute_count,
+            "adjudicated_correction_requests":len(requested),
+            "third_human_required":bool(selected),
             "model_release_approved":False}
 
 
