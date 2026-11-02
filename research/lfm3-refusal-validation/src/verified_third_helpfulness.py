@@ -170,10 +170,20 @@ def prepare(packet,canonical,merge_dir,escrow,first_a,first_b,phase_one,destinat
         f.flush()
         os.fsync(f.fileno())
     (destination/MANIFEST).chmod(0o600)
-    initial_status=status(destination,phase_one)
-    if initial_status["human_helpfulness_entered"]!=0:
+    # The operator-owned 0700 directory is only a staging artifact.
+    # The real human's UID must own the securely transferred copy before
+    # status/review/return checks can claim correct reviewer ownership.
+    _,staged,_=_load(destination)
+    if any(r["benign_helpfulness_0_3"]!="" for r in staged):
         raise ValueError("third-human benign scores were pre-populated")
-    return initial_status
+    return {
+        "key_free_private_staging_created":True,
+        "eligible_benign_disputed_items":len(staged),
+        "human_helpfulness_entered":0,
+        "independent_third_account_handoff_verified":False,
+        "actual_human_identity_attested":False,
+        "release_authorized":False,
+    }
 
 
 def review(workspace,phase_one,reviewer_id):
