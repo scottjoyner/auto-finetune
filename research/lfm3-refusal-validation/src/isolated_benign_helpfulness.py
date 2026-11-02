@@ -17,6 +17,7 @@ from src.local_reviewer_terminal import (
 )
 from src.reviewer_batches import write_csv
 from src.reviewer_helpfulness_pass import _key_snapshot, review_one_helpfulness
+from src.reviewer_return_quarantine import _require_canonical_reviewers_blank
 from src.xstest_450_eval import read_verified_dataset
 
 MANIFEST="private_benign_helpfulness_manifest.json"
@@ -150,6 +151,7 @@ def export(packet_dir, batches_dir, phase_one, destination, *, source=None):
     if dest.exists() or dest.is_symlink():
         raise FileExistsError("helpfulness staging destination already exists")
     first._check_private_path(dest.parent,directory=True)
+    _require_canonical_reviewers_blank(batches)
     result=first.verify_return(packet,batches,phase_one,source=source)
     slot=result["reviewer_slot"]
     verified=list(read_verified_dataset() if source is None else source)
@@ -221,6 +223,7 @@ def review(workspace, phase_one, reviewer_id):
 
 def verify_return(packet_dir,batches_dir,phase_one,workspace,*,source=None):
     """Independent custody check of 750 scored benign rows; no central import."""
+    _require_canonical_reviewers_blank(batches_dir)
     original=first.verify_return(packet_dir,batches_dir,phase_one,source=source)
     m,rows,meta=_load(workspace)
     state=inspect(workspace,phase_one)
