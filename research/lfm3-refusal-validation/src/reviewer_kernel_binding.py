@@ -66,8 +66,10 @@ def _source_paths(packet,one,two,third=None):
 
 def snapshot(packet,one,two,third=None):
     """Original key and existing workspace ownership, without any file reads."""
-    kernel.preflight(packet,one,two,third)
     paths=_source_paths(packet,one,two,third)
+    for path in paths.values():
+        _path_hash(path)
+    kernel.preflight(packet,one,two,third)
     return {
         "schema":SCHEMA,
         "kind":"unattested-reviewer-kernel-source-metadata",
