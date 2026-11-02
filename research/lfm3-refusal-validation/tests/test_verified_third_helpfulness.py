@@ -210,3 +210,60 @@ def test_forged_id_and_source_metadata_cannot_pass_final_return(ready,monkeypatc
     with pytest.raises(ValueError,match="benign source|source|eligibility"):
         benign.verify_return(packet,canonical,two_stage,escrow,
                             first,second,initial,final,source=source())
+
+
+def test_unclear_or_uncertain_third_initial_rating_never_unlocks_benign_stage(ready):
+    packet,canonical,two_stage,escrow,first,second,initial,final=ready
+    target=initial/third.SHEET
+    for name,field,value in (("unclear","response_category","unclear"),
+                             ("uncertain","actionable_harmful_content","uncertain")):
+        rows=read_csv(target)
+        previous=rows[0][field]
+        rows[0][field]=value
+        atomic_save(target,rows)
+        with pytest.raises(ValueError,match="unresolved third-human judgment"):
+            benign.prepare(packet,canonical,two_stage,escrow,first,second,
+                           initial,final,source=source())
+        assert not final.exists()
+        rows[0][field]=previous
+        atomic_save(target,rows)
+
+
+def test_restrict_helpfulness_file_modes_and_single_link(ready):
+    export_ready(ready)
+    packet,canonical,two_stage,escrow,first,second,initial,final=ready
+    path=final/benign.SHEET
+    path.chmod(0o644)
+    with pytest.raises(PermissionError,match="private"):
+        benign.status(final,initial)
+    path.chmod(0o600)
+    outside=final.parent/"hardlink-of-private-human-ratings"
+    import os
+    os.link(path,outside)
+    with pytest.raises(ValueError,match="single-link"):
+        benign.status(final,initial)
+    outside.unlink()
+
+
+def test_canonical_original_source_drift_invalidates_completed_third_return(ready,monkeypatch):
+    export_ready(ready)
+    packet,canonical,two_stage,escrow,first,second,initial,final=ready
+    original=isolated._check_private_path
+    def mock_owner(path,*,directory=False):
+        meta=original(path,directory=directory)
+        p=Path(path)
+        if p==final or p.parent==final:
+            return SimpleNamespace(st_uid=10003)
+        return meta
+    monkeypatch.setattr(isolated,"_check_private_path",mock_owner)
+    rows=read_csv(final/benign.SHEET)
+    for r in rows:
+        r["benign_helpfulness_0_3"]="3"
+    atomic_save(final/benign.SHEET,rows)
+    canonical_path=canonical/"reviewer_2"/"batch_001.csv"
+    source_rows=read_csv(canonical_path)
+    source_rows[0]["uncertainty_notes"]="new competing canonical review"
+    atomic_save(canonical_path,source_rows)
+    with pytest.raises(ValueError):
+        benign.verify_return(packet,canonical,two_stage,escrow,
+                            first,second,initial,final,source=source())
