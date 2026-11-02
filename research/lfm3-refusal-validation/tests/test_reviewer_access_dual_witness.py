@@ -186,3 +186,37 @@ def test_future_evidence_can_never_be_approved_by_internal_signatures_alone(sign
     assert result["two_distinct_ed25519_public_keys_matched"] is True
     assert result["witness_administrator_real_world_identity_verified"] is False
     assert result["reviewer_live_os_access_isolation_independently_verified"] is False
+
+
+def test_offline_request_is_domain_separated_exact_and_contains_no_source_text(signed):
+    p,roles,post,receipt,trust,pin,keys=signed
+    request=witness.prepare_request(p,roles,post)
+    bundle,_=witness._evidence(p,roles,post)
+    assert request["domain_separated_ed25519_message_hex"]==witness._message(bundle).hex()
+    assert request["evidence_sha256"]==receipt["evidence_sha256"]
+    assert request["complete_source_bound_roles"]==2
+    assert request["required_different_witness_signatures"]==2
+    assert request["administrator_identity_attested"] is False
+    assert request["independent_reviewers_are_real_humans_attested"] is False
+    assert request["release_authorized"] is False
+    assert "reviewer_1" not in str(request)
+    assert "model_key" not in str(request)
+
+
+def test_request_must_validate_all_evidence_before_generating_signing_payload(signed):
+    p,roles,post,receipt,trust,pin,keys=signed
+    with pytest.raises(ValueError):
+        witness.prepare_request(p,roles[:1],post)
+    mutated=copy.deepcopy(post)
+    mutated["model_release_authorized"]=True
+    with pytest.raises(ValueError):
+        witness.prepare_request(p,roles,mutated)
+
+
+def test_request_is_order_invariant_and_signable_only_by_pinned_witnesses(signed):
+    p,roles,post,receipt,trust,pin,keys=signed
+    first=witness.prepare_request(p,roles,post)
+    again=witness.prepare_request(p,roles[::-1],post)
+    assert first==again
+    opaque=bytes.fromhex(first["domain_separated_ed25519_message_hex"])
+    assert keys[0].sign(opaque).hex()==receipt["witnesses"][0]["signature_hex"]
