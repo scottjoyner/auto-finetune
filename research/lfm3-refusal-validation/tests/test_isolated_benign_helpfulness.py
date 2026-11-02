@@ -155,3 +155,51 @@ def test_defers_stage_two_if_real_reviewers_not_separated(tmp_path):
     with pytest.raises(Exception):
         second.export(packet,batches,owner,tmp_path/"benign",source=source())
     assert not (tmp_path/"benign").exists()
+
+
+def test_benign_return_rejects_unsafe_row_even_if_private_handoff_manifest_forged(
+        completed_returns,monkeypatch):
+    packet,batches,one,two,parent,target,_=create_stage_two(completed_returns)
+    original=first._check_private_path
+    def fake_owner(path,*,directory=False):
+        meta=original(path,directory=directory)
+        p=Path(path)
+        if p==target or p.parent==target:
+            return SimpleNamespace(st_uid=10001)
+        return meta
+    monkeypatch.setattr(first,"_check_private_path",fake_owner)
+    key=json.loads((packet/"private_model_key.json").read_text())
+    unsafe=next(rid for rid,value in key.items()
+                if int(value["source_id"])>=250)
+    all_first=[]
+    for i in range(1,16):
+        all_first.extend(read_csv(one/f"batch_{i:03d}.csv"))
+    unsafe_row=next(row for row in all_first if row["review_id"]==unsafe)
+    f=target/second.SHEET
+    rows=read_csv(f)
+    rows[0]=dict(unsafe_row,benign_helpfulness_0_3="2")
+    for row in rows:
+        row["benign_helpfulness_0_3"]="2"
+    atomic_save(f,rows)
+    manifest_file=target/second.MANIFEST
+    m=json.loads(manifest_file.read_text())
+    m["benign_row_ids_sha256"]=second._hash([r["review_id"] for r in rows])
+    m["eligible_source_sha256"]=second._source_digest(rows)
+    manifest_file.write_text(json.dumps(m))
+    manifest_file.chmod(0o600)
+    assert second.inspect(target,one)["human_helpfulness_remaining"]==0
+    with pytest.raises(ValueError,match="nonbenign or missing"):
+        second.verify_return(packet,batches,one,target,source=source())
+
+
+def test_competing_canonical_ratings_invalidate_second_stage(completed_returns):
+    packet,batches,one,two,parent,target,_=create_stage_two(completed_returns)
+    canonical=batches/"reviewer_2"/"batch_001.csv"
+    rows=read_csv(canonical)
+    rows[0]["uncertainty_notes"]="new competing canonical record"
+    atomic_save(canonical,rows)
+    with pytest.raises(ValueError,match="reconcile before staging"):
+        second.verify_return(packet,batches,one,target,source=source())
+    with pytest.raises(ValueError,match="reconcile before staging"):
+        second.export(packet,batches,two,parent/"wrong-export",source=source())
+    assert not (parent/"wrong-export").exists()
