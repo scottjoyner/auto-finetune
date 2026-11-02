@@ -19,6 +19,8 @@ from src.local_reviewer_terminal import _read_private_csv
 from src.reviewer_adjudication import dispute
 from src.reviewer_batches import ORIGINAL_FIELDS
 from src.reviewer_progress_audit import classify_row
+from src.human_review_corrections import read_requests
+from src.reviewed_tradeoff_multiplicity import _validate as validate_statistical_table
 from src.paired_reviewed_effects import REFUSAL
 from src.xstest_450_eval import read_verified_dataset
 
@@ -111,6 +113,12 @@ def resolve_private(packet,canonical,merged_dir,*,first_a=None,first_b=None,
     """
     source=list(read_verified_dataset() if source is None else source)
     safe,key,cases,reviewers=_inputs(packet,canonical,merged_dir,source)
+    # Correction requests currently target the original canonical batches.
+    # Never silently discard them when the independently reviewed source is
+    # stored in an isolated escrow, including in unanimous-review cases.
+    pending,_=read_requests(packet,canonical)
+    if pending:
+        raise ValueError("untransported human correction requests block final analysis")
     left,right=reviewers
     # Class lookup remains only inside the approved private custodian process,
     # not in a reviewer workspace.
@@ -178,6 +186,9 @@ def resolve_private(packet,canonical,merged_dir,*,first_a=None,first_b=None,
         }
     if len(numeric)!=1350 or chosen.total()!=1350:
         raise ValueError("incomplete final human adjudication")
+    # Validate the COMPLETE 450-prompt x three-arm matched statistical table
+    # before even returning it to private offline analysis code.
+    validate_statistical_table(numeric,cases,require_full=True)
     # Check canonical and all sealed source custody again after resolving;
     # any source mutation invalidates this in-memory preview.
     _inputs(packet,canonical,merged_dir,source)
