@@ -80,6 +80,22 @@ def _message(evidence):
     return DOMAIN+hashlib.sha256(_canonical(evidence)).digest()
 
 
+def prepare_request(preflight,roles,postflight):
+    """Return an opaque offline signing request, never create private keys."""
+    evidence,technical=_evidence(preflight,roles,postflight)
+    digest=hashlib.sha256(_canonical(evidence)).hexdigest()
+    return {
+        "kind":"unattested-private-access-evidence-offline-signing-request",
+        "evidence_sha256":digest,
+        "domain_separated_ed25519_message_hex":_message(evidence).hex(),
+        "required_different_witness_signatures":2,
+        "complete_source_bound_roles":technical["complete_distinct_unix_role_count"],
+        "administrator_identity_attested":False,
+        "independent_reviewers_are_real_humans_attested":False,
+        "release_authorized":False,
+    }
+
+
 def verify_dual_witness(preflight,roles,postflight,witness_receipt,
                         trusted_public_keys,*,trusted_roster_sha256):
     """Two independent key signatures; explicitly NOT real-person proof."""
@@ -138,24 +154,33 @@ def verify_dual_witness(preflight,roles,postflight,witness_receipt,
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    for name in ("preflight-file","postflight-file","witness-receipt-file",
-                 "trusted-public-keys-file"):
-        p.add_argument("--"+name,type=Path,required=True)
-    p.add_argument("--role-receipt",type=Path,action="append",required=True)
-    p.add_argument("--trusted-roster-sha256",required=True)
+    sub=p.add_subparsers(dest="mode",required=True)
+    for mode in ("request","verify"):
+        tool=sub.add_parser(mode)
+        for name in ("preflight-file","postflight-file"):
+            tool.add_argument("--"+name,type=Path,required=True)
+        tool.add_argument("--role-receipt",type=Path,action="append",required=True)
+        if mode=="verify":
+            tool.add_argument("--witness-receipt-file",type=Path,required=True)
+            tool.add_argument("--trusted-public-keys-file",type=Path,required=True)
+            tool.add_argument("--trusted-roster-sha256",required=True)
     args=p.parse_args()
     def read(path):
         if path.is_symlink():
             raise ValueError("symlinked witness evidence file")
         return json.loads(path.read_text(encoding="utf-8"))
-    result=verify_dual_witness(
-        read(args.preflight_file),
-        [read(path) for path in args.role_receipt],
-        read(args.postflight_file),
-        read(args.witness_receipt_file),
-        read(args.trusted_public_keys_file),
-        trusted_roster_sha256=args.trusted_roster_sha256,
-    )
+    preflight=read(args.preflight_file)
+    roles=[read(path) for path in args.role_receipt]
+    postflight=read(args.postflight_file)
+    if args.mode=="request":
+        result=prepare_request(preflight,roles,postflight)
+    else:
+        result=verify_dual_witness(
+            preflight,roles,postflight,
+            read(args.witness_receipt_file),
+            read(args.trusted_public_keys_file),
+            trusted_roster_sha256=args.trusted_roster_sha256,
+        )
     print(json.dumps(result,sort_keys=True,indent=2))
 
 
