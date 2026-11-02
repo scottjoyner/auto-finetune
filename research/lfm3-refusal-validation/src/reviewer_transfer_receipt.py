@@ -67,6 +67,8 @@ def _files(directory,owner):
     info=_meta(directory,directory=True)
     if info.st_uid!=owner:
         raise PermissionError("reviewer workspace owner differs from expected principal")
+    if stat.S_IMODE(info.st_mode)!=0o700:
+        raise PermissionError("reviewer workspace must allow only owner traversal and editing (0700)")
     actual={p.name for p in directory.iterdir()}
     if actual!=set(FILES):
         raise ValueError("unexpected or missing files in reviewer transfer bundle")
@@ -76,6 +78,8 @@ def _files(directory,owner):
         value=_meta(item)
         if value.st_uid!=owner:
             raise PermissionError("reviewer bundle has mixed Unix ownership")
+        if stat.S_IMODE(value.st_mode)!=0o600:
+            raise PermissionError("reviewer source files must be owner readable/writable only (0600)")
         result[name]=_sha(item)
     return result
 
