@@ -108,7 +108,7 @@ def test_existing_destination_never_overwritten(setup):
 
 def test_target_parent_cannot_be_inside_original_staging(setup):
     one=setup[2]
-    with pytest.raises((ValueError,PermissionError),match="owner|overlap"):
+    with pytest.raises((ValueError,PermissionError),match="owned by reviewer|overlap"):
         run(setup,first_destination=one/"new-review")
 
 
