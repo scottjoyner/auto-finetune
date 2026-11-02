@@ -144,9 +144,9 @@ def stage(packet_dir,batches_dir,stage1_a,help_a,stage1_b,help_b,
         fingerprints[str(slot)]=hashes
     # Refuse a handoff if any original or human source changed mid-copy.
     quarantine._require_canonical_reviewers_blank(batches)
-    _validate_inputs(packet,batches,pairs,source)
+    refreshed=_validate_inputs(packet,batches,pairs,source)
     for slot in (1,2):
-        original_rows,hrows=staged[slot]
+        original_rows,hrows=refreshed[slot]
         if _merge_rows(original_rows,hrows,safe,key,cases)!=prepared[slot]:
             raise ValueError("reviewer input changed during two-stage merge")
     summary=audit_custody(packet,inner,source=source)
