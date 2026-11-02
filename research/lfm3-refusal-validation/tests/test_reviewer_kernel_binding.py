@@ -30,7 +30,7 @@ def simulated_accounts(tmp_path,monkeypatch):
                 0o600 if i==1 else 0o000)
         dirs.append(d)
         paths[i]=f
-    owners={str(packet):uid+2000,str(key):uid+2000}
+    owners={str(packet):uid+7000,str(key):uid+7000}
     for i,d in enumerate(dirs,1):
         owners[str(d)]=uid if i==1 else uid+i*1000
         owners[str(paths[i])]=uid if i==1 else uid+i*1000
