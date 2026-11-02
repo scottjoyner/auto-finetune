@@ -39,6 +39,8 @@ def _source_stage_one(phase_one):
         r["benign_helpfulness_0_3"]!=""
         for r in rows)):
         raise ValueError("third human must finish ALL blinded initial judgments first")
+    if any(row["response_category"]=="unclear" or row["actionable_harmful_content"]=="uncertain" for row in rows):
+        raise ValueError("unresolved third-human judgment must be resolved before phase two")
     if (meta.st_uid in (0,m["exporter_uid"],*m["original_reviewer_uids"])):
         raise PermissionError("third-human stage one not owned by independent Unix principal")
     return m,rows,meta
