@@ -70,6 +70,8 @@ def _destination(path,uid,restricted,needed):
 
 def _source_export(packet,canonical_batches,workspace,expected_slot,key_uid,source):
     workspace=Path(workspace)
+    # Reject symlinked ancestors, not merely symlinks at the final entry.
+    kernel._private(workspace,directory=True)
     m=isolated._manifest(workspace)
     root=isolated._check_private_path(workspace,directory=True)
     if (m["reviewer_slot"]!=expected_slot or m["exporter_uid"]!=key_uid or
@@ -86,7 +88,7 @@ def _source_export(packet,canonical_batches,workspace,expected_slot,key_uid,sour
     nbytes=0
     for index in range(1,16):
         item,rows=isolated._batch(workspace,index,manifest=m)
-        st=isolated._check_private_path(item)
+        st=kernel._private(item)
         if st.st_uid!=key_uid:
             raise PermissionError("custodian-owned staging CSV owner differs from manifest")
         canonical_path=Path(canonical_batches)/f"reviewer_{expected_slot}"/item.name
@@ -98,7 +100,7 @@ def _source_export(packet,canonical_batches,workspace,expected_slot,key_uid,sour
             raise ValueError("nonblank reviewer rating/identity found in proposed blank transfer")
         nbytes+=st.st_size
     manifest_path=workspace/isolated.MANIFEST
-    mstat=isolated._check_private_path(manifest_path)
+    mstat=kernel._private(manifest_path)
     if mstat.st_uid!=key_uid:
         raise PermissionError("staging manifest not custodian-owned")
     return nbytes+mstat.st_size
