@@ -63,6 +63,18 @@ def _selection(packet,canonical,merge_dir,source):
     return selected
 
 
+def _source_owner_uids(packet,canonical,first_a,first_b,source):
+    from src import isolated_reviewer_workspace as original
+    original.verify_pair_returns(packet,canonical,first_a,first_b,source=source)
+    uids=[
+        original._check_private_path(path,directory=True).st_uid
+        for path in (first_a,first_b)
+    ]
+    if len(set(uids))!=2 or 0 in uids:
+        raise PermissionError("two distinct non-root original reviewer owners required")
+    return sorted(uids)
+
+
 def _check_workspace(workspace):
     workspace=Path(workspace)
     owner=isolated._check_private_path(workspace,directory=True)
@@ -74,7 +86,7 @@ def _check_workspace(workspace):
     m=_read_private_json(workspace/MANIFEST)
     needed={"kind","schema","exporter_uid","items","source_context_sha256",
             "model_key_copied","benchmark_class_disclosed",
-            "human_identity_attested","release_authorized"}
+            "human_identity_attested","release_authorized","original_reviewer_uids"}
     if (not isinstance(m,dict) or set(m)!=needed or
         m["kind"]!="key-free-third-human-refusal-stage-one" or
         type(m["schema"]) is not int or m["schema"]!=1 or
@@ -83,6 +95,10 @@ def _check_workspace(workspace):
         any(m[k] is not False for k in (
             "model_key_copied","benchmark_class_disclosed",
             "human_identity_attested","release_authorized")) or
+        not isinstance(m["original_reviewer_uids"],list) or
+        len(m["original_reviewer_uids"])!=2 or
+        any(type(uid) is not int or uid<=0 for uid in m["original_reviewer_uids"]) or
+        len(set(m["original_reviewer_uids"]))!=2 or
         not isinstance(m["source_context_sha256"],str) or
         len(m["source_context_sha256"])!=64):
         raise ValueError("untrusted third-human manifest fields")
@@ -98,18 +114,20 @@ def _source_hash(rows):
     ],ensure_ascii=False,separators=(",",":")).encode("utf-8"))
 
 
-def prepare(packet_dir,canonical_batches,merge_dir,destination,*,source=None):
+def prepare(packet_dir,canonical_batches,merge_dir,destination,first_a,first_b,*,source=None):
     """New private custodian escrow + key-free staging copy, no human claims."""
     packet,canonical,merge_dir=map(Path,(packet_dir,canonical_batches,merge_dir))
     destination=merged.quarantine._safe_parent(
         destination,(packet,canonical,merge_dir))
     source=list(read_verified_dataset() if source is None else source)
     selected=_selection(packet,canonical,merge_dir,source)
+    original_uids=_source_owner_uids(packet,canonical,first_a,first_b,source)
     receipt_source=_sha_file(merge_dir/merged.RECEIPT)
     m={
         "kind":"key-free-third-human-refusal-stage-one","schema":1,
         "exporter_uid":os.geteuid(),
         "items":len(selected),
+        "original_reviewer_uids":original_uids,
         "source_context_sha256":_source_hash(selected),
         "model_key_copied":False,"benchmark_class_disclosed":False,
         "human_identity_attested":False,"release_authorized":False,
@@ -133,6 +151,7 @@ def prepare(packet_dir,canonical_batches,merge_dir,destination,*,source=None):
         "stage_one_manifest_sha256":_sha_file(path),
         "selected_source_sha256":_source_hash(selected),
         "selected_review_rows":len(selected),
+        "original_reviewer_uids":original_uids,
         "original_reviewers_independent_humans_verified":False,
         "third_human_identity_attested":False,
         "third_human_helpfulness_completed":False,
@@ -146,10 +165,10 @@ def prepare(packet_dir,canonical_batches,merge_dir,destination,*,source=None):
         f.flush()
         os.fsync(f.fileno())
     target.chmod(0o600)
-    return verify(packet,canonical,merge_dir,destination,source=source)
+    return verify(packet,canonical,merge_dir,destination,first_a,first_b,source=source)
 
 
-def verify(packet_dir,canonical_batches,merge_dir,destination,*,workspace=None,
+def verify(packet_dir,canonical_batches,merge_dir,destination,first_a,first_b,*,workspace=None,
            source=None):
     """Recompute selection against currently verified sealed two-stage source."""
     packet,canonical,merge_dir,destination=map(
@@ -162,7 +181,8 @@ def verify(packet_dir,canonical_batches,merge_dir,destination,*,workspace=None,
     receipt=_read_private_json(destination/RECEIPT)
     fields={"kind","schema","merged_receipt_sha256",
             "stage_one_manifest_sha256","selected_source_sha256",
-            "selected_review_rows","original_reviewers_independent_humans_verified",
+            "selected_review_rows","original_reviewer_uids",
+            "original_reviewers_independent_humans_verified",
             "third_human_identity_attested","third_human_helpfulness_completed",
             "human_consensus_approved","release_authorized"}
     if (not isinstance(receipt,dict) or set(receipt)!=fields or
@@ -182,6 +202,9 @@ def verify(packet_dir,canonical_batches,merge_dir,destination,*,workspace=None,
         m!=staging_m or m["items"]!=receipt["selected_review_rows"]):
         raise ValueError("adjudicator workspace or manifest differs from source")
     source=list(read_verified_dataset() if source is None else source)
+    original_uids=_source_owner_uids(packet,canonical,first_a,first_b,source)
+    if receipt["original_reviewer_uids"]!=original_uids or m["original_reviewer_uids"]!=original_uids:
+        raise ValueError("original reviewer account custody changed")
     expected=_selection(packet,canonical,merge_dir,source)
     if (_source_hash(expected)!=receipt["selected_source_sha256"] or
         _source_hash(staging_rows)!=_source_hash(expected) or
@@ -213,7 +236,8 @@ def verify(packet_dir,canonical_batches,merge_dir,destination,*,workspace=None,
             packet,merge_dir/merged.INNER,{r["id"]:r for r in source})
         if seen.intersection(original_ids):
             raise ValueError("third-human ID duplicates an original reviewer")
-    isolated_uid=(owner.st_uid!=m["exporter_uid"] and owner.st_uid!=0)
+    isolated_uid=(owner.st_uid!=m["exporter_uid"] and owner.st_uid!=0
+                  and owner.st_uid not in m["original_reviewer_uids"])
     return {
         "verified_source_selection":True,
         "source_reviewed_model_prompt_pairs":1350,
@@ -236,7 +260,9 @@ def review(destination,workspace,adjudicator_id):
     if not os.isatty(0) or not os.isatty(1):
         raise PermissionError("genuine interactive third-human TTY required")
     m,rows,owner=_check_workspace(workspace)
-    if owner.st_uid==m["exporter_uid"] or owner.st_uid==0 or owner.st_uid!=os.geteuid():
+    if (owner.st_uid==m["exporter_uid"] or owner.st_uid==0 or
+        owner.st_uid in m["original_reviewer_uids"] or
+        owner.st_uid!=os.geteuid()):
         raise PermissionError("third adjudicator must use separately owned non-root account")
     if (not isinstance(adjudicator_id,str) or not adjudicator_id.strip() or
         any(ord(c)<32 for c in adjudicator_id)):
@@ -260,7 +286,8 @@ def main():
     sub=p.add_subparsers(dest="mode",required=True)
     for mode in ("prepare","verify"):
         parser=sub.add_parser(mode)
-        for field in ("packet-dir","canonical-batches","merge-dir","destination"):
+        for field in ("packet-dir","canonical-batches","merge-dir","destination",
+                      "first-a","first-b"):
             parser.add_argument("--"+field,type=Path,required=True)
         if mode=="verify":
             parser.add_argument("--workspace",type=Path)
@@ -271,10 +298,11 @@ def main():
     args=p.parse_args()
     if args.mode=="prepare":
         result=prepare(args.packet_dir,args.canonical_batches,
-                       args.merge_dir,args.destination)
+                       args.merge_dir,args.destination,args.first_a,args.first_b)
     elif args.mode=="verify":
         result=verify(args.packet_dir,args.canonical_batches,
-                      args.merge_dir,args.destination,workspace=args.workspace)
+                      args.merge_dir,args.destination,args.first_a,args.first_b,
+                      workspace=args.workspace)
     else:
         result=review(args.destination,args.workspace,args.adjudicator_id)
     print(json.dumps(result,indent=2))
