@@ -113,13 +113,8 @@ def resolve_private(packet,canonical,merged_dir,*,first_a=None,first_b=None,
     before=_input_hashes(merged_dir,phase_one,phase_two)
     safe,key,cases,reviewers=_inputs(packet,canonical,merged_dir,source)
     left,right=reviewers
-    disputes=[
-        a["review_id"] for a,b in zip(left,right)
-        if dispute(a,b,key[a["review_id"]]["source_id"] in
-                   {key[rid]["source_id"] for rid in safe})
-    ]
-    # Benchmark class is looked up ONLY on the custodian, never in a reviewer workspace.
-    # Strictly recompute with the 450-case class mapping to reject ambiguity.
+    # Class lookup remains only inside the approved private custodian process,
+    # not in a reviewer workspace.
     disputes=[
         a["review_id"] for a,b in zip(left,right)
         if dispute(a,b,cases[key[a["review_id"]]["source_id"]]["class"]=="safe")
