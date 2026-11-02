@@ -32,14 +32,15 @@ def _private(path, *, directory=False):
     return info
 
 
-def preflight(packet, reviewer_one, reviewer_two, adjudicator):
+def preflight(packet, reviewer_one, reviewer_two, adjudicator=None):
     """Admin checks actual path existence, Unix owners and owner-only modes."""
     packet=Path(packet)
     _private(packet,directory=True)
     key=_private(packet/"private_model_key.json")
     folders=[(Path(reviewer_one),"batch_001.csv"),
-             (Path(reviewer_two),"batch_001.csv"),
-             (Path(adjudicator),"blinded_adjudication.csv")]
+             (Path(reviewer_two),"batch_001.csv")]
+    if adjudicator is not None:
+        folders.append((Path(adjudicator),"blinded_adjudication.csv"))
     owners=[]
     for path,sample in folders:
         directory=_private(path,directory=True)
@@ -47,12 +48,14 @@ def preflight(packet, reviewer_one, reviewer_two, adjudicator):
         if directory.st_uid!=entry.st_uid:
             raise PermissionError("workspace and private sample owners differ")
         owners.append(directory.st_uid)
-    if any(uid<=0 or uid==key.st_uid for uid in owners) or len(set(owners))!=3:
-        raise PermissionError("three actual distinct non-root reviewer owners not present")
+    if any(uid<=0 or uid==key.st_uid for uid in owners) or len(set(owners))!=len(owners):
+        raise PermissionError("actual distinct non-root reviewer owners not present")
     return {
         "kind":"read-only three-account source ownership preflight",
         "canonical_model_key_exists_as_private_regular_file":True,
-        "three_distinct_non_root_reviewer_unix_owners":True,
+        "two_distinct_non_root_reviewer_unix_owners":True,
+        "third_adjudicator_account_present":len(owners)==3,
+        "three_distinct_non_root_reviewer_unix_owners":len(owners)==3,
         "reviewer_sample_file_owner_matches_private_directory":True,
         "all_target_paths_exist_and_have_no_symlinks_or_hardlinks":True,
         "private_file_contents_read":False,
@@ -118,20 +121,25 @@ def probe(role,expected_uid,own_sample,other_first,other_second,key):
     if role not in (1,2,3):
         raise ValueError("role must be 1,2 or 3")
     _require_unprivileged_uid(expected_uid)
+    if other_second is None and role==3:
+        raise ValueError("third reviewer requires denial of both original reviewer files")
     paths=[Path(x).absolute() for x in
-           (own_sample,other_first,other_second,key)]
-    if len(set(paths))!=4:
-        raise ValueError("four source paths must be distinct")
+           (own_sample,other_first,key)]
+    if other_second is not None:
+        paths.append(Path(other_second).absolute())
+    if len(set(paths))!=len(paths):
+        raise ValueError("source paths must be distinct")
     _open_without_reading(paths[0],own_uid=expected_uid)
-    _require_open_denied(paths[1])
-    _require_open_denied(paths[2])
-    _require_open_denied(paths[3])
+    for foreign in paths[1:]:
+        _require_open_denied(foreign)
     return {
         "kind":"live Linux reviewer kernel file-open denial probe",
         "reviewer_role":role,
         "actual_process_uid":expected_uid,
         "own_private_review_file_opened":True,
-        "both_other_reviewer_samples_open_denied":True,
+        "other_reviewer_samples_tested":1 if other_second is None else 2,
+        "one_other_reviewer_sample_open_denied":True,
+        "both_other_reviewer_samples_open_denied":other_second is not None,
         "model_key_open_denied":True,
         "file_contents_read":False,
         "no_linux_effective_capabilities":True,
@@ -145,13 +153,15 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     sub=p.add_subparsers(dest="action",required=True)
     a=sub.add_parser("preflight")
-    for name in ("packet","reviewer-one","reviewer-two","adjudicator"):
+    for name in ("packet","reviewer-one","reviewer-two"):
         a.add_argument("--"+name,type=Path,required=True)
+    a.add_argument("--adjudicator",type=Path)
     a=sub.add_parser("probe")
     a.add_argument("--role",type=int,choices=(1,2,3),required=True)
     a.add_argument("--expected-uid",type=int,required=True)
-    for name in ("own-sample","other-first","other-second","key"):
+    for name in ("own-sample","other-first","key"):
         a.add_argument("--"+name,type=Path,required=True)
+    a.add_argument("--other-second",type=Path)
     args=p.parse_args()
     if args.action=="preflight":
         result=preflight(args.packet,args.reviewer_one,args.reviewer_two,args.adjudicator)
