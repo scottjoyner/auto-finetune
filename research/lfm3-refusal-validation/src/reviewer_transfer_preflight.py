@@ -131,8 +131,7 @@ def preflight(packet,canonical_batches,first_stage,second_stage,
     originals=(packet,canonical_batches,first_stage,second_stage)
     a=_destination(first_destination,first_uid,originals,size_a)
     b=_destination(second_destination,second_uid,originals,size_b)
-    if (a==b or a in b.parents or b in a.parents or
-        (a.st_dev==b.st_dev and a.st_ino==b.st_ino)):
+    if a==b or a in b.parents or b in a.parents:
         raise ValueError("target reviewer parents cannot be shared")
     # Snapshot recheck after dest checks; reject modification during preflight.
     if (_source_export(packet,canonical_batches,first_stage,1,key.st_uid,source)!=size_a or
