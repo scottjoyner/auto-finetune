@@ -132,7 +132,7 @@ def test_same_owner_third_human_interactive_review_denied(prepared,monkeypatch):
     packet,canonical,two_stage,escrow,result,first,second=prepared
     monkeypatch.setattr(handoff.os,"isatty",lambda _:True)
     with pytest.raises(PermissionError,match="separately owned"):
-        handoff.review(escrow,escrow/handoff.STAGING,"synthetic-third")
+        handoff.review(escrow/handoff.STAGING,"synthetic-third")
 
 
 def test_original_reviewer_cannot_masquerade_as_third_human(prepared):
@@ -179,7 +179,7 @@ def test_third_human_cannot_run_under_either_original_reviewer_uid(prepared,monk
     monkeypatch.setattr(handoff.os,"isatty",lambda _:True)
     monkeypatch.setattr(handoff.os,"geteuid",lambda:10001)
     with pytest.raises(PermissionError,match="separately owned"):
-        handoff.review(escrow,staging,"third-person-new-id")
+        handoff.review(staging,"third-person-new-id")
 
 
 def test_third_human_escrow_receipt_cannot_rewrite_original_owner_ledger(prepared):
