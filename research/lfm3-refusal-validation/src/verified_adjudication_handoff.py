@@ -206,6 +206,13 @@ def verify(packet_dir,canonical_batches,merge_dir,destination,*,workspace=None,
             count+=1
     if len(seen)>1:
         raise ValueError("third-human workspace changed rater identity")
+    # A distinct self-reported name is not proof of personhood, but a reused
+    # original reviewer ID is an immediate, objectively detectable failure.
+    if seen:
+        model_key, originals, original_ids, _, _=sources(
+            packet,merge_dir/merged.INNER,{r["id"]:r for r in source})
+        if seen.intersection(original_ids):
+            raise ValueError("third-human ID duplicates an original reviewer")
     isolated_uid=(owner.st_uid!=m["exporter_uid"] and owner.st_uid!=0)
     return {
         "verified_source_selection":True,
