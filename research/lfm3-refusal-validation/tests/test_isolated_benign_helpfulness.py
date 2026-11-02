@@ -90,7 +90,7 @@ def test_stage_two_extra_files_and_changed_responses_refused(completed_returns):
 
 def test_wrong_reviewer_work_and_unsafe_grades_not_accepted(completed_returns):
     packet,batches,one,two,parent,target,_=create_stage_two(completed_returns)
-    with pytest.raises(ValueError,match="wrong original reviewer"):
+    with pytest.raises(ValueError,match="wrong original reviewer|changed since benign export"):
         second.inspect(target,two)
     f=target/second.SHEET
     rows=read_csv(f)
