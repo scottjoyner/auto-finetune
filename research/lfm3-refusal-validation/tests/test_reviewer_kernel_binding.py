@@ -90,7 +90,7 @@ def test_own_file_replacement_after_preflight_is_detected(simulated_accounts):
     uid,packet,dirs,paths,key=simulated_accounts
     receipt=bind.preflight(packet,dirs[0],dirs[1])
     own=paths[1]
-    own.unlink()
+    own.rename(own.with_suffix(".old"))
     _file(own)
     with pytest.raises(PermissionError,match="own opened file differs"):
         bind.bound_probe(receipt,1,uid,own,paths[2],None,key)
@@ -102,7 +102,7 @@ def test_forbidden_file_swap_is_caught_by_custodian_postflight(simulated_account
     uid,packet,dirs,paths,key=simulated_accounts
     receipt=bind.preflight(packet,dirs[0],dirs[1])
     other=paths[2]
-    other.unlink()
+    other.rename(other.with_suffix(".old"))
     _file(other,0o000)
     # The unprivileged negative open still returns permission-denied.
     # Only a second privileged metadata snapshot detects inode replacement.
