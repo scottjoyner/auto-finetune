@@ -60,7 +60,8 @@ def _account(uid):
     if (u.pw_uid!=uid or u.pw_name!=name or u.pw_shell!=shell or
         not shell.startswith("/") or
         shell.rsplit("/",1)[-1] in ("nologin","false","sync") or
-        not shell):
+        not shell or not os.path.isfile(shell) or not os.access(shell,os.X_OK) or
+        Path(shell).resolve().name in ("nologin","false","sync")):
         raise PermissionError("local reviewer account is not interactive or NSS disagrees")
     return u
 
