@@ -107,3 +107,30 @@ def test_unanimous_reviews_require_no_adjudicator(complete_two_stage):
     assert report["production_release_approved"] is False
     with pytest.raises(ValueError,match="artifacts provided for zero disputes"):
         final.audit(packet,canonical,output,source=source(),phase_one=stage_a)
+
+
+def test_pending_corrections_block_final_even_when_reviewers_agree(complete_two_stage,monkeypatch):
+    packet,canonical,stage_a,help_a,stage_b,help_b,parent=complete_two_stage
+    f=help_b/"benign_helpfulness.csv"
+    rows=read_csv(f)
+    for row in rows:
+        row["benign_helpfulness_0_3"]="2"
+    atomic_save(f,rows)
+    path=parent/"two-stage-merged"
+    merged.stage(packet,canonical,stage_a,help_a,stage_b,help_b,path,source=source())
+    monkeypatch.setattr(final,"read_requests",lambda *_: ({"test-request"},{}))
+    with pytest.raises(ValueError,match="untransported human correction"):
+        final.audit(packet,canonical,path,source=source())
+
+
+def test_private_familywise_diagnostics_are_marked_nonpublishable(resolved):
+    pos,kw=inputs(resolved)
+    r=final.private_exploratory_diagnostics(*pos,**kw,resamples=2000)
+    assert r["source_provenance"]["reviewed_model_prompt_pairs"]==1350
+    assert r["paired_effects_exploratory"]["human_reviewed_evidence"] is False
+    assert r["familywise_exploratory"]["automatically_generated_labels"]==0
+    assert r["independent_human_personhood_attested"] is False
+    assert r["public_scientific_claim_approved"] is False
+    assert r["production_release_approved"] is False
+    with pytest.raises(ValueError,match="2000 paired resamples"):
+        final.private_exploratory_diagnostics(*pos,**kw,resamples=1000)
