@@ -37,7 +37,9 @@ def _meta(path, directory=False):
 def _sha(path):
     """Hash exactly one stable owner-only regular inode without following links."""
     p=Path(path)
-    original=_meta(p)
+    # The opened-file identity must come from real kernel metadata, not
+    # the separately checked directory-owner ledger.
+    original=kernel._private(p)
     if not hasattr(os,"O_NOFOLLOW"):
         raise RuntimeError("Linux O_NOFOLLOW required")
     fd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|getattr(os,"O_CLOEXEC",0))
