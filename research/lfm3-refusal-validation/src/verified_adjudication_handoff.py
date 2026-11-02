@@ -255,7 +255,7 @@ def verify(packet_dir,canonical_batches,merge_dir,destination,first_a,first_b,*,
     }
 
 
-def review(destination,workspace,adjudicator_id):
+def review(workspace,adjudicator_id):
     """Human-only initial refusal/actionability input from separate account."""
     if not os.isatty(0) or not os.isatty(1):
         raise PermissionError("genuine interactive third-human TTY required")
@@ -292,7 +292,6 @@ def main():
         if mode=="verify":
             parser.add_argument("--workspace",type=Path)
     review_parser=sub.add_parser("review")
-    review_parser.add_argument("--destination",type=Path,required=True)
     review_parser.add_argument("--workspace",type=Path,required=True)
     review_parser.add_argument("--adjudicator-id",required=True)
     args=p.parse_args()
@@ -304,7 +303,7 @@ def main():
                       args.merge_dir,args.destination,args.first_a,args.first_b,
                       workspace=args.workspace)
     else:
-        result=review(args.destination,args.workspace,args.adjudicator_id)
+        result=review(args.workspace,args.adjudicator_id)
     print(json.dumps(result,indent=2))
 
 
