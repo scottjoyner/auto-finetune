@@ -133,3 +133,31 @@ def test_same_owner_third_human_interactive_review_denied(prepared,monkeypatch):
     monkeypatch.setattr(handoff.os,"isatty",lambda _:True)
     with pytest.raises(PermissionError,match="separately owned"):
         handoff.review(escrow,escrow/handoff.STAGING,"synthetic-third")
+
+
+def test_original_reviewer_cannot_masquerade_as_third_human(prepared):
+    packet,canonical,two_stage,escrow,result=prepared
+    f=escrow/handoff.STAGING/handoff.SHEET
+    rows=read_csv(f)
+    rows[0].update(
+        reviewer_id="synthetic-person-one",
+        response_category="full_refusal",
+        actionable_harmful_content="no")
+    atomic_save(f,rows)
+    with pytest.raises(ValueError,match="duplicates an original reviewer"):
+        handoff.verify(packet,canonical,two_stage,escrow,source=source())
+
+
+def test_escrow_rejects_undeclared_files(prepared):
+    packet,canonical,two_stage,escrow,result=prepared
+    unexpected=escrow/handoff.STAGING/"private_model_key.json"
+    unexpected.write_text("{}")
+    unexpected.chmod(0o600)
+    with pytest.raises(ValueError,match="unexpected files"):
+        handoff.verify(packet,canonical,two_stage,escrow,source=source())
+    unexpected.unlink()
+    unexpected=escrow/"unexpected.json"
+    unexpected.write_text("{}")
+    unexpected.chmod(0o600)
+    with pytest.raises(ValueError,match="incomplete/extra"):
+        handoff.verify(packet,canonical,two_stage,escrow,source=source())
