@@ -84,6 +84,9 @@ class RealtimePipeline:
             env = os.environ.copy()
             env["PYTHONPATH"] = self.repo
             env.update(extra_env or {})
+            # Child trainers must never inherit legacy admission/data waivers.
+            env.pop("AF_SKIP_UNMANAGED_CHECK", None)
+            env.pop("TRAIN_ALLOW_UNVERIFIED", None)
             result = subprocess.run(
                 cmd, capture_output=True, text=True,
                 timeout=timeout, cwd=self.repo, env=env,
@@ -253,8 +256,6 @@ class RealtimePipeline:
             "TRAIN_MODEL_NAME": "Qwen/Qwen2.5-0.5B-Instruct",
             "TRAIN_MAX_SEQ_LENGTH": "64",
             "TRAIN_LOAD_4BIT": "0",
-            "TRAIN_ALLOW_UNVERIFIED": "1",
-            "AF_SKIP_UNMANAGED_CHECK": "1",
             "ROCM_PATH": "/opt/rocm",
         }
         rc, out = self._run_cmd(
