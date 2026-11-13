@@ -14,6 +14,7 @@ Workflow:
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 from dataclasses import asdict, dataclass, field
@@ -85,13 +86,11 @@ class AutoPromoter:
                                 f"A/B test started: {active.version_id} vs {vid}")
                 return vid
             else:
-                print("[promote] Failed to start A/B test; promoting directly")
-                self.registry.promote(vid)
+                print("[promote] HOLD: A/B start unavailable; candidate remains unpromoted")
                 return vid
         else:
-            # No active model; promote directly
-            self.registry.promote(vid)
-            print(f"[promote] No active model; promoted {vid} directly")
+            # No incumbent baseline is NOT implicit authorization to launch.
+            print(f"[promote] HOLD: no active baseline; {vid} remains candidate")
             return vid
 
     def record_inference(self, model_version: str, session_id: str,
@@ -129,64 +128,58 @@ class AutoPromoter:
             result["details"] = "A/B test not running"
             return result
 
-        # Check if enough feedback collected
+        # Balanced, finite and bounded quality receipts are required: a 50/0
+        # study must never allow candidate activation or a misleading winner.
         count_a = ab.metrics_a.get("score_count", 0)
         count_b = ab.metrics_b.get("score_count", 0)
+        if not all(isinstance(c, int) and c >= 0 for c in (count_a, count_b)):
+            return {"action": "hold", "details": "invalid feedback counts"}
         total = count_a + count_b
-
-        if total < self.config.min_feedback_samples:
-            result["details"] = f"Insufficient feedback: {total}/{self.config.min_feedback_samples}"
+        per_arm = max(1, (self.config.min_feedback_samples + 1) // 2)
+        if total < self.config.min_feedback_samples or min(count_a, count_b) < per_arm:
+            result["details"] = f"Insufficient balanced feedback: A={count_a}, B={count_b}"
             return result
 
-        # Check if test duration exceeded
-        elapsed_hours = (time.time() - ab.start_time) / 3600
+        try:
+            elapsed_hours = (time.time() - float(ab.start_time)) / 3600
+        except (ValueError, TypeError, OverflowError):
+            return {"action": "hold", "details": "invalid A/B timestamp"}
+        if not math.isfinite(elapsed_hours) or elapsed_hours < 0:
+            return {"action": "hold", "details": "invalid A/B timestamp"}
         if elapsed_hours < self.config.ab_test_duration_hours and total < self.config.min_feedback_samples * 2:
             result["details"] = f"Test still running: {elapsed_hours:.1f}h / {self.config.ab_test_duration_hours}h"
             return result
 
-        # Complete the test
-        winner = self.registry.complete_ab_test(test_id, "score")
-        if winner:
-            self.state["active_ab_test"] = None
-            self.state["last_promotion"] = time.time()
-            self._save_state()
+        score_a = ab.metrics_a.get("score", 0)
+        score_b = ab.metrics_b.get("score", 0)
+        if not all(isinstance(n, (int, float)) and math.isfinite(n)
+                   for n in (score_a, score_b)):
+            return {"action": "hold", "details": "invalid feedback scores"}
+        avg_a, avg_b = score_a / count_a, score_b / count_b
+        if not (0 <= avg_a <= 1 and 0 <= avg_b <= 1):
+            return {"action": "hold", "details": "feedback score outside [0, 1]"}
 
-            # Get winner version
-            winner_v = self.registry.get(winner)
-            loser_id = ab.version_b if winner == ab.version_a else ab.version_a
+        # Registry completion writes only a research result. The registry
+        # must never activate or retire any model as an A/B side effect.
+        try:
+            winner = self.registry.complete_ab_test(test_id, "score")
+        except Exception:
+            return {"action": "hold", "details": "A/B completion unavailable"}
+        if winner is None:
+            return {"action": "hold", "details": "A/B completion unavailable"}
+        self.state["active_ab_test"] = None
+        self.state["last_review"] = time.time()
+        self._save_state()
 
-            # Check for regression
-            avg_winner = ab.metrics_a.get("score", 0) / max(1, ab.metrics_a.get("score_count", 1)) if winner == ab.version_a else ab.metrics_b.get("score", 0) / max(1, ab.metrics_b.get("score_count", 1))
-            avg_loser = ab.metrics_b.get("score", 0) / max(1, ab.metrics_b.get("score_count", 1)) if winner == ab.version_a else ab.metrics_a.get("score", 0) / max(1, ab.metrics_a.get("score_count", 1))
-
-            if avg_winner < self.config.min_score_threshold:
-                # New model doesn't meet minimum; rollback
-                if self.config.auto_rollback:
-                    # Re-promote the loser
-                    self.registry.promote(loser_id)
-                    self.state["last_rollback"] = time.time()
-                    self._save_state()
-                    self.alerts.fire("warning", "auto_promote",
-                                    f"New model {winner} below threshold ({avg_winner:.3f}); rolled back to {loser_id}")
-                    result = {"action": "rollback", "details": f"Promoted {loser_id} (winner {winner} below threshold)"}
-                else:
-                    result = {"action": "promoted_with_warning", "details": f"Promoted {winner} (below threshold)"}
-            elif avg_loser > 0 and (avg_loser - avg_winner) > self.config.max_regression:
-                # Regression detected
-                if self.config.auto_rollback:
-                    self.registry.promote(loser_id)
-                    self.state["last_rollback"] = time.time()
-                    self._save_state()
-                    self.alerts.fire("warning", "auto_promote",
-                                    f"Regression detected: {winner} ({avg_winner:.3f}) < {loser_id} ({avg_loser:.3f})")
-                    result = {"action": "rollback", "details": f"Rolled back to {loser_id}"}
-                else:
-                    result = {"action": "promoted_with_regression", "details": f"Promoted {winner} despite regression"}
-            else:
-                result = {"action": "promoted", "details": f"Promoted {winner} (score: {avg_winner:.3f})"}
-                self.alerts.fire("info", "auto_promote", f"Model promoted: {winner} (score: {avg_winner:.3f})")
-
-        return result
+        if winner != ab.version_b:
+            return {"action": "hold", "details": "incumbent outperformed candidate"}
+        if avg_b < self.config.min_score_threshold:
+            return {"action": "hold", "details": "candidate below minimum score"}
+        if avg_a - avg_b > self.config.max_regression:
+            return {"action": "hold", "details": "candidate exceeds regression budget"}
+        # Quality success is still NOT a deployment or credential grant.
+        return {"action": "ready_for_review",
+                "details": f"Candidate {winner} passed offline scores; manual release decision required"}
 
     def status(self) -> dict:
         """Get auto-promotion status."""
@@ -223,6 +216,8 @@ def main(argv=None) -> int:
         result = promoter.check_promotion()
         print(f"[promote] Action: {result['action']}")
         print(f"[promote] Details: {result['details']}")
+        if result["action"] in ("hold", "ready_for_review"):
+            return 78
     elif args.status:
         print(json.dumps(promoter.status(), indent=2, default=str))
     else:
