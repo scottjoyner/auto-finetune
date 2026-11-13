@@ -58,3 +58,36 @@ protected checkpoint restore requirements, or R9700 RAM/swap/GTT thresholds.
 
 Rollback: no running services altered. Close the draft and discard its
 isolated worktree if the safety review rejects the patch.
+
+## Neo4j credential source removal — 2026-11-13 follow-up
+
+The real-time incremental Neo4j extractor previously embedded a literal
+connection password in its source. The updated workflow **never** hardcodes
+that credential: operators must supply NEO4J_TRACES_PASSWORD through an
+approved runtime secret injection mechanism, without putting it in source
+code, shell history, command arguments, issue comments, CI logs, or new
+artifacts. No password value is included in this document.
+
+If the variable is unset or empty, the extractor marks a
+neo4j_traces_credential_unavailable HOLD, persists that generic reason,
+does not launch a Neo4j child, and does not advance dataset progress.
+The one-shot CLI now returns exit **78** on extraction HOLD, and nonzero for
+failed cleaning/formatting. This prevents a scheduled retrainer from
+misreporting a failed incremental extract as successful work.
+
+When present, the secret remains in the inherited environment. The
+orchestrator does not copy it into subprocess overrides or any argv.
+Child stdout, stderr and Python exception messages are redacted **before**
+logging or truncation; related tests use only synthetic fake strings.
+
+**Important security boundary:** Removing the literal from current source
+does **not** erase it from Git history, deployed worktrees, backups, or
+existing log copies. The owning Neo4j administrator must independently
+determine whether this credential is still active, rotate/revoke it if so,
+and distribute a newly scoped secret via the approved manager. Rotation
+and live service configuration require a separate authorized operation.
+This draft does not establish that any connection succeeds; do not deploy
+without owner-approved secret provisioning and admission review.
+
+No real network/Neo4j connection, extraction, credential rotation, training
+or production configuration change was made during this patch.
