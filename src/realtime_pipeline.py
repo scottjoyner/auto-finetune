@@ -91,11 +91,22 @@ class RealtimePipeline:
                 cmd, capture_output=True, text=True,
                 timeout=timeout, cwd=self.repo, env=env,
             )
-            return result.returncode, (result.stdout + result.stderr)[-2000:]
+            output = result.stdout + result.stderr
+            # Child diagnostics must not leak inherited credentials to logs,
+            # alerting, or stored status. Redact before truncation.
+            for key in ("NEO4J_TRACES_PASSWORD",):
+                secret = env.get(key)
+                if secret:
+                    output = output.replace(secret, "[REDACTED]")
+            return result.returncode, output[-2000:]
         except subprocess.TimeoutExpired:
             return 1, "timeout"
         except Exception as e:
-            return 1, str(e)
+            detail = str(e)
+            secret = os.environ.get("NEO4J_TRACES_PASSWORD")
+            if secret:
+                detail = detail.replace(secret, "[REDACTED]")
+            return 1, detail[-2000:]
 
     def _count_raw_files(self) -> int:
         """Count raw JSON files."""
@@ -141,12 +152,18 @@ class RealtimePipeline:
         self._save_state()
         print("[pipeline] Phase: extraction")
 
-        # Neo4j traces (incremental)
+        # The credential is supplied at runtime through the inherited
+        # environment, never embedded in source or command arguments.
+        # A missing secret is a HOLD, not a successful zero-row extraction.
+        if not os.environ.get("NEO4J_TRACES_PASSWORD"):
+            self.state.last_error = "neo4j_traces_credential_unavailable"
+            self._save_state()
+            print("[pipeline] Extraction HOLD: neo4j_traces_credential_unavailable")
+            return False
         rc, out = self._run_cmd(
             [sys.executable, "-m", "src.cli", "neo4j-traces", "--incremental"],
             timeout=300,
-            extra_env={"NEO4J_TRACES_PASSWORD": "Pg5EajbfcuPYbhGSO2uBOv30",
-                      "ROCM_PATH": "/opt/rocm"},
+            extra_env={"ROCM_PATH": "/opt/rocm"},
         )
         if rc != 0:
             print(f"[pipeline] Extraction failed: {out[-500:]}")
@@ -372,6 +389,12 @@ def main(argv=None) -> int:
     else:
         results = pipeline.run_once()
         print(json.dumps(results, indent=2, default=str))
+        # The scheduler uses exit status as its success receipt: an extraction
+        # HOLD or failed ETL stage must never be recorded as a successful run.
+        if not results.get("extraction"):
+            return 78
+        if not results.get("cleaning") or not results.get("formatting"):
+            return 1
     return 0
 
 
