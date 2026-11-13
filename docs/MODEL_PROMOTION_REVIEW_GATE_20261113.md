@@ -44,3 +44,34 @@ Do not merge, deploy or retarget model traffic without independent review,
 exact-head hosted tests, the unchanged 69% coverage floor, approved dataset/
 checkpoint custody, an operator decision record, and validated production
 GPU ownership. Preserve xwing HOLD exit 78 and Joyner memory/GTT holds.
+
+## Feedback, cost, sampling and export custody expansion (2026-11-13)
+
+This is still source-only and stacked on draft PR #108. No source change here
+is an operator authorization or a production deployment.
+
+- Feedback admission rejects nonfinite or out-of-range scores, makes issue
+  classification idempotent across repeated analysis, and returns distinct
+  flagged session IDs rather than raw record objects. Scores and corrections
+  in tests are synthetic only. Real feedback records remain private.
+- Cost history now returns the most recent N observations, not the oldest N
+  from a descending sort. Ledger writes use the existing atomic JSON writer
+  rather than truncating the live file before rewriting.
+- Bucket balancing uses a local deterministic generator (not process-global
+  random.seed), rejects invalid weights/capacity, and refuses to claim success
+  if selected session records are absent or the selected dataset is empty.
+  Tests only create data under a disposable temporary directory.
+- Model exports deny overwrite when output or GGUF merge-staging paths already
+  exist. Synthetic fake model/PEFT/Torch/converter modules test the export
+  branches without reading model weights, allocating GPUs or invoking a real
+  conversion process. Existing output contents are preserved.
+
+The dedicated offline Model A/B review workflow now exercises model
+promotion, registry, feedback quality, cost ledger custody, bucket
+balancing and model export safety with no attached credentials.
+
+A/B winners still require independent review. Direct explicit registry
+promotion still exists and needs an operator decision record in the
+deployment process; this branch does not implement cryptographic approval.
+The full suite remains subject to unchanged 69% coverage and every
+existing production/credential/recovery/lease gate.
