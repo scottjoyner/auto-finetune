@@ -75,3 +75,34 @@ promotion still exists and needs an operator decision record in the
 deployment process; this branch does not implement cryptographic approval.
 The full suite remains subject to unchanged 69% coverage and every
 existing production/credential/recovery/lease gate.
+
+## Atomic bucket publication and strict data-quality custody (2026-11-13)
+
+This draft adds a distinct fail-closed acceptance boundary between synthetic
+training records and any derived dataset artifacts. No live input, production
+checkpoint, model process, credential, or node configuration was altered.
+
+- Per-tool bucket export validates all source JSONL records before creating
+  output; rejects malformed/empty records, dangerous tool names that would
+  become filenames, missing source, empty datasets and invalid min bucket size.
+- Bucket output is staged on the destination filesystem and published only
+  after every file and manifest is written. Existing output/symlinks are not
+  overwritten. On staged write failure the private staging directory is
+  cleaned; no partial published manifest appears.
+- Data-quality input no longer silently skips malformed JSONL: any invalid
+  record holds the entire stage. Quality output cannot overwrite a prior
+  artifact; a temporary file and no-clobber hard link protect complete
+  publication. Missing/empty input, invalid threshold, no passing records,
+  occupied destination or filesystem errors are HOLD.
+- Real-time cleaning no longer treats failed quality validation as a skipped
+  optional check. A failed gate or more than half the sessions failing quality
+  blocks progression to formatting or training. Runtime errors record a
+  generic status without leaking input content or credentials.
+- The separate offline GitHub policy workflow exercises actual temporary
+  files, malformed records, symlink/overwrite denial, stage cleanup and
+  fake pipeline continuation. It never calls Neo4j, LFM3, physical GPUs,
+  production keyfiles or deployed services.
+
+The full 69% repository coverage requirement and all xwing/Joyner
+recovery, GPU ownership, credential and operator promotion holds remain.
+Passing local tests alone is not permission to deploy.

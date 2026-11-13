@@ -214,8 +214,12 @@ class RealtimePipeline:
             if qresult["failed"] > qresult["total"] * 0.5:
                 am.fire("warning", "quality_gate",
                         f"High failure rate: {qresult['failed']}/{qresult['total']}")
-        except Exception as e:
-            print(f"[pipeline] Quality gate skipped: {e}")
+                self.state.last_error = "quality_gate_failure_rate"
+                return False
+        except Exception:
+            self.state.last_error = "quality_gate_unavailable"
+            print("[pipeline] HOLD: quality gate unavailable")
+            return False
 
         return True
 
