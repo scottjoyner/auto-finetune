@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import math
 import os
 import random
 from collections import Counter, defaultdict
@@ -101,10 +102,13 @@ def balance_buckets(
     Returns:
         dict of bucket -> list of session_ids to include
     """
+    if not isinstance(target_size, int) or target_size <= 0:
+        raise ValueError("invalid_balance_target")
     if weights is None:
         weights = BUCKET_WEIGHTS
 
-    random.seed(seed)
+    # Local RNG: balancing must not perturb global training/evaluation seeds.
+    rng = random.Random(seed)
 
     # Group sessions by bucket
     bucket_sessions: dict[str, list[str]] = defaultdict(list)
@@ -119,7 +123,11 @@ def balance_buckets(
 
     # Compute weighted sizes
     balanced: dict[str, list[str]] = {}
-    total_weight = sum(weights.get(b, 1.0) for b in bucket_sessions)
+    used_weights = [weights.get(b, 1.0) for b in bucket_sessions]
+    if not all(isinstance(w, (int, float)) and math.isfinite(w) and w > 0
+               for w in used_weights):
+        raise ValueError("invalid_bucket_weights")
+    total_weight = sum(used_weights)
 
     for bucket, sessions in bucket_sessions.items():
         weight = weights.get(bucket, 1.0)
@@ -132,7 +140,7 @@ def balance_buckets(
         if bucket_target >= len(sessions):
             balanced[bucket] = sessions.copy()
         else:
-            balanced[bucket] = random.sample(sessions, bucket_target)
+            balanced[bucket] = rng.sample(sessions, bucket_target)
 
     return balanced
 
@@ -143,6 +151,9 @@ def write_balanced_dataset(
     output_path: str,
 ) -> dict:
     """Write balanced dataset to JSONL."""
+    selected = {sid for sids in balanced.values() for sid in sids}
+    if not selected.issubset(sessions):
+        raise ValueError("selected_session_records_unavailable")
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
     stats = {"total": 0, "by_bucket": {}}
@@ -180,14 +191,27 @@ def main(cfg: Config, label: str | None = None, cap: int = 500,
     print(f"[auto-balance] buckets: {stats['by_bucket']}")
 
     # Balance
-    balanced = balance_buckets(bucket_map, target_size=cap, seed=seed)
+    try:
+        balanced = balance_buckets(bucket_map, target_size=cap, seed=seed)
+    except ValueError as exc:
+        print(f"[auto-balance] HOLD: {exc}")
+        return 78
     total_sampled = sum(len(sids) for sids in balanced.values())
+    if total_sampled == 0:
+        print("[auto-balance] HOLD: no eligible session samples")
+        return 78
     print(f"[auto-balance] sampled {total_sampled} sessions across {len(balanced)} buckets")
     for bucket, sids in sorted(balanced.items(), key=lambda x: -len(x[1])):
         print(f"  {bucket}: {len(sids)}")
 
     # Load sessions
     sessions = load_sessions(cleaned_dir)
+    required = {sid for sids in balanced.values() for sid in sids}
+    if not required.issubset(sessions):
+        # Never publish an apparently successful but incomplete dataset.
+        # Avoid disclosing session IDs in routine logs.
+        print("[auto-balance] HOLD: selected session records unavailable")
+        return 78
 
     # Write output
     if out_dir is None:

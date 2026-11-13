@@ -37,6 +37,9 @@ def export_merged(checkpoint_path: str, output_path: str,
     result = ExportResult(format="merged", output_path=output_path)
     start = time.time()
     try:
+        if os.path.lexists(output_path):
+            result.error = "export output already exists; overwrite denied"
+            return result
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from peft import PeftModel
         import torch
@@ -79,6 +82,10 @@ def export_gguf(checkpoint_path: str, output_path: str,
     result = ExportResult(format=f"gguf-{quantize}", output_path=output_path)
     start = time.time()
     try:
+        merged_dir = output_path + ".merged"
+        if os.path.lexists(output_path) or os.path.lexists(merged_dir):
+            result.error = "export output or merge staging already exists; overwrite denied"
+            return result
         # Check for llama.cpp conversion script
         convert_script = None
         for path in ["/usr/local/bin/convert_hf_to_gguf.py",
@@ -94,8 +101,7 @@ def export_gguf(checkpoint_path: str, output_path: str,
 
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-        # First merge if needed
-        merged_dir = output_path + ".merged"
+        # First merge if needed; this private staging directory was absent.
         merge_result = export_merged(checkpoint_path, merged_dir)
         if not merge_result.success:
             result.error = f"Merge failed: {merge_result.error}"
@@ -130,6 +136,9 @@ def export_onnx(checkpoint_path: str, output_path: str,
     result = ExportResult(format="onnx", output_path=output_path)
     start = time.time()
     try:
+        if os.path.lexists(output_path):
+            result.error = "export output already exists; overwrite denied"
+            return result
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from peft import PeftModel

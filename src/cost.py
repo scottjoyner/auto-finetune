@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass
 
 from src import flags
 from src.config import Config
+from src.locking import atomic_write_json
 
 COSTS_FILE = "cost-tracking.json"
 
@@ -60,8 +61,8 @@ class CostTracker:
     def _save(self):
         os.makedirs(os.path.dirname(self.costs_path), exist_ok=True)
         data = [asdict(e) for e in self.entries]
-        with open(self.costs_path, "w") as f:
-            json.dump(data, f, indent=2)
+        # A truncated cost ledger must never become an apparent empty history.
+        atomic_write_json(self.costs_path, data)
 
     def record(self, **kwargs) -> CostEntry:
         """Record a new cost entry."""
@@ -84,7 +85,8 @@ class CostTracker:
         entries = self.entries
         if label:
             entries = [e for e in entries if e.label == label]
-        return sorted(entries, key=lambda e: -e.timestamp)[-limit:]
+        # Most recent first; tail slicing had returned the OLDEST N entries.
+        return sorted(entries, key=lambda e: e.timestamp, reverse=True)[:limit]
 
     def get_summary(self, label: str | None = None) -> dict:
         """Get summary statistics."""
