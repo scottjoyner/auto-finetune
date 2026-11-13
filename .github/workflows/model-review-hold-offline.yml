@@ -23,7 +23,10 @@ jobs:
       - name: Static admission and manual-promotion compilation
         run: |
           python -m py_compile src/auto_promote.py src/model_registry.py
+          python -m py_compile src/feedback_loop.py src/cost.py src/auto_balance.py src/model_export.py
           python -m py_compile tests/test_promotion_requires_review.py tests/test_registry_promotion_custody.py
+          python -m py_compile tests/test_feedback_quality_custody.py tests/test_cost_ledger_custody.py
+          python -m py_compile tests/test_auto_balance_custody.py tests/test_model_export_custody.py
       - name: Verify A/B result is NOT a production model cutover
         env:
           AF_SKIP_UNMANAGED_CHECK: "1"
@@ -31,4 +34,8 @@ jobs:
         run: |
           python -m pytest -q -o addopts= -p no:cacheprovider \
             tests/test_promotion_requires_review.py \
-            tests/test_registry_promotion_custody.py
+            tests/test_registry_promotion_custody.py \
+            tests/test_feedback_quality_custody.py \
+            tests/test_cost_ledger_custody.py \
+            tests/test_auto_balance_custody.py \
+            tests/test_model_export_custody.py
