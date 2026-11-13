@@ -91,3 +91,30 @@ without owner-approved secret provisioning and admission review.
 
 No real network/Neo4j connection, extraction, credential rotation, training
 or production configuration change was made during this patch.
+
+## Read-only freshness and VRAM availability admission — 2026-11-13
+
+**Candidate source change only.** No trainer starts, allocation, service,
+node configuration, or GPU process changes.
+
+- Data freshness now treats a missing required raw/cleaned/dataset stage
+  (reported as infinite age) as CRITICAL instead of filtering it out and
+  misclassifying a partially populated pipeline as fresh.
+- An unavailable durable freshness receipt is CRITICAL, not a silent success:
+  downstream retraining policy must not proceed without an auditable witness.
+- VRAM discovery no longer invents a default 15 GiB total / 8 GiB free or
+  assumes 80% free when only a Torch device exists. ROCm/NVIDIA readings are
+  validated for nonnegative, finite, consistent totals. Torch uses actual
+  mem_get_info when available. If no trustworthy reading is available,
+  discovery reports (0, 0).
+- Auto-scaling declines to recommend executable parameters on missing,
+  negative or inconsistent VRAM readings, nonpositive model size, or when
+  baseline bf16 model/gradient/optimizer state plus 1 GiB of headroom does
+  not fit. The CLI reports HOLD exit 78; no prior allocated services are
+  touched. This is only an advisory heuristic, never independent permission
+  to acquire a GPU lease or authorize production training.
+
+Local synthetic tests exercise hardware-command failures, invalid metrics,
+model-scaling boundaries, persistent-report failures, missing data stages and
+temporary filesystem timestamps. No actual GPU utilities, inference HTTP,
+training sessions, Neo4j access or secrets are needed for these tests.
