@@ -85,7 +85,9 @@ def assess_freshness(cfg: Config) -> FreshnessReport:
     # Determine staleness
     ages = [report.raw_newest_age_hours, report.cleaned_newest_age_hours,
             report.dataset_newest_age_hours]
-    max_age = max(a for a in ages if a != float("inf")) if any(a != float("inf") for a in ages) else float("inf")
+    # Every required stage must have observable data. Filtering out a missing
+    # stage (+inf) incorrectly classified partially populated pipelines FRESH.
+    max_age = max(ages)
 
     if max_age < 1:
         report.overall_staleness = "fresh"
@@ -113,7 +115,10 @@ def assess_freshness(cfg: Config) -> FreshnessReport:
     try:
         atomic_write_json(report_path, asdict(report))
     except Exception:
-        pass
+        # No durable freshness witness means no training admission, even if
+        # the in-memory stage timestamps appear fresh.
+        report.overall_staleness = "critical"
+        report.recommendations.append("CRITICAL: freshness receipt unavailable; hold training")
 
     return report
 
