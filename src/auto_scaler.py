@@ -6,6 +6,7 @@ to maximize throughput while staying within VRAM limits.
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import time
@@ -42,9 +43,9 @@ def detect_vram() -> tuple[float, float]:
             data = json.loads(result.stdout)
             for key, val in data.items():
                 if isinstance(val, dict):
-                    total = val.get("VRAM Total (B)", 0) or val.get("Total VRAM", 0)
-                    used = val.get("VRAM Used (B)", 0) or val.get("Used VRAM", 0)
-                    if total:
+                    total = float(val.get("VRAM Total (B)", 0) or val.get("Total VRAM", 0))
+                    used = float(val.get("VRAM Used (B)", 0) or val.get("Used VRAM", 0))
+                    if math.isfinite(total) and math.isfinite(used) and total > 0 and 0 <= used <= total:
                         total_gb = total / (1024**3)
                         avail_gb = (total - used) / (1024**3)
                         return total_gb, avail_gb
@@ -62,7 +63,8 @@ def detect_vram() -> tuple[float, float]:
             if len(parts) >= 2:
                 total_mb = float(parts[0].strip())
                 free_mb = float(parts[1].strip())
-                return total_mb / 1024, free_mb / 1024
+                if all(math.isfinite(n) for n in (total_mb, free_mb)) and total_mb > 0 and 0 <= free_mb <= total_mb:
+                    return total_mb / 1024, free_mb / 1024
     except Exception:
         pass
 
@@ -70,14 +72,15 @@ def detect_vram() -> tuple[float, float]:
     try:
         import torch
         if torch.cuda.is_available():
-            total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            # Estimate available as 80% of total (conservative)
-            return total, total * 0.8
+            # Do not invent free capacity from a fraction of total VRAM.
+            free_b, total_b = torch.cuda.mem_get_info(0)
+            if total_b > 0 and 0 <= free_b <= total_b:
+                return total_b / (1024**3), free_b / (1024**3)
     except Exception:
         pass
 
-    # Fallback
-    return 15.0, 8.0
+    # Unknown telemetry is a resource HOLD; synthetic 15/8 GB was unsafe.
+    return 0.0, 0.0
 
 
 def recommend(available_vram_gb: float | None = None,
@@ -109,6 +112,19 @@ def recommend(available_vram_gb: float | None = None,
         if total_vram_gb is None:
             total_vram_gb = total
 
+    if (not math.isfinite(total_vram_gb) or not math.isfinite(available_vram_gb)
+            or total_vram_gb <= 0 or available_vram_gb <= 0
+            or available_vram_gb > total_vram_gb):
+        raise ValueError("measured_vram_unavailable")
+    if not math.isfinite(model_params_b) or model_params_b <= 0:
+        raise ValueError("invalid_model_size")
+    # Conservative bf16 training heuristic, NOT authorization for a GPU lease.
+    # Do not recommend an executable config when even the baseline model state
+    # and 1 GiB headroom exceed physically measured free VRAM.
+    model_mem_gb = model_params_b * 2 * 3
+    if available_vram_gb < model_mem_gb + 1:
+        raise ValueError("insufficient_vram_for_model")
+
     config = ScalingConfig(
         estimated_vram_gb=total_vram_gb,
         available_vram_gb=available_vram_gb,
@@ -123,9 +139,7 @@ def recommend(available_vram_gb: float | None = None,
         config.throughput_estimate = 2.0
         return config
 
-    # Model memory estimate (bf16): params * 2 bytes + optimizer (2x) + gradients
-    model_mem_gb = model_params_b * 2 * 3  # weights + grad + optimizer state
-
+    # model_mem_gb was checked above as an admission-independent heuristic.
     # Available for data/activations
     free_for_data = available_vram_gb - model_mem_gb - 1.0  # 1GB headroom
     if free_for_data < 0:
@@ -187,7 +201,11 @@ def main(argv=None) -> int:
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args(argv)
 
-    config = recommend(model_params_b=args.model_size, prefer_quality=args.prefer_quality)
+    try:
+        config = recommend(model_params_b=args.model_size, prefer_quality=args.prefer_quality)
+    except ValueError as exc:
+        print(f"[autoscale] HOLD: {exc}")
+        return 78
 
     if args.json:
         import json as j
