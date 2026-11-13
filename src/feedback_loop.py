@@ -10,6 +10,7 @@ and uses them to:
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 from dataclasses import asdict, dataclass, field
@@ -80,6 +81,10 @@ class FeedbackCollector:
                issues: list[str] | None = None,
                metadata: dict | None = None) -> str:
         """Record a feedback entry."""
+        # Untrusted score inputs must never influence promotion evaluation.
+        if (isinstance(score, bool) or not isinstance(score, (int, float))
+                or not math.isfinite(score) or not 0 <= score <= 1):
+            raise ValueError("feedback_score_out_of_range")
         entry_id = f"fb-{int(time.time() * 1000)}"
         entry = FeedbackEntry(
             entry_id=entry_id,
@@ -99,26 +104,26 @@ class FeedbackCollector:
         return entry_id
 
     def _detect_issues(self, entry: FeedbackEntry) -> list[str]:
-        """Auto-detect issues in an inference result."""
-        issues = list(entry.issues)
+        """Detect unique issues; repeated analysis must be idempotent."""
+        issues = list(dict.fromkeys(entry.issues))
+
+        def add_once(issue: str) -> None:
+            if issue not in issues:
+                issues.append(issue)
+
         if entry.score < 0.3:
-            issues.append("low_score")
+            add_once("low_score")
         if entry.output_text and len(entry.output_text) < 10:
-            issues.append("too_short")
+            add_once("too_short")
         if entry.output_text and len(entry.output_text) > 5000:
-            issues.append("too_long")
-        # Check for repetition
+            add_once("too_long")
         if entry.output_text:
             words = entry.output_text.split()
-            if len(words) > 10:
-                unique_ratio = len(set(words)) / len(words)
-                if unique_ratio < 0.3:
-                    issues.append("repetitive")
-        # Check for error patterns
-        error_patterns = ["error", "exception", "traceback", "failed", "cannot"]
+            if len(words) > 10 and len(set(words)) / len(words) < 0.3:
+                add_once("repetitive")
         lower = entry.output_text.lower()
-        if any(p in lower for p in error_patterns):
-            issues.append("error_in_output")
+        if any(p in lower for p in ("error", "exception", "traceback", "failed", "cannot")):
+            add_once("error_in_output")
         return issues
 
     def analyze(self) -> FeedbackSummary:
@@ -151,9 +156,12 @@ class FeedbackCollector:
         return summary
 
     def get_flagged_sessions(self) -> list[str]:
-        """Return session IDs that should be excluded from training."""
+        """Return distinct session IDs, not FeedbackEntry objects."""
         self.analyze()
-        return [s for s in self.entries if s.score < 0.3 or "error_in_output" in s.issues]
+        return list(dict.fromkeys(
+            e.session_id for e in self.entries
+            if e.score < 0.3 or "error_in_output" in e.issues
+        ))
 
     def generate_repair_pairs(self, output_path: str) -> int:
         """Generate contrastive repair pairs from feedback."""
