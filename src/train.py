@@ -18,19 +18,9 @@ import json
 import os
 import sys
 
-# Pre-import transformers.configuration_utils so it's fully loaded
-# before LFM3 config is loaded as a dynamic module
-import transformers.configuration_utils  # noqa: F401
-
+# Keep this module importable without model libraries: direct training
+# admission must run before importing Transformers or touching GPU/runtime state.
 from src.lfm3_support import patch_transformers_for_lfm3, is_lfm3_model, LFM3_MODEL_LOCAL_PATH
-
-# Debug: patch PreTrainedModel.__init__ to trace calls
-import transformers.modeling_utils as _mu
-_orig_ptm_init = _mu.PreTrainedModel.__init__
-def _patched_ptm_init(self, config, *args, **kwargs):
-    print(f"[DEBUG] PreTrainedModel.__init__ called with config type: {type(config).__name__}", file=__import__('sys').stderr)
-    return _orig_ptm_init(self, config, *args, **kwargs)
-_mu.PreTrainedModel.__init__ = _patched_ptm_init
 
 from src.config import Config
 
@@ -432,12 +422,11 @@ def _reject_held_out(data_path: str) -> str:
 
 def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: str | None = None, max_examples: int | None = None, tokenized_dir: str | None = None) -> int:
     import sys
-    print(f"[DEBUG] train.main: AF_SKIP={os.environ.get('AF_SKIP_UNMANAGED_CHECK')!r}, dry_run={dry_run}", file=sys.stderr, flush=True)
 
     # Direct callers of src.train.main bypass the src.cli dispatcher.
     # Admission MUST run before dataset scanning, tokenization or GPU load.
     # A read failure denies the work, rather than assuming free GPU capacity.
-    if not dry_run and os.environ.get("AF_SKIP_UNMANAGED_CHECK") != "1":
+    if not dry_run:
         try:
             from src.training_admission import read_live
             decision = read_live()
@@ -447,8 +436,6 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
         if not decision.allowed:
             print(f"[train-admission] HOLD: {decision.reason}", flush=True)
             return 78
-    elif not dry_run:
-        print("[train-admission] HOLD: skipped (AF_SKIP_UNMANAGED_CHECK=1)", flush=True)
 
     # Apply LFM3 transformers patches if using LFM3 model
     model_name = os.environ.get("TRAIN_MODEL_NAME")
