@@ -437,6 +437,31 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
             print(f"[train-admission] HOLD: {decision.reason}", flush=True)
             return 78
 
+    dataset_dir = os.environ.get("TRAIN_DATASET_DIR") or cfg.path("dataset_dir")
+    tokenized_dir = tokenized_dir or os.environ.get("TRAIN_TOKENIZED_DIR")
+    fn_parts = ["train"]
+    if label:
+        fn_parts.append(label)
+    if source:
+        fn_parts.append(source)
+    data_path = os.path.join(dataset_dir, ".".join(fn_parts) + ".jsonl")
+    # Last line of defence: every emit path now holds out the benchmark, but
+    # train is the only place that knows what is actually being fitted. A
+    # dataset assembled before that enforcement can still be contaminated.
+    # A real trainer must have an independently verified benchmark holdout.
+    # The historical waiver variables may still affect old diagnostics, but
+    # they CANNOT turn unverified/skipped/inactive evidence into permission to
+    # launch. A dry-run may inspect synthetic data without a GPU allocation.
+    try:
+        holdout_status = _reject_held_out(data_path)
+    except Exception:
+        print("[train] HOLD: benchmark provenance unavailable")
+        return 78
+    if holdout_status == "contaminated":
+        return 3
+    if not dry_run and holdout_status != "clean":
+        print(f"[train] HOLD: benchmark provenance {holdout_status}")
+        return 78
     # Apply LFM3 transformers patches if using LFM3 model
     model_name = os.environ.get("TRAIN_MODEL_NAME")
     if not model_name and hasattr(cfg, "get"):
@@ -457,20 +482,6 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
         import transformers.utils  # noqa: F401
         import transformers.modeling_rope_utils  # noqa: F401
 
-    dataset_dir = os.environ.get("TRAIN_DATASET_DIR") or cfg.path("dataset_dir")
-    tokenized_dir = tokenized_dir or os.environ.get("TRAIN_TOKENIZED_DIR")
-    fn_parts = ["train"]
-    if label:
-        fn_parts.append(label)
-    if source:
-        fn_parts.append(source)
-    data_path = os.path.join(dataset_dir, ".".join(fn_parts) + ".jsonl")
-    # Last line of defence: every emit path now holds out the benchmark, but
-    # train is the only place that knows what is actually being fitted. A
-    # dataset assembled before that enforcement can still be contaminated.
-    # Contaminated is never waivable; unverifiable is, via TRAIN_ALLOW_UNVERIFIED.
-    if _reject_held_out(data_path) == "contaminated":
-        return 3
     data = validate_dataset(data_path)
     if max_examples is not None and max_examples > 0:
         data = data[:max_examples]
