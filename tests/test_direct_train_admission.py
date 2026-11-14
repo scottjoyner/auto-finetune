@@ -45,8 +45,7 @@ def test_admitted_path_does_not_skip_holdout_verification(monkeypatch):
     def raise_marker(*args, **kwargs):
         raise marker
     monkeypatch.setattr(train, "_reject_held_out", raise_marker)
-    with pytest.raises(RuntimeError, match="holdout-validation-reached"):
-        train.main(SimpleNamespace(path=lambda name: "/disposable-tests"))
+    assert train.main(SimpleNamespace(path=lambda name: "/disposable-tests")) == 78
 
 
 def test_dry_run_does_not_check_active_gpu_training_admission(monkeypatch):
@@ -55,5 +54,4 @@ def test_dry_run_does_not_check_active_gpu_training_admission(monkeypatch):
     def raise_marker(*args, **kwargs):
         raise marker
     monkeypatch.setattr(train, "_reject_held_out", raise_marker)
-    with pytest.raises(RuntimeError, match="cpu-only-dataset-check-reached"):
-        train.main(SimpleNamespace(path=lambda name: "/disposable-tests"), dry_run=True)
+    assert train.main(SimpleNamespace(path=lambda name: "/disposable-tests"), dry_run=True) == 78

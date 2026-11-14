@@ -212,6 +212,9 @@ def test_main_uses_label_dataset_path(tmp_path, monkeypatch):
         return [{"messages": [{"role": "user", "content": "q"}]}]
 
     monkeypatch.setattr(T, "validate_dataset", fake_validate)
+    # Isolated path test supplies a synthetic holdout receipt; production
+    # training must independently verify its actual source provenance.
+    monkeypatch.setattr(T, "_reject_held_out", lambda path: "clean")
     monkeypatch.setattr(T, "_resolve_backend", lambda cfg: "peft")
     monkeypatch.setattr(T, "_train_peft", lambda cfg, data, tokenized_ds=None: 0)
 
