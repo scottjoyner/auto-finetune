@@ -112,3 +112,111 @@ def test_mocked_clean_holdout_status_can_reach_dataset_validation(
     monkeypatch.setattr(train, "validate_dataset", marker)
     with pytest.raises(RuntimeError, match="validation reached"):
         train.main(Cfg(tmp_path))
+
+
+def _fixture_bundle_for_native_trainer(tmp_path):
+    root = tmp_path / "input-datasets"
+    root.mkdir()
+    data = root / qb.DATA_NAME
+    data.write_text(json.dumps({"messages": [
+        {"role": "user", "content": "synthetic question"},
+        {"role": "assistant", "content": "synthetic answer"},
+    ]}) + "\n")
+    data.with_suffix(".provenance.jsonl").write_text(
+        json.dumps({"row": 0, "session_id": "synthetic-non-heldout"}) + "\n"
+    )
+    receipt = qb.publish_quality_bundle(data, root)
+    directory = qb.bundle_path(root, receipt["bundle_id"])
+    return root, directory
+
+
+def test_native_trainer_rechecks_exact_quality_receipt(tmp_path):
+    root, directory = _fixture_bundle_for_native_trainer(tmp_path)
+    native = directory / qb.DATA_NAME
+    assert train._verify_native_quality_bundle(
+        str(directory), str(native), source="neo4j-traces", label=None
+    )
+    assert not train._verify_native_quality_bundle(
+        str(directory), str(native), source="opencode", label=None
+    )
+    assert not train._verify_native_quality_bundle(
+        str(directory), str(native), source="neo4j-traces", label="other"
+    )
+    assert not train._verify_native_quality_bundle(
+        str(directory), str(directory / "train.other.jsonl"),
+        source="neo4j-traces", label=None
+    )
+
+
+@pytest.mark.parametrize("tamper", [qb.DATA_NAME, qb.PROVENANCE_NAME, qb.RECEIPT_NAME])
+def test_native_trainer_denies_changed_bundle_before_data_access(tmp_path, tamper):
+    root, directory = _fixture_bundle_for_native_trainer(tmp_path)
+    (directory / tamper).write_text("synthetic tampering")
+    with pytest.raises(ValueError):
+        train._verify_native_quality_bundle(
+            str(directory), str(directory / qb.DATA_NAME),
+            source="neo4j-traces", label=None
+        )
+
+
+def test_native_trainer_denies_source_changed_after_qa(tmp_path):
+    root, directory = _fixture_bundle_for_native_trainer(tmp_path)
+    (root / qb.DATA_NAME).write_text("new unverified data")
+    with pytest.raises(ValueError):
+        train._verify_native_quality_bundle(
+            str(directory), str(directory / qb.DATA_NAME),
+            source="neo4j-traces", label=None
+        )
+
+
+def test_native_trainer_denies_nested_fake_bundle(tmp_path):
+    directory = tmp_path / "quality-bundles" / "unexpected" / ("qb-" + "a" * 64)
+    assert not train._verify_native_quality_bundle(
+        str(directory), str(directory / qb.DATA_NAME),
+        source="neo4j-traces", label=None
+    )
+
+
+def test_direct_training_holds_on_fake_native_quality_directory(
+        tmp_path, monkeypatch):
+    fake = tmp_path / "quality-bundles" / ("qb-" + "a" * 64)
+    monkeypatch.setenv("TRAIN_DATASET_DIR", str(fake))
+    monkeypatch.setenv("TRAIN_MODEL_NAME", "synthetic/no-training-model")
+    monkeypatch.setattr(admission, "read_live",
+                        lambda: admission.Decision(True, "synthetic-admitted"))
+    monkeypatch.setattr(train, "_reject_held_out",
+                        lambda *a: pytest.fail("holdout evaluated after missing QA bundle"))
+    monkeypatch.setattr(train, "validate_dataset",
+                        lambda *a: pytest.fail("model dataset loaded without QA"))
+    assert train.main(Cfg(tmp_path), source="neo4j-traces") == 78
+
+
+def test_direct_training_holds_on_wrong_native_target(
+        tmp_path, monkeypatch):
+    root, bundle = _fixture_bundle_for_native_trainer(tmp_path)
+    monkeypatch.setenv("TRAIN_DATASET_DIR", str(bundle))
+    monkeypatch.setenv("TRAIN_MODEL_NAME", "synthetic/no-training-model")
+    monkeypatch.setattr(admission, "read_live",
+                        lambda: admission.Decision(True, "synthetic-admitted"))
+    monkeypatch.setattr(train, "_reject_held_out",
+                        lambda *a: pytest.fail("unapproved source reached holdout"))
+    assert train.main(Cfg(tmp_path), source="wrong-label") == 78
+
+
+def test_native_bundle_rechecked_after_dataset_read(tmp_path, monkeypatch):
+    root, bundle = _fixture_bundle_for_native_trainer(tmp_path)
+    monkeypatch.setenv("TRAIN_DATASET_DIR", str(bundle))
+    monkeypatch.setenv("TRAIN_MODEL_NAME", "synthetic/no-training-model")
+    monkeypatch.setattr(admission, "read_live",
+                        lambda: admission.Decision(True, "synthetic-admitted"))
+    monkeypatch.setattr(train, "_reject_held_out", lambda *a: "clean")
+    calls = []
+    def mutate_after_read(path):
+        calls.append(path)
+        (bundle / qb.DATA_NAME).write_text("changed-during-read")
+        return [{"messages": [{"role": "user", "content": "synthetic"}]}]
+    monkeypatch.setattr(train, "validate_dataset", mutate_after_read)
+    monkeypatch.setattr(train, "_resolve_backend",
+                        lambda *a: pytest.fail("model backend reached after QA mutation"))
+    assert train.main(Cfg(tmp_path), source="neo4j-traces") == 78
+    assert len(calls) == 1
