@@ -166,3 +166,26 @@ still requires its recovery/lease release decision; Joyner remains memory
 constrained. The two draft PRs still need combined review and exact merged
 commit CI. Existing production filtered outputs must not be relocated or
 deleted merely to satisfy this source-only change.
+
+## Independent trainer-boundary QA verification (Nov 13, 2026)
+
+The orchestrator's prior verified-bundle-directory check is not sufficient
+by itself: the source or symlink target might change before the separate
+trainer opens the dataset. A successful orchestrator subprocess launch is
+not independent trainer evidence.
+
+- Direct src.train.main checks any data directory inside the reserved
+  quality-bundles/ path independently, before importing a model library or
+  loading a dataset. It requires the native train.neo4j-traces.jsonl filename,
+  a matching approved source and label, and a complete integrity/quality
+  receipt bound to the current original formatted source and its provenance.
+- After dataset validation creates in-memory examples, the trainer checks
+  the same source/bundle integrity a second time before choosing a backend.
+  Broken hashes, altered JSONL/provenance, missing receipt, malformed path
+  or invalid source binding return HOLD exit 78 before model loading.
+- Quality-bundle publication and reuse refuse a symlinked quality-bundles
+  parent directory to avoid writing outside the intended dataset namespace.
+- Tests exercise only disposable paths and fake admitted decisions.
+  Runtime credential, checkpoint, weight, lease and operator approval remain
+  independent release gates. A local hash is not a signature or a statement
+  about the authority that produced the source.
