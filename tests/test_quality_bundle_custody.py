@@ -215,3 +215,26 @@ def test_receipt_publication_failure_leaves_unverifiable_bundle(tmp_path, monkey
     assert not list((dataset / "quality-bundles").glob(".qb-stage-*"))
     with pytest.raises(ValueError, match="quality_bundle_incomplete"):
         qb.publish_quality_bundle(source, dataset)
+
+
+def test_symlinked_quality_bundle_parent_denies_reuse(tmp_path):
+    dataset, source, sidecar = setup(tmp_path)
+    receipt = qb.publish_quality_bundle(source, dataset)
+    parent = dataset / "quality-bundles"
+    moved = dataset / "original-private-bundles"
+    parent.rename(moved)
+    parent.symlink_to(moved, target_is_directory=True)
+    with pytest.raises(ValueError, match="quality_bundle_missing"):
+        qb.verify_quality_bundle(dataset, receipt["bundle_id"], source)
+    with pytest.raises(ValueError, match="quality_bundle_parent_symlink"):
+        qb.publish_quality_bundle(source, dataset)
+
+
+def test_symlink_parent_denies_initial_quality_publication(tmp_path):
+    dataset, source, sidecar = setup(tmp_path)
+    outside = tmp_path / "unrelated-directory"
+    outside.mkdir()
+    (dataset / "quality-bundles").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="quality_bundle_parent_symlink"):
+        qb.publish_quality_bundle(source, dataset)
+    assert list(outside.iterdir()) == []

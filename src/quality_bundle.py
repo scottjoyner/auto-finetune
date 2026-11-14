@@ -130,7 +130,7 @@ def verify_quality_bundle(dataset_dir: str | Path, bundle_id: str,
                           source_path: str | Path) -> dict:
     """Reverify source, provenance, and receipt at each training boundary."""
     base = bundle_path(dataset_dir, bundle_id)
-    if base.is_symlink() or not base.is_dir():
+    if base.parent.is_symlink() or base.is_symlink() or not base.is_dir():
         raise ValueError("quality_bundle_missing")
     paths = [base / name for name in (DATA_NAME, PROVENANCE_NAME, RECEIPT_NAME)]
     if any(p.is_symlink() or not p.is_file() for p in paths):
@@ -174,6 +174,8 @@ def publish_quality_bundle(source_path: str | Path,
     data, provenance, receipt = _content(source, source_provenance, min_score)
     target = bundle_path(dataset_dir, receipt["bundle_id"])
     parent = target.parent
+    if parent.is_symlink():
+        raise ValueError("quality_bundle_parent_symlink")
     if target.exists() or target.is_symlink():
         verify_quality_bundle(dataset_dir, receipt["bundle_id"], source_path)
         return receipt
