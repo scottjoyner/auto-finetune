@@ -106,3 +106,63 @@ checkpoint, model process, credential, or node configuration was altered.
 The full 69% repository coverage requirement and all xwing/Joyner
 recovery, GPU ownership, credential and operator promotion holds remain.
 Passing local tests alone is not permission to deploy.
+
+## Immutable QA dataset + provenance consumer contract — 2026-11-13
+
+A read-only source trace found two separate production-invalid paths:
+
+1. The previous real-time pipeline ran quality_gate during CLEANING, before
+   the labeled formatter had written train.neo4j-traces.jsonl. A previous-cycle
+   file could be mistakenly re-evaluated as the current output.
+2. Even with a passing gate, src.cli train --source=neo4j-traces consumed the
+   unfiltered train.neo4j-traces.jsonl, not the filtered QA output. Simply
+   renaming filtered JSONL would also lose the row-aligned provenance sidecar
+   required to evaluate benchmark holdouts.
+
+This source-only draft now uses this strictly ordered chain:
+
+  extraction -> clean -> format -> publish+verify immutable QA bundle
+  -> verify QA source/receipt at should_train -> reverify at train
+  -> trainer receives TRAIN_DATASET_DIR pointing ONLY to the vetted bundle
+
+Bundle contract (schema auto-finetune.quality-bundle.v1):
+
+- An identity derived from exact source and source-provenance bytes and the
+  fixed 0.6 scoring policy determines the immutable directory name qb-<sha>.
+- The directory contains train.neo4j-traces.jsonl, the exactly aligned
+  train.neo4j-traces.provenance.jsonl, and receipt.json. Receipt contains input
+  and output SHA-256 digests, policy version, source and accepted row counts.
+- Missing, corrupt, mismatched, or untrusted provenance rejects the batch.
+  Filtering preserves each accepted example's original session_id and assigns
+  contiguous output row numbers.
+- A private stage writes and fsyncs each file. An atomic no-clobber mkdir
+  reserves the destination; receipt is published last. Partial/interrupted
+  bundles are never trusted or silently overwritten. Exact-repeat input
+  reuses a bundle only after complete byte-for-byte verification; changed
+  source creates another identifier.
+- Both the source and its provenance are rechecked at the training boundary.
+  The trainer uses native train.<source>.jsonl naming inside the exact bundle
+  directory so the standard holdout verifier sees the real sidecar.
+- The direct real trainer now denies all statuses other than an independently
+  CLEAN holdout result. Historically supported skip/unverified environment
+  variables cannot authorize an actual train even if they change the logging
+  of the diagnostic function. Dry-run is CPU-only and still rejects known
+  contamination.
+- The real-time child launcher strips legacy GPU and holdout bypass flags.
+  A missing/invalid freshness check or a changed QA artifact is HOLD.
+  The old hardcoded Qwen model override is removed; the real-time workflow
+  denies a model config not containing LFM3 and does not fabricate a registry
+  entry with a fixed checkpoint path or fake zero loss.
+- Tests use only synthetic data under temporary directories, mocked
+  subprocess results, and offline fake model identities. No model loads,
+  user data read, remote Neo4j connection, GPU changes, credential accesses
+  or production service changes were performed.
+
+IMPORTANT REMAINING RELEASE REQUIREMENTS: a model family string containing
+LFM3 is not enough to establish trusted pinned weights, exact trainer
+checkout/runtime binding, secured benchmark custody or signed output
+artifacts. A zero trainer subprocess exit is NOT checkpoint acceptance. Xwing
+still requires its recovery/lease release decision; Joyner remains memory
+constrained. The two draft PRs still need combined review and exact merged
+commit CI. Existing production filtered outputs must not be relocated or
+deleted merely to satisfy this source-only change.
