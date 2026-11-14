@@ -15,6 +15,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import shutil
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -121,55 +124,83 @@ def main() -> int:
     args = parser.parse_args()
 
     out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    input_path = Path(args.input)
+    # Never turn absent, malformed or empty input into a new empty dataset,
+    # and never silently overwrite a prior signed research receipt.
+    if (args.min_per_bucket < 1 or not input_path.is_file()
+            or out_dir.exists() or out_dir.is_symlink()):
+        print("[bucket] HOLD: invalid input/threshold or existing output")
+        return 78
 
     buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
     total = 0
+    try:
+        with input_path.open() as source:
+            for line in source:
+                if not line.strip():
+                    continue
+                ex = json.loads(line)
+                if (not isinstance(ex, dict)
+                        or not isinstance(ex.get("messages"), list)
+                        or not ex["messages"]
+                        or not all(isinstance(m, dict) for m in ex["messages"])):
+                    raise ValueError("invalid session record")
+                labels = bucket_example(ex, overlap=args.overlap)
+                for lbl in labels:
+                    # Tool names are untrusted; labels become local filenames.
+                    if not isinstance(lbl, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,80}", lbl) or ".." in lbl:
+                        raise ValueError("untrusted bucket filename")
+                    buckets[lbl].append(ex)
+                total += 1
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        print("[bucket] HOLD: input record or label invalid")
+        return 78
+    if total == 0:
+        print("[bucket] HOLD: zero valid training records")
+        return 78
 
-    with open(args.input) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            ex = json.loads(line)
-            labels = bucket_example(ex, overlap=args.overlap)
-            for lbl in labels:
-                buckets[lbl].append(ex)
-            total += 1
+    # Merge small buckets into misc, retaining the original source total.
+    small = [label for label, records in buckets.items()
+             if len(records) < args.min_per_bucket]
+    for label in small:
+        buckets["misc"].extend(buckets.pop(label))
 
-    # Merge small buckets into misc
-    small: list[str] = []
-    for lbl, exs in list(buckets.items()):
-        if len(exs) < args.min_per_bucket:
-            small.append(lbl)
-
-    for lbl in small:
-        exs = buckets.pop(lbl)
-        buckets["misc"].extend(exs)
-
-    # Write bucket files
     manifest: dict[str, Any] = {
-        "source": str(args.input),
+        "source": str(input_path),
         "total_examples": total,
         "min_per_bucket": args.min_per_bucket,
         "overlap": args.overlap,
         "buckets": {},
     }
 
-    for lbl in sorted(buckets):
-        exs = buckets[lbl]
-        bucket_path = out_dir / f"{lbl}.jsonl"
-        with open(bucket_path, "w") as f:
-            for ex in exs:
-                f.write(json.dumps(ex, ensure_ascii=False) + "\n")
-        manifest["buckets"][lbl] = {
-            "count": len(exs),
-            "file": str(bucket_path),
-        }
+    # Stage all outputs on the destination filesystem before one atomic
+    # directory rename. A failed write never publishes a partial manifest.
+    stage = None
+    try:
+        out_dir.parent.mkdir(parents=True, exist_ok=True)
+        stage = Path(tempfile.mkdtemp(prefix=".bucket-stage-", dir=out_dir.parent))
+        for label in sorted(buckets):
+            bucket_path = stage / f"{label}.jsonl"
+            with bucket_path.open("w") as output:
+                for ex in buckets[label]:
+                    output.write(json.dumps(ex, ensure_ascii=False) + "\n")
+            manifest["buckets"][label] = {
+                "count": len(buckets[label]),
+                "file": str(out_dir / f"{label}.jsonl"),
+            }
+        atomic_write_json(stage / "manifest.json", manifest)
+        if out_dir.exists() or out_dir.is_symlink():
+            raise FileExistsError("output appeared during stage")
+        stage.rename(out_dir)
+        stage = None
+    except (OSError, ValueError, TypeError):
+        print("[bucket] HOLD: atomic dataset publication unavailable")
+        return 78
+    finally:
+        if stage is not None and stage.exists():
+            shutil.rmtree(stage)
 
     manifest_path = out_dir / "manifest.json"
-    atomic_write_json(manifest_path, manifest)
-
     print(f"[bucket] total examples: {total}")
     print(f"[bucket] buckets created: {len(manifest['buckets'])}")
     print(f"[bucket] output dir: {out_dir}")

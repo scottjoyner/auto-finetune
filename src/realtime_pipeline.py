@@ -23,8 +23,7 @@ from src.locking import atomic_write_json
 from src.pipeline_health import check_pipeline, validate_synergy
 from src.alerting import AlertManager
 from src.data_freshness import assess_freshness
-from src.data_quality import quality_gate
-from src.model_registry import ModelRegistry
+from src.quality_bundle import publish_quality_bundle, verify_quality_bundle, bundle_path
 
 
 @dataclass
@@ -44,6 +43,7 @@ class PipelineState:
     runs_failed: int = 0
     current_phase: str = "idle"
     last_error: str | None = None
+    quality_bundle_id: str | None = None
     # Thresholds
     min_new_for_train: int = 50
     min_interval_train: float = 3600  # seconds between training runs
@@ -87,6 +87,7 @@ class RealtimePipeline:
             # Child trainers must never inherit legacy admission/data waivers.
             env.pop("AF_SKIP_UNMANAGED_CHECK", None)
             env.pop("TRAIN_ALLOW_UNVERIFIED", None)
+            env.pop("TRAIN_SKIP_HOLDOUT_CHECK", None)
             result = subprocess.run(
                 cmd, capture_output=True, text=True,
                 timeout=timeout, cwd=self.repo, env=env,
@@ -201,26 +202,14 @@ class RealtimePipeline:
         self.state.last_clean = time.time()
         print(f"[pipeline] Cleaned: {self.state.total_cleaned} total files")
 
-        # Quality gate: filter bad data before formatting
-        try:
-            am = AlertManager(self.cfg)
-            qresult = quality_gate(
-                self.cfg,
-                os.path.join(self.cfg.path("dataset_dir"), "train.neo4j-traces.jsonl"),
-                os.path.join(self.cfg.path("dataset_dir"), "train.neo4j-traces.filtered.jsonl"),
-            )
-            print(f"[pipeline] Quality gate: {qresult['passed']}/{qresult['total']} passed "
-                  f"(avg={qresult['avg_score']})")
-            if qresult["failed"] > qresult["total"] * 0.5:
-                am.fire("warning", "quality_gate",
-                        f"High failure rate: {qresult['failed']}/{qresult['total']}")
-        except Exception as e:
-            print(f"[pipeline] Quality gate skipped: {e}")
+        # Quality checking happens after formatting. Here we have only
+        # cleaned records; a formatted artifact from a prior cycle is stale.
 
         return True
 
     def _format(self) -> bool:
-        """Run formatting on cleaned data."""
+        """Format, then publish a separately verified immutable QA bundle."""
+        self.state.quality_bundle_id = None
         self.state.current_phase = "formatting"
         self._save_state()
         print("[pipeline] Phase: formatting")
@@ -234,13 +223,40 @@ class RealtimePipeline:
             self.state.last_error = out[-200:]
             return False
 
-        self.state.total_formatted = self._count_dataset_rows()
+        # This is the freshly formatted source, emitted by --label=neo4j-traces.
+        dataset_dir = self.cfg.path("dataset_dir")
+        source_path = os.path.join(dataset_dir, "train.neo4j-traces.jsonl")
+        try:
+            receipt = publish_quality_bundle(source_path, dataset_dir)
+            bundle_id = receipt["bundle_id"]
+            verify_quality_bundle(dataset_dir, bundle_id, source_path)
+        except (OSError, ValueError, TypeError, KeyError):
+            self.state.last_error = "quality_bundle_unavailable"
+            self._save_state()
+            print("[pipeline] HOLD: formatted quality/provenance bundle unavailable")
+            return False
+        self.state.quality_bundle_id = bundle_id
+        self.state.total_formatted = receipt["accepted_rows"]
         self.state.last_format = time.time()
-        print(f"[pipeline] Formatted: {self.state.total_formatted} total rows")
+        self._save_state()
+        print(f"[pipeline] Vetted {receipt['accepted_rows']}/{receipt['source_rows']} rows "
+              f"into immutable bundle {bundle_id[:16]}")
         return True
+
+    def _verified_bundle_dir(self) -> str:
+        dataset_dir = self.cfg.path("dataset_dir")
+        bundle_id = self.state.quality_bundle_id or ""
+        source_path = os.path.join(dataset_dir, "train.neo4j-traces.jsonl")
+        verify_quality_bundle(dataset_dir, bundle_id, source_path)
+        return str(bundle_path(dataset_dir, bundle_id))
 
     def _should_train(self) -> bool:
         """Determine if training should be triggered."""
+        try:
+            self._verified_bundle_dir()
+        except (OSError, ValueError, TypeError):
+            self.state.last_error = "quality_training_binding_unavailable"
+            return False
         # Freshness check
         try:
             report = assess_freshness(self.cfg)
@@ -251,8 +267,10 @@ class RealtimePipeline:
                 return False
             if report.recommendations:
                 print(f"[pipeline] Freshness warnings: {report.recommendations}")
-        except Exception as e:
-            print(f"[pipeline] Freshness check skipped: {e}")
+        except Exception:
+            self.state.last_error = "freshness_unavailable"
+            print("[pipeline] HOLD: freshness telemetry unavailable")
+            return False
 
         if self.state.new_since_train < self.state.min_new_for_train:
             print(f"[pipeline] Not enough new data for training: {self.state.new_since_train} < {self.state.min_new_for_train}")
@@ -264,13 +282,25 @@ class RealtimePipeline:
         return True
 
     def _train(self) -> bool:
-        """Run training on new data."""
+        """Train from exact QA artifact with row-aligned holdout provenance."""
+        try:
+            qa_dir = self._verified_bundle_dir()
+        except (OSError, ValueError, TypeError):
+            self.state.last_error = "quality_training_binding_unavailable"
+            return False
+        # This workflow is LFM3-specific; a legacy Qwen hardcode must not
+        # silently send live training to the wrong model family.
+        model_name = self.cfg.get("train", "model_name", default="")
+        if not isinstance(model_name, str) or "lfm3" not in model_name.lower():
+            self.state.last_error = "lfm3_model_identity_unapproved"
+            return False
         self.state.current_phase = "training"
         self._save_state()
         print("[pipeline] Phase: training")
 
         env = {
-            "TRAIN_MODEL_NAME": "Qwen/Qwen2.5-0.5B-Instruct",
+            "TRAIN_DATASET_DIR": qa_dir,
+            "TRAIN_MODEL_NAME": model_name,
             "TRAIN_MAX_SEQ_LENGTH": "64",
             "TRAIN_LOAD_4BIT": "0",
             "ROCM_PATH": "/opt/rocm",
@@ -288,25 +318,19 @@ class RealtimePipeline:
             self.state.runs_failed += 1
             return False
 
-        self.state.total_trained += self.state.new_since_train
+        # The subprocess receives at most 500 examples and may have fewer
+        # quality-accepted rows than the raw incremental source count.
+        self.state.total_trained += min(
+            self.state.new_since_train, 500, self.state.total_formatted,
+        )
         self.state.new_since_train = 0
         self.state.last_train = time.time()
         self.state.runs_completed += 1
 
-        # Auto-register model version
-        try:
-            registry = ModelRegistry(self.cfg)
-            vid = registry.register(
-                label=f"auto-{int(time.time())}",
-                checkpoint_path="/media/scott/data/finetune-staging/outputs/checkpoints/toolcall-v5-3b-hermes",
-                base_model="Qwen/Qwen2.5-0.5B-Instruct",
-                metrics={"loss": 0.0},
-                notes="Auto-registered by realtime pipeline",
-            )
-            print(f"[pipeline] Model registered: {vid}")
-        except Exception as e:
-            print(f"[pipeline] Model registration skipped: {e}")
-
+        # A zero subprocess exit alone is NOT checkpoint custody evidence.
+        # Do not register an invented checkpoint path, model identity or loss;
+        # separate exact-output signing / verification is needed before any
+        # registry entry or promotion can be authorized.
         print(f"[pipeline] Training complete: {self.state.total_trained} total trained")
         return True
 

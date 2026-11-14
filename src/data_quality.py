@@ -15,6 +15,8 @@ import hashlib
 import json
 import os
 import time
+import math
+import tempfile
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -231,32 +233,58 @@ def filter_quality(sessions: list[dict], min_score: float = 0.6) -> list[dict]:
     return result
 
 
+def _read_verified_sessions(input_path: str) -> list[dict]:
+    """Reject malformed records rather than silently removing source evidence."""
+    sessions: list[dict] = []
+    with open(input_path) as source:
+        for line in source:
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except (ValueError, TypeError) as exc:
+                raise ValueError("quality_input_malformed") from exc
+            if (not isinstance(row, dict)
+                    or not isinstance(row.get("messages"), list)
+                    or not all(isinstance(m, dict) for m in row["messages"])):
+                raise ValueError("quality_input_malformed")
+            sessions.append(row)
+    if not sessions:
+        raise ValueError("quality_input_empty")
+    return sessions
+
+
+def _publish_quality_output(output_path: str, sessions: list[dict]) -> None:
+    """Publish complete JSONL without overwriting an existing signed output."""
+    target = os.path.abspath(output_path)
+    if os.path.lexists(target):
+        raise ValueError("quality_output_already_exists")
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    fd, stage = tempfile.mkstemp(prefix=".quality-stage-", dir=os.path.dirname(target))
+    try:
+        with os.fdopen(fd, "w") as output:
+            for row in sessions:
+                output.write(json.dumps(row) + "\n")
+            output.flush()
+            os.fsync(output.fileno())
+        # A hard link is atomic and fails if target appeared in a race.
+        os.link(stage, target)
+    finally:
+        if os.path.lexists(stage):
+            os.unlink(stage)
+
+
 def quality_gate(cfg: Config, input_path: str, output_path: str,
                  min_score: float = 0.6) -> dict:
-    """Apply quality gate to a dataset file.
-
-    Reads sessions from input_path, scores them, writes passing ones to output_path.
-    Returns a summary dict.
-    """
-    sessions = []
-    with open(input_path) as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                try:
-                    sessions.append(json.loads(line))
-                except json.JSONDecodeError:
-                    pass
-
+    """Validate and score complete source data; never silently overwrite output."""
+    if not isinstance(min_score, (int, float)) or not math.isfinite(min_score) or not 0 <= min_score <= 1:
+        raise ValueError("quality_threshold_invalid")
+    sessions = _read_verified_sessions(input_path)
     report = assess_batch(sessions)
     passing = filter_quality(sessions, min_score)
-
-    # Write passing sessions
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    with open(output_path, "w") as f:
-        for s in passing:
-            f.write(json.dumps(s) + "\n")
-
+    if not passing:
+        raise ValueError("quality_no_passing_records")
+    _publish_quality_output(output_path, passing)
     return {
         "total": report.total,
         "passed": report.passed,
@@ -277,15 +305,14 @@ def main(argv=None) -> int:
     parser.add_argument("--report", action="store_true", help="Print detailed report")
     args = parser.parse_args(argv)
 
-    sessions = []
-    with open(args.input) as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                try:
-                    sessions.append(json.loads(line))
-                except json.JSONDecodeError:
-                    pass
+    if not math.isfinite(args.min_score) or not 0 <= args.min_score <= 1:
+        print("[quality] HOLD: invalid quality threshold")
+        return 78
+    try:
+        sessions = _read_verified_sessions(args.input)
+    except (OSError, ValueError):
+        print("[quality] HOLD: input unavailable or malformed")
+        return 78
 
     report = assess_batch(sessions)
     print(f"[quality] Total: {report.total}, Passed: {report.passed}, "
@@ -296,10 +323,14 @@ def main(argv=None) -> int:
 
     if args.output:
         passing = filter_quality(sessions, args.min_score)
-        os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
-        with open(args.output, "w") as f:
-            for s in passing:
-                f.write(json.dumps(s) + "\n")
+        if not passing:
+            print("[quality] HOLD: no passing quality records")
+            return 78
+        try:
+            _publish_quality_output(args.output, passing)
+        except (OSError, ValueError):
+            print("[quality] HOLD: output custody unavailable")
+            return 78
         print(f"[quality] Wrote {len(passing)} passing sessions to {args.output}")
 
     return 0

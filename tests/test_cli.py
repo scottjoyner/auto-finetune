@@ -68,9 +68,30 @@ def test_cli_train_error_propagates(tmp_path, monkeypatch):
     import src.cli as cli
     cfg = __import__("src.config", fromlist=["Config"]).Config(raw=raw)
     monkeypatch.setattr(cli, "load", lambda *a, **k: cfg)
-    # no train.jsonl -> TrainError -> exit code 2
+    # Isolated legacy error-dispatch test: supply a synthetic CLEAN
+    # provenance receipt so it can exercise the missing-dataset TrainError.
+    import src.train as train
+    monkeypatch.setattr(train, "_reject_held_out", lambda path: "clean")
     rc = cli_main(["cli", "train"])
     assert rc == 2
+
+
+def test_cli_train_without_provenance_is_hold(tmp_path, monkeypatch):
+    ds = tmp_path / "datasets"
+    ds.mkdir()
+    import src.cli as cli
+    import src.train as train
+    from src.config import Config, _DEFAULTS
+    raw = copy.deepcopy(_DEFAULTS)
+    raw["paths"] = {"raw_dir": str(tmp_path / "raw"),
+                    "cleaned_dir": str(tmp_path / "cleaned"),
+                    "dataset_dir": str(ds)}
+    cfg = Config(raw=raw)
+    monkeypatch.setattr(cli, "load", lambda *a, **kw: cfg)
+    monkeypatch.setattr(train, "_reject_held_out", lambda path: "unverifiable")
+    monkeypatch.setattr(train, "validate_dataset",
+                        lambda *a: (_ for _ in ()).throw(AssertionError("unexpected dataset access")))
+    assert cli_main(["cli", "train"]) == 78
 
 
 def test_cli_train_dry_run(tmp_path, monkeypatch):

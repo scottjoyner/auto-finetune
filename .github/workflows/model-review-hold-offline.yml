@@ -1,0 +1,61 @@
+name: Model A/B review gate (offline)
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  model-review-hold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact source checkout SHA
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          echo "verified checkout SHA $EXPECTED_HEAD"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install minimal offline policy dependencies
+        run: python -m pip install pytest pyyaml
+      - name: Static admission and manual-promotion compilation
+        run: |
+          python -m py_compile src/auto_promote.py src/model_registry.py
+          python -m py_compile src/feedback_loop.py src/cost.py src/auto_balance.py src/model_export.py
+          python -m py_compile src/bucket_dataset.py src/data_quality.py src/realtime_pipeline.py
+          python -m py_compile src/quality_bundle.py src/train.py
+          python -m py_compile tests/test_promotion_requires_review.py tests/test_registry_promotion_custody.py
+          python -m py_compile tests/test_feedback_quality_custody.py tests/test_cost_ledger_custody.py
+          python -m py_compile tests/test_auto_balance_custody.py tests/test_model_export_custody.py
+          python -m py_compile tests/test_bucket_dataset_atomic_custody.py tests/test_data_quality_gate_custody.py
+          python -m py_compile tests/test_realtime_quality_gate_hold.py
+          python -m py_compile tests/test_quality_bundle_custody.py tests/test_train_holdout_binding.py
+      - name: Verify A/B result is NOT a production model cutover
+        env:
+          AF_SKIP_UNMANAGED_CHECK: "1"
+          TRAIN_ALLOW_UNVERIFIED: "1"
+          TRAIN_SKIP_HOLDOUT_CHECK: "1"
+        run: |
+          python -m pytest -q -o addopts= -p no:cacheprovider \
+            tests/test_promotion_requires_review.py \
+            tests/test_registry_promotion_custody.py \
+            tests/test_feedback_quality_custody.py \
+            tests/test_cost_ledger_custody.py \
+            tests/test_auto_balance_custody.py \
+            tests/test_model_export_custody.py \
+            tests/test_bucket_dataset_atomic_custody.py \
+            tests/test_data_quality_gate_custody.py \
+            tests/test_realtime_quality_gate_hold.py \
+            tests/test_quality_bundle_custody.py \
+            tests/test_train_holdout_binding.py \
+            tests/test_direct_train_admission.py

@@ -420,6 +420,34 @@ def _reject_held_out(data_path: str) -> str:
     return "clean"
 
 
+def _verify_native_quality_bundle(dataset_dir: str, data_path: str,
+                                  source: str | None, label: str | None) -> bool:
+    """Bind an immutable QA directory to its original source before GPU work.
+
+    Ordinary datasets retain the preexisting holdout path. Any path under the
+    reserved quality-bundles directory MUST prove its full receipt; renaming a
+    filtered file or pointing it at another training source is not sufficient.
+    """
+    from pathlib import Path
+    from src.quality_bundle import DATA_NAME, bundle_path, verify_quality_bundle
+
+    directory = Path(dataset_dir)
+    if "quality-bundles" not in directory.parts:
+        return True
+    if (directory.parent.name != "quality-bundles" or source != "neo4j-traces"
+            or label is not None or directory.is_symlink()
+            or directory.parent.is_symlink()):
+        return False
+    dataset_root = directory.parent.parent
+    if directory != bundle_path(dataset_root, directory.name):
+        return False
+    if Path(data_path) != directory / DATA_NAME:
+        return False
+    receipt = verify_quality_bundle(dataset_root, directory.name,
+                                    dataset_root / DATA_NAME)
+    return receipt.get("accepted_rows", 0) > 0
+
+
 def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: str | None = None, max_examples: int | None = None, tokenized_dir: str | None = None) -> int:
     import sys
 
@@ -437,6 +465,38 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
             print(f"[train-admission] HOLD: {decision.reason}", flush=True)
             return 78
 
+    dataset_dir = os.environ.get("TRAIN_DATASET_DIR") or cfg.path("dataset_dir")
+    tokenized_dir = tokenized_dir or os.environ.get("TRAIN_TOKENIZED_DIR")
+    fn_parts = ["train"]
+    if label:
+        fn_parts.append(label)
+    if source:
+        fn_parts.append(source)
+    data_path = os.path.join(dataset_dir, ".".join(fn_parts) + ".jsonl")
+    try:
+        if not _verify_native_quality_bundle(dataset_dir, data_path, source, label):
+            print("[train] HOLD: verified quality dataset binding missing")
+            return 78
+    except (OSError, ValueError, TypeError):
+        print("[train] HOLD: verified quality dataset unavailable")
+        return 78
+    # Last line of defence: every emit path now holds out the benchmark, but
+    # train is the only place that knows what is actually being fitted. A
+    # dataset assembled before that enforcement can still be contaminated.
+    # A real trainer must have an independently verified benchmark holdout.
+    # The historical waiver variables may still affect old diagnostics, but
+    # they CANNOT turn unverified/skipped/inactive evidence into permission to
+    # launch. A dry-run may inspect synthetic data without a GPU allocation.
+    try:
+        holdout_status = _reject_held_out(data_path)
+    except Exception:
+        print("[train] HOLD: benchmark provenance unavailable")
+        return 78
+    if holdout_status == "contaminated":
+        return 3
+    if not dry_run and holdout_status != "clean":
+        print(f"[train] HOLD: benchmark provenance {holdout_status}")
+        return 78
     # Apply LFM3 transformers patches if using LFM3 model
     model_name = os.environ.get("TRAIN_MODEL_NAME")
     if not model_name and hasattr(cfg, "get"):
@@ -457,21 +517,16 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
         import transformers.utils  # noqa: F401
         import transformers.modeling_rope_utils  # noqa: F401
 
-    dataset_dir = os.environ.get("TRAIN_DATASET_DIR") or cfg.path("dataset_dir")
-    tokenized_dir = tokenized_dir or os.environ.get("TRAIN_TOKENIZED_DIR")
-    fn_parts = ["train"]
-    if label:
-        fn_parts.append(label)
-    if source:
-        fn_parts.append(source)
-    data_path = os.path.join(dataset_dir, ".".join(fn_parts) + ".jsonl")
-    # Last line of defence: every emit path now holds out the benchmark, but
-    # train is the only place that knows what is actually being fitted. A
-    # dataset assembled before that enforcement can still be contaminated.
-    # Contaminated is never waivable; unverifiable is, via TRAIN_ALLOW_UNVERIFIED.
-    if _reject_held_out(data_path) == "contaminated":
-        return 3
     data = validate_dataset(data_path)
+    # After reading the dataset, reverify that the files and source have not
+    # changed between initial admission and the in-memory training snapshot.
+    try:
+        if not _verify_native_quality_bundle(dataset_dir, data_path, source, label):
+            print("[train] HOLD: verified dataset changed after loading")
+            return 78
+    except (OSError, ValueError, TypeError):
+        print("[train] HOLD: verified dataset changed after loading")
+        return 78
     if max_examples is not None and max_examples > 0:
         data = data[:max_examples]
         print(f"[train] --max-examples={max_examples}: using first {len(data)} examples")

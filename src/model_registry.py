@@ -6,6 +6,7 @@ Stores version metadata in a JSON registry file.
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 from dataclasses import asdict, dataclass, field
@@ -141,7 +142,8 @@ class ModelRegistry:
 
     def start_ab_test(self, version_a: str, version_b: str) -> str | None:
         """Start an A/B test between two versions."""
-        if version_a not in self._versions or version_b not in self._versions:
+        if (version_a == version_b or version_a not in self._versions
+                or version_b not in self._versions):
             return None
         test_id = f"ab-{int(time.time())}"
         ab = ABTest(
@@ -153,8 +155,11 @@ class ModelRegistry:
         self._ab_tests[test_id] = ab
         self._versions[version_a].ab_test_group = test_id
         self._versions[version_b].ab_test_group = test_id
-        self._versions[version_a].status = "testing"
-        self._versions[version_b].status = "testing"
+        # Never demote the incumbent merely by opening an A/B study.
+        # Production identity remains active until a separate operator decision.
+        for version in (version_a, version_b):
+            if self._versions[version].status != "active":
+                self._versions[version].status = "testing"
         self._save()
         return test_id
 
@@ -174,28 +179,39 @@ class ModelRegistry:
         return True
 
     def complete_ab_test(self, test_id: str, metric: str = "score") -> str | None:
-        """Complete an A/B test and determine winner by metric."""
+        """Record a winning candidate only; NEVER activate/retire versions.
+
+        Completion is a research outcome, not a release decision.  Only an
+        explicit, separately authorized promotion may change active identity.
+        """
         ab = self._ab_tests.get(test_id)
         if not ab or ab.status != "running":
             return None
+        # A result without independently scored samples from BOTH arms is
+        # not a result. Do not persist a fabricated tie/winner or an invalid
+        # score from a broken importer or untrusted registry receipt.
+        count_a = ab.metrics_a.get(f"{metric}_count", 0)
+        count_b = ab.metrics_b.get(f"{metric}_count", 0)
+        score_a = ab.metrics_a.get(metric, 0)
+        score_b = ab.metrics_b.get(metric, 0)
+        if (not all(isinstance(n, int) and n > 0 for n in (count_a, count_b))
+                or not all(isinstance(n, (int, float)) and math.isfinite(n)
+                           for n in (score_a, score_b))):
+            return None
+        avg_a, avg_b = score_a / count_a, score_b / count_b
+        if not (0 <= avg_a <= 1 and 0 <= avg_b <= 1):
+            return None
         ab.end_time = time.time()
         ab.status = "completed"
-
-        # Compute average metric
-        count_a = ab.metrics_a.get(f"{metric}_count", 1)
-        count_b = ab.metrics_b.get(f"{metric}_count", 1)
-        avg_a = ab.metrics_a.get(metric, 0) / max(1, count_a)
-        avg_b = ab.metrics_b.get(metric, 0) / max(1, count_b)
-
         winner = ab.version_a if avg_a >= avg_b else ab.version_b
         ab.winner = winner
 
-        # Promote winner
-        self.promote(winner)
-        # Retire loser
-        loser = ab.version_b if winner == ab.version_a else ab.version_a
-        if loser in self._versions:
-            self._versions[loser].status = "retired"
+        # Preserve the running incumbent; concluded challenger test records
+        # return to candidate rather than becoming active/retired implicitly.
+        for version in (ab.version_a, ab.version_b):
+            mv = self._versions.get(version)
+            if mv and mv.status == "testing":
+                mv.status = "candidate"
 
         self._save()
         return winner

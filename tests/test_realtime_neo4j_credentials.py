@@ -82,6 +82,7 @@ def test_subprocess_inherits_only_runtime_secret_and_scrubs_output(monkeypatch):
     monkeypatch.setenv("NEO4J_TRACES_PASSWORD", secret)
     monkeypatch.setenv("AF_SKIP_UNMANAGED_CHECK", "1")
     monkeypatch.setenv("TRAIN_ALLOW_UNVERIFIED", "1")
+    monkeypatch.setenv("TRAIN_SKIP_HOLDOUT_CHECK", "1")
     calls = []
 
     def fake_run(command, **kwargs):
@@ -99,6 +100,7 @@ def test_subprocess_inherits_only_runtime_secret_and_scrubs_output(monkeypatch):
     assert kwargs["env"]["NEO4J_TRACES_PASSWORD"] == secret
     assert "AF_SKIP_UNMANAGED_CHECK" not in kwargs["env"]
     assert "TRAIN_ALLOW_UNVERIFIED" not in kwargs["env"]
+    assert "TRAIN_SKIP_HOLDOUT_CHECK" not in kwargs["env"]
 
 
 def test_redaction_precedes_tail_truncation(monkeypatch):
