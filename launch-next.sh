@@ -112,6 +112,10 @@ QUEUE=(
   # Ornith stays queued behind it: it will pick up automatically if bitsandbytes
   # ever ships gfx1100 kernels for the Qwen3_5 linear_attn weights.
   "mixed:ornith15-9b-sft-r1:done-ornith15b-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/Ornith-1.5-9B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=1:MERGE=1"
+  # LFM3-1.7B SFT on the same held-out-excluded mixed corpus. bf16 (no 4-bit;
+  # 1.7B fits on 15GB VRAM). Runs after ornith; blocked by training_admission
+  # until the recovery latch is promoted and GPU headroom is available.
+  "mixed:lfm3-1.7b-sft-r1:done-lfm3-sft-r1:TRAIN_MODEL_NAME=/media/scott/data/finetune-staging/models/LFM3-1.7B,TRAIN_MAX_SEQ_LENGTH=4096,TRAIN_LOAD_4BIT=0:MERGE=1"
   # comparison-only (low priority) — uncomment to include
   # "nas5-old-broken:toolcall-v5-3b-nas5-old-broken:done-nas5-old-broken"
   # "nas5-recover-old:toolcall-v5-3b-nas5-recover-old:done-nas5-recover-old"
