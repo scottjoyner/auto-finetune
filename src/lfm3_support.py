@@ -63,6 +63,11 @@ def patch_transformers_for_lfm3() -> None:
                 ) | {"partial_rotary_factor"}
 
         self.standardize_rope_params()
+        # Drop None (non-RoPE, e.g. conv) entries so downstream model code
+        # that intersects layer_types with rope_parameters keys never sees None.
+        rp = getattr(self, "rope_parameters", None)
+        if isinstance(rp, dict):
+            self.rope_parameters = {k: v for k, v in rp.items() if v is not None}
         return kwargs
 
     RotaryEmbeddingConfigMixin.convert_rope_params_to_dict = patched_convert
@@ -80,6 +85,11 @@ def patch_transformers_for_lfm3() -> None:
             if layer_types is not None and missing_key in layer_types:
                 self.rope_parameters[missing_key] = None
                 original_std(self)
+        # Drop None (non-RoPE, e.g. conv) entries so downstream model code
+        # that intersects layer_types with rope_parameters keys never sees None.
+        rp = getattr(self, "rope_parameters", None)
+        if isinstance(rp, dict):
+            self.rope_parameters = {k: v for k, v in rp.items() if v is not None}
 
     RotaryEmbeddingConfigMixin.standardize_rope_params = patched_std
 
