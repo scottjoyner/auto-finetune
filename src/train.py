@@ -200,7 +200,18 @@ def _train_peft(cfg: Config, data: list[dict],
             pad_token="<|pad|>",
         )
     if is_lfm3_model(model_name):
-        tokenizer.chat_template = "{% for message in messages %}{% if message['role'] == 'system' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% elif message['role'] == 'user' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% elif message['role'] == 'assistant' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% endif %}{% endfor %}"
+        _ct_path = None
+        for _base in (model_name, LFM3_MODEL_LOCAL_PATH):
+            _cand = os.path.join(_base, "chat_template.jinja")
+            if os.path.isfile(_cand):
+                _ct_path = _cand
+                break
+        if _ct_path:
+            with open(_ct_path, encoding="utf-8") as _f:
+                tokenizer.chat_template = _f.read()
+        else:
+            tokenizer.chat_template = "{% for message in messages %}{% if message['role'] == 'system' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% elif message['role'] == 'user' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% elif message['role'] == 'assistant' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% endif %}{% endfor %}"
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
