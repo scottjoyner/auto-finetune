@@ -131,6 +131,10 @@ def quantize_gptq(
         from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
         from transformers import AutoTokenizer
 
+        from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+        if is_lfm3_model(model_path):
+            patch_transformers_for_lfm3()
+
         print(f"[quantize] loading model: {model_path}")
         tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
