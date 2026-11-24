@@ -56,12 +56,17 @@ def binarize_mix(src_jsonl: str, out_dir: str, model_name: str,
     """Load JSONL rows, tokenize with the real model tokenizer, save to Arrow."""
     from transformers import AutoTokenizer
 
+    from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+
     if not os.path.exists(src_jsonl):
         raise FileNotFoundError(f"source mix not found: {src_jsonl}")
     rows = load_dataset(src_jsonl)
     if not rows:
         raise ValueError(f"source mix is empty: {src_jsonl}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    _lfm3 = is_lfm3_model(model_name)
+    if _lfm3:
+        patch_transformers_for_lfm3()
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=_lfm3)
     ds = binarize(rows, tokenizer, max_seq)
     os.makedirs(out_dir, exist_ok=True)
     ds.save_to_disk(out_dir)
