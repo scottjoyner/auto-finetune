@@ -393,15 +393,20 @@ class LocalDriver(ModelDriver):
             return
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
-        self._tok = AutoTokenizer.from_pretrained(self.model_path)
+        from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+        _lfm3 = is_lfm3_model(self.model_path)
+        if _lfm3:
+            patch_transformers_for_lfm3()
+        self._tok = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=_lfm3)
         if self.rocm:
-            # Load on CPU first, then move to GPU — avoids device_map="auto" hangs on ROCm
             self._model = AutoModelForCausalLM.from_pretrained(
-                self.model_path, torch_dtype=torch.bfloat16, device_map=None)
+                self.model_path, torch_dtype=torch.bfloat16, device_map=None,
+                trust_remote_code=_lfm3)
             self._model = self._model.to("cuda")
         else:
             self._model = AutoModelForCausalLM.from_pretrained(
-                self.model_path, torch_dtype="auto", device_map="cpu")
+                self.model_path, torch_dtype="auto", device_map="cpu",
+                trust_remote_code=_lfm3)
 
     def generate(self, messages: list[dict], max_new_tokens: int = 512) -> str:
         self._load()
