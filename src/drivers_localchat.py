@@ -118,10 +118,17 @@ class LocalChatDriver(ModelDriver):
         if self._model is not None:
             return
         from transformers import AutoModelForCausalLM, AutoTokenizer
+        from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+        _lfm3 = is_lfm3_model(self.model_path)
+        if _lfm3:
+            patch_transformers_for_lfm3()
         dev = {"device_map": "auto"} if self.rocm else {"device_map": "cpu"}
         self._model = AutoModelForCausalLM.from_pretrained(self.model_path,
-                                                          torch_dtype="auto", **dev)
-        self._tok = AutoTokenizer.from_pretrained(self.model_path)
+                                                          torch_dtype="auto",
+                                                          trust_remote_code=_lfm3,
+                                                          **dev)
+        self._tok = AutoTokenizer.from_pretrained(self.model_path,
+                                                  trust_remote_code=_lfm3)
 
     def generate(self, messages: list[dict], max_new_tokens: int = 512) -> str:
         self._load()
