@@ -285,6 +285,8 @@ def load_model_and_tokenizer(model_path: str, base_model: str, rocm: bool = Fals
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
+    from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+
     is_adapter = (Path(model_path) / "adapter_config.json").exists()
     resolved_base = base_model
     if is_adapter:
@@ -296,7 +298,11 @@ def load_model_and_tokenizer(model_path: str, base_model: str, rocm: bool = Fals
         except (OSError, json.JSONDecodeError):
             pass
 
-    tok = AutoTokenizer.from_pretrained(resolved_base)
+    _lfm3 = is_lfm3_model(resolved_base)
+    if _lfm3:
+        patch_transformers_for_lfm3()
+
+    tok = AutoTokenizer.from_pretrained(resolved_base, trust_remote_code=_lfm3)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
@@ -305,6 +311,7 @@ def load_model_and_tokenizer(model_path: str, base_model: str, rocm: bool = Fals
         torch_dtype=torch.bfloat16 if rocm else torch.float16,
         attn_implementation="sdpa",
         device_map=None,
+        trust_remote_code=_lfm3,
     )
     if is_adapter:
         from peft import PeftModel
