@@ -48,10 +48,12 @@ def export_merged(checkpoint_path: str, output_path: str,
         os.makedirs(output_path, exist_ok=True)
 
         # Load base model
+        _trust = is_lfm3_model(base_model)
         model = AutoModelForCausalLM.from_pretrained(
             base_model, torch_dtype=torch.bfloat16, device_map="cpu",
+            trust_remote_code=_trust,
         )
-        tokenizer = AutoTokenizer.from_pretrained(base_model)
+        tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=_trust)
 
         # Load and merge adapter
         model = PeftModel.from_pretrained(model, checkpoint_path)
@@ -141,12 +143,14 @@ def export_onnx(checkpoint_path: str, output_path: str,
         os.makedirs(output_path, exist_ok=True)
 
         # Load and merge
+        _trust = is_lfm3_model(base_model)
         model = AutoModelForCausalLM.from_pretrained(
             base_model, torch_dtype=torch.bfloat16, device_map="cpu",
+            trust_remote_code=_trust,
         )
         model = PeftModel.from_pretrained(model, checkpoint_path)
         model = model.merge_and_unload()
-        tokenizer = AutoTokenizer.from_pretrained(base_model)
+        tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=_trust)
 
         # Export to ONNX
         dummy_input = tokenizer("Hello", return_tensors="pt")
