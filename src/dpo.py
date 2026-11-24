@@ -75,7 +75,12 @@ def train_dpo(cfg, pairs: list[dict], model_name: str,
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from trl import DPOTrainer
 
-    tok = AutoTokenizer.from_pretrained(model_name)
+    from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+    _lfm3 = is_lfm3_model(model_name)
+    if _lfm3:
+        patch_transformers_for_lfm3()
+
+    tok = AutoTokenizer.from_pretrained(model_name, trust_remote_code=_lfm3)
     if tok.pad_token_id is None:
         tok.pad_token = tok.eos_token
     dataset = load_dpo_dataset(tok, pairs)
@@ -86,7 +91,8 @@ def train_dpo(cfg, pairs: list[dict], model_name: str,
         return 0
 
     model = AutoModelForCausalLM.from_pretrained(
-        model_name, torch_dtype="auto", device_map="auto")
+        model_name, torch_dtype="auto", device_map="auto",
+        trust_remote_code=_lfm3)
     peft_cfg = LoraConfig(
         r=cfg.get("train", "lora_r", default=16),
         lora_alpha=cfg.get("train", "lora_alpha", default=32),
