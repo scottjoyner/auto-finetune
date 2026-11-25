@@ -10,8 +10,10 @@ and uses them to:
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
+import uuid
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -80,7 +82,11 @@ class FeedbackCollector:
                issues: list[str] | None = None,
                metadata: dict | None = None) -> str:
         """Record a feedback entry."""
-        entry_id = f"fb-{int(time.time() * 1000)}"
+        # Reject poisoning and invalid scores before any private prompt text
+        # is appended to a feedback file or propagated into A/B evaluation.
+        if type(score) not in (int, float) or not math.isfinite(score) or not 0 <= score <= 1:
+            raise ValueError("feedback_score_must_be_finite_fraction")
+        entry_id = f"fb-{uuid.uuid4().hex}"
         entry = FeedbackEntry(
             entry_id=entry_id,
             session_id=session_id,
@@ -119,7 +125,9 @@ class FeedbackCollector:
         lower = entry.output_text.lower()
         if any(p in lower for p in error_patterns):
             issues.append("error_in_output")
-        return issues
+        # analyze() is repeatable: do not multiply automatic issue labels
+        # whenever someone refreshes the dashboard or reads a summary.
+        return list(dict.fromkeys(issues))
 
     def analyze(self) -> FeedbackSummary:
         """Analyze all feedback and return summary."""
@@ -153,7 +161,10 @@ class FeedbackCollector:
     def get_flagged_sessions(self) -> list[str]:
         """Return session IDs that should be excluded from training."""
         self.analyze()
-        return [s for s in self.entries if s.score < 0.3 or "error_in_output" in s.issues]
+        return list(dict.fromkeys(
+            entry.session_id for entry in self.entries
+            if entry.score < 0.3 or "error_in_output" in entry.issues
+        ))
 
     def generate_repair_pairs(self, output_path: str) -> int:
         """Generate contrastive repair pairs from feedback."""
