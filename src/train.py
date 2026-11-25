@@ -18,19 +18,23 @@ import json
 import os
 import sys
 
-# Pre-import transformers.configuration_utils so it's fully loaded
-# before LFM3 config is loaded as a dynamic module
-import transformers.configuration_utils  # noqa: F401
-
+# These imports have to remain lightweight: admission denial must be possible
+# even on a host without torch/transformers. Import the full model stack
+# only after the training admission gate has approved a real training run.
 from src.lfm3_support import patch_transformers_for_lfm3, is_lfm3_model, LFM3_MODEL_LOCAL_PATH
 
-# Debug: patch PreTrainedModel.__init__ to trace calls
-import transformers.modeling_utils as _mu
-_orig_ptm_init = _mu.PreTrainedModel.__init__
-def _patched_ptm_init(self, config, *args, **kwargs):
-    print(f"[DEBUG] PreTrainedModel.__init__ called with config type: {type(config).__name__}", file=__import__('sys').stderr)
-    return _orig_ptm_init(self, config, *args, **kwargs)
-_mu.PreTrainedModel.__init__ = _patched_ptm_init
+
+def _prepare_lfm3_model_imports():
+    """Perform LFM3 compatibility preimports only after admission succeeds."""
+    import transformers.configuration_utils  # noqa: F401
+    import transformers.modeling_utils as mu
+    if not getattr(mu.PreTrainedModel.__init__, "_lfm3_training_probe", False):
+        original = mu.PreTrainedModel.__init__
+        def patched(self, config, *args, **kwargs):
+            print(f"[DEBUG] PreTrainedModel.__init__ called with config type: {type(config).__name__}", file=__import__('sys').stderr)
+            return original(self, config, *args, **kwargs)
+        patched._lfm3_training_probe = True
+        mu.PreTrainedModel.__init__ = patched
 
 from src.config import Config
 
@@ -455,6 +459,7 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
     if not model_name and hasattr(cfg, "get"):
         model_name = cfg.get("train", "model_name", default="")
     if is_lfm3_model(model_name):
+        _prepare_lfm3_model_imports()
         patch_transformers_for_lfm3()
         # Pre-import transformers modules for dynamic module loading
         import transformers.dynamic_module_utils as dmu
