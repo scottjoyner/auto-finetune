@@ -28,6 +28,10 @@ from typing import Any
 
 BUCKET_DIR = Path("/media/scott/data/finetune-staging/data/datasets/buckets")
 MANIFEST = BUCKET_DIR / "manifest.json"
+REPORT_PATH = BUCKET_DIR / "training_report.json"
+CHECKOUT_ROOT = Path(__file__).resolve().parents[1]
+# Unsafe training admission bypasses must never propagate to child jobs.
+FORBIDDEN_CHILD_ENV = ("TRAIN_ALLOW_UNVERIFIED", "AF_SKIP_UNMANAGED_CHECK")
 
 BEHAVIOR_GROUPS = {
     "code_execution": ["code_execution", "tool:terminal", "tool:execute_code", "tool:process", "tool:cronjob"],
@@ -88,8 +92,8 @@ def main() -> int:
         print(f"[{i}/{len(to_train)}] {bucket} ({count} examples)...")
 
         env = os.environ.copy()
-        env["TRAIN_ALLOW_UNVERIFIED"] = "1"
-        env["AF_SKIP_UNMANAGED_CHECK"] = "1"
+        for name in FORBIDDEN_CHILD_ENV:
+            env.pop(name, None)
 
         cmd = [sys.executable, "-m", "src.cli", "train", f"--source={bucket}"]
         if args.dry_run or not args.live:
@@ -103,7 +107,7 @@ def main() -> int:
                 capture_output=True,
                 text=True,
                 env=env,
-                cwd="/media/scott/data/git/auto-finetune",
+                cwd=str(CHECKOUT_ROOT),
                 timeout=300,
             )
             ok = proc.returncode == 0
@@ -136,7 +140,7 @@ def main() -> int:
     print("=" * 60)
 
     # Write report
-    report_path = Path("/media/scott/data/finetune-staging/data/datasets/buckets/training_report.json")
+    report_path = REPORT_PATH
     report = {
         "mode": "dry-run" if (args.dry_run or not args.live) else "live",
         "group": args.group,
