@@ -107,3 +107,25 @@ def test_missing_live_model_is_not_exercised_here(tmp_path):
     p=promoter(tmp_path)
     assert p.registry.active_version() is None
     assert not (tmp_path/"model.safetensors").exists()
+
+
+def test_status_and_check_cli_do_not_contact_external_models(tmp_path,monkeypatch,capsys):
+    monkeypatch.setattr(promotion,"load",lambda:cfg(tmp_path))
+    assert promotion.main(["--check"])==0
+    assert "No active A/B test" in capsys.readouterr().out
+    assert promotion.main(["--status"])==0
+    output=json.loads(capsys.readouterr().out)
+    assert output["registry_summary"]["total_versions"]==0
+    assert promotion.main(["--register"])==1
+    assert "required" in capsys.readouterr().out
+    assert promotion.main([])==0
+    assert "usage:" in capsys.readouterr().out.lower()
+
+
+def test_no_active_metric_can_mutate_closed_ab_test(tmp_path):
+    p=promoter(tmp_path)
+    p.record_inference("synthetic-version","local-test","input","output",score=.2)
+    assert p.registry.summary()["total_versions"]==0
+    assert p.state["active_ab_test"] is None
+    assert p.feedback.summary()["total_entries"]==1
+    assert p.check_promotion()["action"]=="none"

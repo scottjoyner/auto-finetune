@@ -145,3 +145,39 @@ def test_cli_run_reports_disposable_skip_status(tmp_path,monkeypatch,capsys):
                         lambda self:{"status":"skipped","reason":"fixture"})
     assert scheduler.main(["--run","--interval","1"])==0
     assert '"status": "skipped"' in capsys.readouterr().out
+
+
+def test_gpu_guard_denies_pgrep_resident_trainer(tmp_path,monkeypatch):
+    r=make(tmp_path,require_gpu_free=True)
+    monkeypatch.setattr(scheduler,"unmanaged_training_processes",lambda _:[])
+    monkeypatch.setattr(scheduler.subprocess,"run",
+                        lambda *a,**k:SimpleNamespace(returncode=0,stdout="synthetic pid"))
+    assert r._gpu_available() is False
+
+
+def test_gpu_guard_accepts_idle_subprocess_monitor(tmp_path,monkeypatch):
+    r=make(tmp_path,require_gpu_free=True)
+    monkeypatch.setattr(scheduler,"unmanaged_training_processes",lambda _:[])
+    monkeypatch.setattr(scheduler.subprocess,"run",
+                        lambda *a,**k:SimpleNamespace(returncode=1,stdout=""))
+    assert r._gpu_available() is True
+
+
+def test_loop_keyboard_interrupt_resets_disposable_state(tmp_path,monkeypatch):
+    r=make(tmp_path)
+    monkeypatch.setattr(r,"run",lambda:{"status":"skipped"})
+    monkeypatch.setattr(scheduler.time,"sleep",
+                        lambda seconds: (_ for _ in ()).throw(KeyboardInterrupt()))
+    r.state.current_status="running"
+    r.run_loop(check_interval=1)
+    assert r.state.current_status=="idle"
+    assert make(tmp_path).state.current_status=="idle"
+
+
+def test_scheduler_cli_loop_uses_local_mock_without_sleep(tmp_path,monkeypatch):
+    monkeypatch.setattr(scheduler,"load",lambda:cfg(tmp_path))
+    seen=[]
+    monkeypatch.setattr(scheduler.ScheduledRetrainer,"run_loop",
+                        lambda self,check_interval:seen.append(check_interval))
+    assert scheduler.main(["--loop","--check-interval","7"])==0
+    assert seen==[7]
