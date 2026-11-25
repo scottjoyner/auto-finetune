@@ -1,0 +1,38 @@
+{
+  "authority": "unverified_local_research_measurement",
+  "captured_at_utc": "2026-10-29T04:12:00+00:00",
+  "limitations": [
+    "single CPU-only functional smoke",
+    "not a sustained tokens-per-second benchmark",
+    "no GPU execution",
+    "local hashes not publisher signatures",
+    "no independent third-party attestation",
+    "no model or adapter updates",
+    "no heldout benchmark",
+    "no optimizer comparison"
+  ],
+  "model_reference_claim": "LiquidAI/LFM3-1.7B@40ebe0aa6662c9d40389c2f5d565b6a2c6aebacd",
+  "node_claim": "x1-370",
+  "prompt_sha256": "64ec88ca00b268e5ba1a35678a1b5316d212f4f366b2477232534a8aeca37f3c",
+  "result": {
+    "finite_logits": true,
+    "gpu_execution_verified": false,
+    "heldout_quality_verified": false,
+    "input_token_count": 2,
+    "model_source_signature_verified": false,
+    "native_template_digest_verified": true,
+    "optimizer_improvement_verified": false,
+    "output_logit_shape": [
+      1,
+      2,
+      128000
+    ],
+    "pretrained_loading_keys_complete": true,
+    "schema": "auto-finetune.lfm3.cpu-checkpoint-smoke.v1",
+    "source_claim": "sha256_pinned_local_snapshot_not_publisher_signature",
+    "status": "cpu_functional_smoke_passed",
+    "weight_promotion_permitted": false
+  },
+  "runner_sha256": "341874a518b0faadb91ee6bcde99fa607e662964a4d78c433eeed79a89cda1f6",
+  "schema": "auto-finetune.lfm3.cpu-checkpoint-research-receipt.v1"
+}
