@@ -20,6 +20,10 @@ from src.locking import atomic_write_json
 def _load_tokenizer(model_name: str):
     """Load tokenizer from transformers."""
     from transformers import AutoTokenizer
+
+    from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+    if is_lfm3_model(model_name):
+        patch_transformers_for_lfm3()
     return AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 
 
