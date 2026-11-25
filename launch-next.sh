@@ -30,6 +30,11 @@ fi
 export HF_HOME=/media/scott/data/finetune-staging/hf-home
 export TRANSFORMERS_CACHE=/media/scott/data/finetune-staging/hf-home
 export HF_DATASETS_CACHE=/media/scott/data/finetune-staging/hf-home/datasets
+# gfx1151 (Radeon 8050S) needs the override to match its actual arch; 11.0.0
+# (the global default) produces hipErrorInvalidImage on every GPU kernel.
+export HSA_OVERRIDE_GFX_VERSION=11.5.1
+export TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1
+export HIP_VISIBLE_DEVICES=0
 export TORCH_HOME=/media/scott/data/finetune-staging/torch-home
 export TMPDIR=/media/scott/data/finetune-staging/tmp
 export TEMP=/media/scott/data/finetune-staging/tmp

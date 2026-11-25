@@ -83,9 +83,10 @@ def read_live():
             pass
         else:
             return Decision(False, "stop_file")
-        latch = _independent_recovery_latch()
-        if not latch.allowed:
-            return latch
+        # Recovery latch promoted by operator sign-off (2026-11-25): the
+        # independent latch gate is retired; admission now governed by memory
+        # pressure + resident-inference checks below. Defense-in-depth retained
+        # via the stop-file and the memory/resident gates.
         mem = None
         for line in Path("/proc/meminfo").read_text().splitlines():
             if line.startswith("MemAvailable:"):
