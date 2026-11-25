@@ -100,7 +100,9 @@ class FeedbackCollector:
 
     def _detect_issues(self, entry: FeedbackEntry) -> list[str]:
         """Auto-detect issues in an inference result."""
-        issues = list(entry.issues)
+        # analyze() is called repeatedly by the CLI and dashboard. Keep
+        # inferred labels idempotent instead of duplicating them on reload.
+        issues = list(dict.fromkeys(entry.issues))
         if entry.score < 0.3:
             issues.append("low_score")
         if entry.output_text and len(entry.output_text) < 10:
@@ -119,7 +121,7 @@ class FeedbackCollector:
         lower = entry.output_text.lower()
         if any(p in lower for p in error_patterns):
             issues.append("error_in_output")
-        return issues
+        return list(dict.fromkeys(issues))
 
     def analyze(self) -> FeedbackSummary:
         """Analyze all feedback and return summary."""
@@ -153,7 +155,12 @@ class FeedbackCollector:
     def get_flagged_sessions(self) -> list[str]:
         """Return session IDs that should be excluded from training."""
         self.analyze()
-        return [s for s in self.entries if s.score < 0.3 or "error_in_output" in s.issues]
+        # The caller and public return type require session IDs, not objects.
+        # Preserve deterministic first-seen order and exclude duplicates.
+        return list(dict.fromkeys(
+            e.session_id for e in self.entries
+            if e.score < 0.3 or "error_in_output" in e.issues
+        ))
 
     def generate_repair_pairs(self, output_path: str) -> int:
         """Generate contrastive repair pairs from feedback."""

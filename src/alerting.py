@@ -39,15 +39,25 @@ class AlertManager:
 
     def _load(self) -> None:
         if os.path.exists(self.alerts_path):
+            # Journal records may repeat an alert ID when an acknowledgement
+            # updates its state. Replay by identity rather than counting
+            # historical versions as independent outstanding alerts.
+            latest: dict[str, Alert] = {}
             try:
                 with open(self.alerts_path) as f:
                     for line in f:
-                        line = line.strip()
-                        if line:
-                            data = json.loads(line)
-                            self.alerts.append(Alert(**data))
-            except Exception:
+                        if not line.strip():
+                            continue
+                        try:
+                            entry = Alert(**json.loads(line))
+                        except (ValueError, TypeError, KeyError):
+                            # A torn/corrupt line must not hide valid later
+                            # journal entries or create phantom notifications.
+                            continue
+                        latest[entry.alert_id] = entry
+            except OSError:
                 pass
+            self.alerts = list(latest.values())
 
     def _save_alert(self, alert: Alert) -> None:
         os.makedirs(os.path.dirname(self.alerts_path), exist_ok=True)
