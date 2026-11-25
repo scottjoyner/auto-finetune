@@ -18,8 +18,8 @@ import json
 import os
 import sys
 
-# Importing the training API must not initialize a model runtime before
-# the fail-closed admission gate. LFM3-specific imports happen after admission.
+# Training-admission checks must execute before importing or monkey-patching
+# heavyweight model runtimes. LFM3-specific imports happen after admission.
 from src.lfm3_support import patch_transformers_for_lfm3, is_lfm3_model, LFM3_MODEL_LOCAL_PATH
 
 from src.config import Config
@@ -177,28 +177,40 @@ def _train_peft(cfg: Config, data: list[dict],
         load_4bit = env_lb.strip().lower() not in {"0", "false", "off", "no"}
     load_8bit = t.get("load_in_8bit", False)
     grad_ckpt = t.get("gradient_checkpointing", False)
+    lfm3_dir = None
+    if is_lfm3_model(model_name):
+        from src.lfm3_pretrained_guard import verify_official_lfm3_snapshot
+        lfm3_dir = verify_official_lfm3_snapshot(LFM3_MODEL_LOCAL_PATH)
+        if load_4bit or load_8bit:
+            raise TrainError("LFM3 direct pretrained loader cannot claim 4/8-bit quantization")
 
     # Load tokenizer; LFM3 uses TokenizersBackend which needs special handling
     try:
         tokenizer = AutoTokenizer.from_pretrained(
-            model_name, trust_remote_code=True
+            lfm3_dir or model_name, trust_remote_code=True,
+            local_files_only=bool(lfm3_dir),
         )
-    except (ValueError, OSError):
-        # Fall back to PreTrainedTokenizerFast with tokenizer.json
+    except (ValueError, OSError) as exc:
+        if lfm3_dir:
+            raise TrainError("pinned LFM3 tokenizer load failed; fallback refused") from exc
+        # Legacy non-LFM3 fallback, never used for a pinned LFM3 checkpoint.
         from transformers import PreTrainedTokenizerFast
-        tok_path = model_name
+        tok_path = lfm3_dir or model_name
         if not os.path.exists(os.path.join(tok_path, "tokenizer.json")):
+            if lfm3_dir:
+                raise TrainError("LFM3 local tokenizer.json missing")
             from huggingface_hub import hf_hub_download
             tok_path = hf_hub_download(model_name, "tokenizer.json")
         tok_dir = os.path.dirname(tok_path) if os.path.isfile(tok_path) else tok_path
         tokenizer = PreTrainedTokenizerFast(
             tokenizer_file=os.path.join(tok_dir, "tokenizer.json"),
             bos_token="<|startoftext|>",
-            eos_token="\u6620",  # LFM3 EOS token
+            eos_token="<|im_end|>",
             pad_token="<|pad|>",
         )
-    if is_lfm3_model(model_name):
-        tokenizer.chat_template = "{% for message in messages %}{% if message['role'] == 'system' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% elif message['role'] == 'user' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% elif message['role'] == 'assistant' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% endif %}{% endfor %}"
+    if lfm3_dir:
+        from src.lfm3_chat_template_guard import ensure_native_lfm3_chat_template
+        ensure_native_lfm3_chat_template(tokenizer, lfm3_dir)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -218,20 +230,17 @@ def _train_peft(cfg: Config, data: list[dict],
         )
 
     # Load model with LFM3 support (transformers patches applied in train.main())
-    if is_lfm3_model(model_name):
-        # Direct load of LFM3 model from local files
-        import importlib.util
-        import transformers.configuration_utils  # Ensure PreTrainedConfig is available
-        model_dir = LFM3_MODEL_LOCAL_PATH
-        sys.path.insert(0, model_dir)
+    if lfm3_dir:
+        # Auto classes load the pinned local remote-code modules in a proper
+        # package namespace, and report actual checkpoint loading anomalies.
+        from transformers import AutoConfig
+        from src.lfm3_pretrained_guard import load_pretrained_lfm3
 
-        from configuration_lfm3 import Lfm3Config
-        config = Lfm3Config()
-
-        from modeling_lfm3 import Lfm3ForCausalLM
-        model = Lfm3ForCausalLM(config)
-        model = model.to(dtype=torch.bfloat16 if _detect_rocm() else torch.float16)
-        model.config._name_or_path = model_dir  # Point to local path for tokenizer loading
+        model = load_pretrained_lfm3(
+            lfm3_dir, AutoConfig, AutoModelForCausalLM,
+            torch.bfloat16 if _detect_rocm() else torch.float16,
+        )
+        model.config._name_or_path = lfm3_dir
     elif load_4bit or load_8bit:
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
