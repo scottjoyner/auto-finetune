@@ -239,7 +239,7 @@ def _train_peft(cfg: Config, data: list[dict],
             model_dir,
             trust_remote_code=True,
             torch_dtype=torch.bfloat16,
-            device_map=None,
+            device_map="auto",
         )
     elif load_4bit or load_8bit:
         model = AutoModelForCausalLM.from_pretrained(
