@@ -29,6 +29,14 @@ def merge_adapter(
     from peft import PeftModel
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
+    # Apply LFM3 patches if needed
+    try:
+        from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+        if is_lfm3_model(base_model):
+            patch_transformers_for_lfm3()
+    except ImportError:
+        pass
+
     os.makedirs(out_dir, exist_ok=True)
     dtype = torch.bfloat16 if rocm else torch.float16
 
