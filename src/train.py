@@ -135,8 +135,7 @@ def _train_unsloth(cfg: Config, data: list[dict],
             model=model,
             args=_training_args(t, model, rocm=_detect_rocm()),
             train_dataset=tokenized_ds,
-            tokenized=True,
-            dataset_text_field="text",
+            processing_class=tokenizer,
         )
     else:
         texts = _build_texts(data, tokenizer, t.get("max_seq_length", 8192))
@@ -299,8 +298,7 @@ def _train_peft(cfg: Config, data: list[dict],
             model=model,
             args=_training_args(t, model, rocm=_detect_rocm()),
             train_dataset=tokenized_ds,
-            tokenized=True,
-            dataset_text_field="text",
+            processing_class=tokenizer,
         )
     else:
         texts = _build_texts(data, tokenizer, max_seq)
@@ -310,8 +308,7 @@ def _train_peft(cfg: Config, data: list[dict],
             model=model,
             args=_training_args(t, model, rocm=_detect_rocm()),
             train_dataset=ds,
-            dataset_text_field="text",
-            max_seq_length=max_seq,
+            processing_class=tokenizer,
         )
     trainer.train()
     _save(model, tokenizer, t)
@@ -331,7 +328,7 @@ def _training_args(t: dict, model=None, rocm: bool = False) -> "TrainingArgument
         learning_rate=float(t.get("learning_rate", 2e-4)),
         # Transformers 5.x renamed warmup_ratio -> warmup_steps; values in
         # [0,1) retain ratio semantics via TrainingArguments.get_warmup_steps().
-        warmup_ratio=t.get("warmup_ratio", 0.03),
+        warmup_steps=t.get("warmup_ratio", 0.03),
         weight_decay=t.get("weight_decay", 0.01),
         lr_scheduler_type="cosine",
         optim="adamw_torch" if not use_bnb_optim else "adamw_8bit",
@@ -457,7 +454,7 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
         # Pre-import transformers modules for dynamic module loading
         import transformers.dynamic_module_utils as dmu
         orig = dmu.get_class_in_module
-        def patched_gci(module_path, class_name, force_reload=False):
+        def patched_gci(class_name, module_path, force_reload=False):
             import transformers.configuration_utils
             import transformers.utils
             import transformers.modeling_rope_utils
