@@ -106,6 +106,12 @@ def _health_check(model_path: str, timeout: int = 30) -> bool:
 
         # Quick tokenizer load test
         from transformers import AutoTokenizer
+        try:
+            from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+            if is_lfm3_model(model_path):
+                patch_transformers_for_lfm3()
+        except ImportError:
+            pass
         tok = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
         test = tok("Hello world", return_tensors="pt")
         if not test.get("input_ids") is not None:
