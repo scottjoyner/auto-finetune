@@ -3,7 +3,7 @@
 Everything below is ready; only the operator gates (P0 hold, GPU, venv) block execution.
 
 ## Pre-flight (must all pass)
-1. Recovery latch promoted via reviewed policy (see docs/XWING_QWEN_DUAL_RECOVERY_HOLD_20261024.md).
+1. Recovery latch retired via reviewed policy on 2026-11-25 (see docs/XWING_QWEN_DUAL_RECOVERY_HOLD_20261024.md); do not re-arm it.
    Training admission must return `PASS` (not `HOLD`).
 2. GPU healthy: `rocm-smi` shows card 0, and a 256x256 bf16 matmul succeeds:
    ```bash

@@ -29,13 +29,11 @@ def merge_adapter(
     from peft import PeftModel
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    # Apply LFM3 patches if needed
-    try:
-        from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
-        if is_lfm3_model(base_model):
-            patch_transformers_for_lfm3()
-    except ImportError:
-        pass
+    from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+
+    _lfm3 = is_lfm3_model(base_model)
+    if _lfm3:
+        patch_transformers_for_lfm3()
 
     os.makedirs(out_dir, exist_ok=True)
     dtype = torch.bfloat16 if rocm else torch.float16
@@ -45,7 +43,8 @@ def merge_adapter(
     # and, without it, prompt "Do you wish to run the custom code? [y/N]" on
     # stdin -- which hangs the post-training merge hook with no terminal attached.
     base = AutoModelForCausalLM.from_pretrained(
-        base_model, torch_dtype=dtype, attn_implementation="sdpa", device_map=None,
+        base_model, torch_dtype=dtype, attn_implementation="sdpa",
+        device_map="auto" if _lfm3 else None,
         trust_remote_code=True,
     )
     model = PeftModel.from_pretrained(base, adapter_path)

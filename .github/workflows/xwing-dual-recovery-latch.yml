@@ -1,4 +1,4 @@
-name: xwing-dual-recovery-latch
+name: xwing-training-admission-no-latch
 
 on:
   pull_request:
@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 jobs:
-  fail-closed-dual-stop-fixtures:
+  no-latch-regressions:
     runs-on: ubuntu-latest
     timeout-minutes: 9
     steps:
@@ -27,7 +27,7 @@ jobs:
           python-version: '3.12'
       - name: Install offline test dependencies
         run: python -m pip install 'pytest>=8,<10' 'PyYAML>=6,<7'
-      - name: Both recovery holds and repository admission regressions
+      - name: Retired-latch and repository admission regressions
         run: |
           python -m py_compile src/training_admission.py
           python -m pytest -o addopts= tests/test_xwing_dual_recovery_latch.py tests/test_training_admission.py tests/test_qwen_python_runtime_audit.py -q

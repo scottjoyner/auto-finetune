@@ -41,16 +41,17 @@ def export_merged(checkpoint_path: str, output_path: str,
         from peft import PeftModel
         import torch
 
-        # Apply LFM3 patches if needed
-        if is_lfm3_model(base_model):
+        # LFM3 detection drives trust_remote_code, device placement, and patches
+        _trust = is_lfm3_model(base_model)
+        if _trust:
             patch_transformers_for_lfm3()
 
         os.makedirs(output_path, exist_ok=True)
 
         # Load base model
-        _trust = is_lfm3_model(base_model)
         model = AutoModelForCausalLM.from_pretrained(
-            base_model, torch_dtype=torch.bfloat16, device_map="cpu",
+            base_model, torch_dtype=torch.bfloat16,
+            device_map="auto" if _trust else "cpu",
             trust_remote_code=_trust,
         )
         tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=_trust)
@@ -136,16 +137,17 @@ def export_onnx(checkpoint_path: str, output_path: str,
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from peft import PeftModel
 
-        # Apply LFM3 patches if needed
-        if is_lfm3_model(base_model):
+        # LFM3 detection drives trust_remote_code, device placement, and patches
+        _trust = is_lfm3_model(base_model)
+        if _trust:
             patch_transformers_for_lfm3()
 
         os.makedirs(output_path, exist_ok=True)
 
         # Load and merge
-        _trust = is_lfm3_model(base_model)
         model = AutoModelForCausalLM.from_pretrained(
-            base_model, torch_dtype=torch.bfloat16, device_map="cpu",
+            base_model, torch_dtype=torch.bfloat16,
+            device_map="auto" if _trust else "cpu",
             trust_remote_code=_trust,
         )
         model = PeftModel.from_pretrained(model, checkpoint_path)
