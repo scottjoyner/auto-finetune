@@ -153,6 +153,127 @@ def test_render_sample_texts_with_fake_tokenizer():
     assert out == ["user:q"]
 
 
+# ── unsloth backend: SFTTrainer fallback must derive max_seq itself ───────────
+
+
+def _fake_unsloth_stack(monkeypatch, captured):
+    """Stub trl/unsloth/datasets so _train_unsloth can run without a GPU."""
+    import sys
+    import types
+
+    class FakeTok:
+        chat_template = None
+        pad_token = None
+        eos_token = "eos"
+
+        def save_pretrained(self, path):
+            captured.setdefault("tok_saved", []).append(path)
+
+        def apply_chat_template(self, msgs, tokenize=False, add_generation_prompt=False):
+            return "rendered"
+
+    class FakeModel:
+        def save_pretrained(self, path):
+            captured.setdefault("model_saved", []).append(path)
+
+    class FakeFastLanguageModel:
+        @staticmethod
+        def from_pretrained(model_name, max_seq_length, load_in_4bit, **kwargs):
+            captured["unsloth_max_seq_length"] = max_seq_length
+            captured["unsloth_model_name"] = model_name
+            return FakeModel(), FakeTok()
+
+        @staticmethod
+        def get_peft_model(model, **kwargs):
+            return model
+
+    unsloth_mod = types.ModuleType("unsloth")
+    unsloth_mod.FastLanguageModel = FakeFastLanguageModel
+    trl_mod = types.ModuleType("trl")
+
+    class SFTTrainer:
+        last = None
+
+        def __init__(self, **kwargs):
+            SFTTrainer.last = kwargs
+
+        def train(self):
+            pass
+
+    trl_mod.SFTTrainer = SFTTrainer
+    datasets_mod = types.ModuleType("datasets")
+
+    class Dataset:
+        @staticmethod
+        def from_dict(d):
+            captured["dataset"] = d
+            return ("dataset", d)
+
+    datasets_mod.Dataset = Dataset
+    monkeypatch.setitem(sys.modules, "unsloth", unsloth_mod)
+    monkeypatch.setitem(sys.modules, "trl", trl_mod)
+    monkeypatch.setitem(sys.modules, "datasets", datasets_mod)
+    return SFTTrainer
+
+
+def test_train_unsloth_fallback_derives_max_seq_without_pre_tokenized_ds(monkeypatch, tmp_path):
+    """Regression: the unsloth SFTTrainer fallback must derive max_seq_length from
+    the train config (default 8192) instead of referencing an undefined `max_seq`.
+    Exercises the unsloth path WITHOUT a pre-tokenized dataset (tokenizer-text path)."""
+    import src.train as T
+
+    captured: dict = {}
+    SFTTrainer = _fake_unsloth_stack(monkeypatch, captured)
+    monkeypatch.setattr(T, "_training_args", lambda *a, **k: object())
+
+    cfg = _cfg()
+    cfg.raw["train"]["output_dir"] = str(tmp_path / "ckpt")
+    rc = T._train_unsloth(cfg, [{"messages": [{"role": "user", "content": "q"}]}])
+
+    assert rc == 0
+    assert captured["unsloth_max_seq_length"] == 8192
+    trainer_kwargs = SFTTrainer.last
+    assert trainer_kwargs["dataset_text_field"] == "text"
+    assert trainer_kwargs["max_seq_length"] == 8192
+    assert trainer_kwargs["train_dataset"] == ("dataset", {"text": ["rendered"]})
+
+
+def test_train_unsloth_fallback_honors_configured_max_seq(monkeypatch, tmp_path):
+    import src.train as T
+
+    captured: dict = {}
+    SFTTrainer = _fake_unsloth_stack(monkeypatch, captured)
+    monkeypatch.setattr(T, "_training_args", lambda *a, **k: object())
+
+    cfg = _cfg(max_seq_length=4096)
+    cfg.raw["train"]["output_dir"] = str(tmp_path / "ckpt")
+    assert T._train_unsloth(cfg, [{"messages": [{"role": "user", "content": "q"}]}]) == 0
+    assert captured["unsloth_max_seq_length"] == 4096
+    assert SFTTrainer.last["max_seq_length"] == 4096
+
+
+def test_load_lfm3_tokenizer_passthrough_for_non_lfm3():
+    import src.train as T
+
+    assert T._load_lfm3_tokenizer(None, "Qwen/Qwen2.5-7B-Instruct") is None
+
+
+def test_load_lfm3_tokenizer_missing_template_raises_train_error(monkeypatch):
+    import src.train as T
+
+    def _boom(*a, **k):
+        raise FileNotFoundError("LFM3 chat_template.jinja not found in: [/x/chat_template.jinja]")
+
+    monkeypatch.setattr(T, "load_lfm3_chat_template", _boom)
+    monkeypatch.setattr(T, "is_lfm3_model", lambda name: True)
+
+    class FakeTok:
+        chat_template = None
+
+    with pytest.raises(TrainError, match="LFM3 chat template not found"):
+        T._load_lfm3_tokenizer(FakeTok(), "LiquidAI/LFM3-1.7B")
+
+
 def test_dry_run_writes_nothing_but_validates(tmp_path, capsys):
     # Build a minimal dataset and run dry-run with a fake tokenizer import.
     ds = tmp_path / "datasets"

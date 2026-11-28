@@ -300,6 +300,8 @@ def test_merge_adapter(monkeypatch, tmp_path):
     GPU-free via stubbed transformers/peft."""
     import src.merge as M
 
+    monkeypatch.setattr(M, "preflight_merge", lambda: None)
+
     (tmp_path / "toolcall-v5-3b-ssd").mkdir()
     (tmp_path / "toolcall-v5-3b-ssd" / "adapter_config.json").write_text("{}")
 
@@ -340,6 +342,37 @@ def test_merge_adapter(monkeypatch, tmp_path):
     res = M.merge_adapter(str(tmp_path / "toolcall-v5-3b-ssd"), "base", str(out), rocm=False)
     assert res == str(out)
     assert out.exists()
+
+
+def test_load_model_and_tokenizer_lfm3_missing_template_raises_value_error(monkeypatch, tmp_path):
+    """A missing LFM3 chat_template.jinja must fail closed as a clean ValueError
+    (CLI -> `[error]` + exit 2), not escape as an unhandled FileNotFoundError."""
+    import types
+
+    import transformers as tf
+
+    import src.eval as E
+    import src.lfm3_support as support
+
+    class FakeTok:
+        chat_template = None
+        pad_token = None
+        eos_token = "eos"
+
+    monkeypatch.setattr(support, "is_lfm3_model", lambda name: True)
+
+    def _boom(*a, **k):
+        raise FileNotFoundError(
+            "LFM3 chat_template.jinja not found in: [/nope/chat_template.jinja]"
+        )
+
+    monkeypatch.setattr(support, "load_lfm3_chat_template", _boom)
+    monkeypatch.setattr(
+        tf, "AutoTokenizer",
+        types.SimpleNamespace(from_pretrained=staticmethod(lambda *a, **k: FakeTok())),
+    )
+    with pytest.raises(ValueError, match="LFM3 chat template not found"):
+        E.load_model_and_tokenizer(str(tmp_path), "LiquidAI/LFM3-1.7B")
 
 
 def test_compare_probes_and_format(tmp_path, monkeypatch):
