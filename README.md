@@ -140,7 +140,7 @@ python -m src.cli deploy --label=combined --nodes=local,nas5
 
 | Stage | Command | What it does |
 |-------|---------|--------------|
-| Train | `python -m src.cli train` | Unsloth/PEFT QLoRA finetune on the formatted dataset | |
+| Train | `python -m src.cli train` | Unsloth/PEFT QLoRA finetune on the formatted dataset |
 | Eval-split | `python -m src.cli eval-split --label=<x>` | Deterministic train/eval partition, benchmark held out |
 | Eval | `python -m src.cli eval-all` | Held-out loss + tool-call correctness table |
 | Best | `python -m src.cli best --metric=loss` | Pick the winning adapter |
