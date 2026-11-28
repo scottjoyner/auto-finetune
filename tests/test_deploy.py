@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import types
 
 import pytest
 from conftest import make_cfg
@@ -187,6 +189,32 @@ def test_health_check_rejects_incomplete_model(tmp_path):
     empty.mkdir()
     assert _health_check(str(empty)) is False
     assert _health_check(str(tmp_path / "does-not-exist")) is False
+
+
+def test_health_check_always_trusts_remote_code(monkeypatch, tmp_path):
+    """Health checks run on arbitrary model paths, not just LFM3 ones.
+
+    Custom-code bases need trust_remote_code, and gating it on LFM3 detection
+    could hang the unattended deploy path on an interactive trust prompt.
+    """
+    from src.deploy import _health_check
+
+    for name in ("config.json", "tokenizer.json"):
+        (tmp_path / name).write_text("{}")
+
+    calls = []
+
+    class _StubTok:
+        def __call__(self, text, **kwargs):
+            return {"input_ids": [1, 2, 3]}
+
+    tf = types.ModuleType("transformers")
+    tf.AutoTokenizer = types.SimpleNamespace(
+        from_pretrained=lambda path, **kw: (calls.append(kw) or _StubTok()))
+    monkeypatch.setitem(sys.modules, "transformers", tf)
+
+    assert _health_check(str(tmp_path)) is True
+    assert calls == [{"trust_remote_code": True}]
 
 
 def test_get_model_size_sums_files(tmp_path):

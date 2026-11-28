@@ -185,7 +185,9 @@ def _stub_merge_stack(monkeypatch, captured):
             return object()
 
     tf.AutoModelForCausalLM = types.SimpleNamespace(from_pretrained=_FakeCausalLM.from_pretrained)
-    tf.AutoTokenizer = types.SimpleNamespace(from_pretrained=lambda *a, **k: StubTok())
+    tf.AutoTokenizer = types.SimpleNamespace(
+        from_pretrained=lambda *a, **k: (
+            captured.setdefault("tok_loads", []).append(dict(k)) or StubTok()))
     monkeypatch.setitem(sys.modules, "torch", torch)
     monkeypatch.setitem(sys.modules, "peft", peft)
     monkeypatch.setitem(sys.modules, "transformers", tf)
@@ -226,6 +228,28 @@ def test_merge_non_lfm3_default_is_cpu(monkeypatch, tmp_path, host):
     assert M.merge_adapter("adapter", "Qwen/Qwen2.5-7B-Instruct", str(tmp_path / "merged"),
                             rocm=False) == str(tmp_path / "merged")
     assert captured["model_loads"][-1]["device_map"] is None
+
+
+@pytest.mark.parametrize("base_model", [
+    "LiquidAI/LFM3-1.7B",
+    "Qwen/Qwen2.5-7B-Instruct",
+])
+def test_merge_always_trusts_remote_code(host, monkeypatch, tmp_path, base_model):
+    """The batch merge path trusts remote code for *every* base, not just LFM3.
+
+    Bases shipping custom modeling files (e.g. K2-Horizon) require it, and
+    without it the unattended merge hook can block on an interactive trust
+    prompt. An unfinished edit once used `_lfm3 or True` (always True but
+    misleading) and was nearly "fixed" to `_lfm3`, which would regress both
+    cases. Pin the real contract so the always-True choice stays explicit.
+    """
+    captured: dict = {}
+    _stub_merge_stack(monkeypatch, captured)
+    _idle_inventory(monkeypatch)
+
+    assert M.merge_adapter("adapter", base_model, str(tmp_path / "merged")) == str(tmp_path / "merged")
+    assert captured["model_loads"][-1]["trust_remote_code"] is True
+    assert captured["tok_loads"][-1]["trust_remote_code"] is True
 
 
 def test_cli_merge_refuses_with_nonzero_code_before_load(host, forbid_model_load,
