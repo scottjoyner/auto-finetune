@@ -10,16 +10,6 @@ import pytest
 from src import merge as M
 from src import training_admission as A
 
-# TEMPORARY (PR #110 only): main received these regressions ahead of the
-# merge-preflight implementation, which lands in stacked PR #111. Keeping the
-# tests here but gating them on the feature being present avoids breaking #110
-# while preserving every assertion; PR #111 removes this guard so the tests
-# run unconditionally once the implementation is in the branch.
-pytestmark = pytest.mark.skipif(
-    not hasattr(A, "MEMINFO"),
-    reason="merge preflight is implemented in stacked PR #111",
-)
-
 GIB = 1024 * 1024
 IDLE_INVENTORY = [
     {"type": "embedding", "loaded_instances": [{"id": "embed"}]},
