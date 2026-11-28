@@ -1004,8 +1004,12 @@ def main(argv: list[str]) -> int:
     cmd = argv[1] if len(argv) > 1 else "help"
     dry = "--dry-run" in argv
     if cmd in {"train", "dpo"} and not dry:
-        from src.training_admission import read_live
-        decision = read_live()
+        try:
+            from src.training_admission import read_live
+            decision = read_live()
+        except Exception:
+            print("[train-admission] HOLD: admission_unavailable", flush=True)
+            return 78
         if not decision.allowed:
             print(f"[train-admission] HOLD: {decision.reason}", flush=True)
             return 78
@@ -1034,14 +1038,15 @@ def main(argv: list[str]) -> int:
     names = {request.name for request in resources}
     # The active trainer predates lease support. Fail closed for any command that
     # could mutate its dataset or contend for its GPU during this migration.
-    # AF_SKIP_UNMANAGED_CHECK=1: test escape hatch — dispatch tests must pass
-    # on a machine that happens to be training right now.
-    if os.environ.get("AF_SKIP_UNMANAGED_CHECK") != "1":
-        if "gpu" in names or any(r.name == "datasets" and not r.shared for r in resources):
+    if "gpu" in names or any(r.name == "datasets" and not r.shared for r in resources):
+        try:
             unmanaged = unmanaged_training_processes(lock_dir(cfg))
-            if unmanaged:
-                print(f"[busy] unmanaged training process active: {unmanaged}")
-                return 75
+        except Exception:
+            print("[busy] unmanaged training census unavailable")
+            return 75
+        if unmanaged:
+            print("[busy] unmanaged training process active")
+            return 75
     try:
         with command_leases(cfg, cmd, label,
                             runner=(_parse_str_flag(argv, "--runner")

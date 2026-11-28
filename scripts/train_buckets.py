@@ -88,8 +88,8 @@ def main() -> int:
         print(f"[{i}/{len(to_train)}] {bucket} ({count} examples)...")
 
         env = os.environ.copy()
-        env["TRAIN_ALLOW_UNVERIFIED"] = "1"
-        env["AF_SKIP_UNMANAGED_CHECK"] = "1"
+        env.pop("TRAIN_ALLOW_UNVERIFIED", None)
+        env.pop("AF_SKIP_UNMANAGED_CHECK", None)
 
         cmd = [sys.executable, "-m", "src.cli", "train", f"--source={bucket}"]
         if args.dry_run or not args.live:
@@ -103,7 +103,7 @@ def main() -> int:
                 capture_output=True,
                 text=True,
                 env=env,
-                cwd="/media/scott/data/git/auto-finetune",
+                cwd=str(Path(__file__).resolve().parents[1]),
                 timeout=300,
             )
             ok = proc.returncode == 0

@@ -18,10 +18,8 @@ import json
 import os
 import sys
 
-# Pre-import transformers.configuration_utils so it's fully loaded
-# before LFM3 config is loaded as a dynamic module
-import transformers.configuration_utils  # noqa: F401
-
+# Keep this module importable without model libraries: direct training
+# admission must run before importing Transformers or touching GPU/runtime state.
 from src.lfm3_support import patch_transformers_for_lfm3, is_lfm3_model, LFM3_MODEL_LOCAL_PATH
 
 from src.config import Config
@@ -429,7 +427,6 @@ def _reject_held_out(data_path: str) -> str:
 
 def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: str | None = None, max_examples: int | None = None, tokenized_dir: str | None = None) -> int:
     import sys
-    print(f"[DEBUG] train.main: AF_SKIP={os.environ.get('AF_SKIP_UNMANAGED_CHECK')!r}, dry_run={dry_run}", file=sys.stderr, flush=True)
 
     # Direct callers of src.train.main bypass the src.cli dispatcher.
     # Admission MUST run before dataset scanning, tokenization or GPU load.

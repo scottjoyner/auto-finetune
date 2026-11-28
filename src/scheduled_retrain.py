@@ -85,7 +85,8 @@ class ScheduledRetrainer:
             if unmanaged:
                 return False
         except Exception:
-            pass
+            # Unknown trainer ownership is not permission to use a GPU.
+            return False
         # Check if training is already running
         import subprocess
         try:
@@ -93,11 +94,12 @@ class ScheduledRetrainer:
                 ["pgrep", "-f", "src.cli train"],
                 capture_output=True, text=True, timeout=5,
             )
-            if result.returncode == 0 and result.stdout.strip():
+            if result.returncode == 0:
                 return False
+            # pgrep 1 = no matches; errors, signals and unknown statuses DENY.
+            return result.returncode == 1
         except Exception:
-            pass
-        return True
+            return False
 
     def _should_run(self) -> tuple[bool, str]:
         """Determine if a retraining run should happen."""
@@ -147,32 +149,33 @@ class ScheduledRetrainer:
         try:
             env = os.environ.copy()
             env["PYTHONPATH"] = self.repo
-            env["TRAIN_ALLOW_UNVERIFIED"] = "1"
-            env["AF_SKIP_UNMANAGED_CHECK"] = "1"
+            # Never propagate historical training-policy override flags.
+            env.pop("TRAIN_ALLOW_UNVERIFIED", None)
+            env.pop("AF_SKIP_UNMANAGED_CHECK", None)
             env["ROCM_PATH"] = "/opt/rocm"
 
             # Incremental extraction
             subprocess.run(
                 [sys.executable, "-m", "src.cli", "neo4j-traces", "--incremental"],
-                cwd=self.repo, env=env, timeout=300,
+                cwd=self.repo, env=env, timeout=300, check=True,
             )
 
             # Clean
             subprocess.run(
                 [sys.executable, "-m", "src.cli", "clean", "--label=neo4j-traces"],
-                cwd=self.repo, env=env, timeout=300,
+                cwd=self.repo, env=env, timeout=300, check=True,
             )
 
             # Format
             subprocess.run(
                 [sys.executable, "-m", "src.cli", "format", "--label=neo4j-traces"],
-                cwd=self.repo, env=env, timeout=300,
+                cwd=self.repo, env=env, timeout=300, check=True,
             )
 
             # Train (via realtime pipeline for quality gating)
             subprocess.run(
                 [sys.executable, "-m", "src.cli", "realtime-pipeline", "--mode=once"],
-                cwd=self.repo, env=env, timeout=600,
+                cwd=self.repo, env=env, timeout=600, check=True,
             )
 
             self.state.last_run = time.time()
