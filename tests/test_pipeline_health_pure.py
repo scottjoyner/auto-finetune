@@ -66,7 +66,7 @@ def test_check_raw_dir_ok_counts_nested_json_only(dirs, cfg):
 
 def test_check_raw_dir_with_relative_path_does_not_double_join(tmp_path, monkeypatch):
     """A relative raw_dir must validate the discovered files, not raw_dir + file."""
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("src.config.project_root", lambda: tmp_path)
     raw = tmp_path / "data" / "raw"
     (raw / "sub").mkdir(parents=True)
     _write_json(raw / "a.json", {"id": 1})
