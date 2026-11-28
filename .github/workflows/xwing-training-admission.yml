@@ -17,8 +17,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install small test dependencies
-        run: python -m pip install pytest pyyaml
+      - name: Install declared test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # src.train imports transformers.configuration_utils at module scope,
+          # and several admission tests import src.train. Install the repo's
+          # declared dependencies instead of assuming only pytest/pyyaml.
+          python -m pip install -r requirements.txt
+          python -m pip install pytest transformers
       - name: Validate fail-closed Python and shell entrypoints
         run: |
           python -m py_compile src/training_admission.py src/cli.py src/train.py
