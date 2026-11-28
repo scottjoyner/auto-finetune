@@ -21,6 +21,7 @@ import transformers  # noqa: F401
 from conftest import make_cfg
 from transformers import AutoTokenizer  # noqa: F401
 
+from src import training_admission as A
 from src.quantize import (
     BUILTIN_CALIBRATION_PROMPTS,
     _get_dir_size_mb,
@@ -29,6 +30,21 @@ from src.quantize import (
     main,
     quantize_gptq,
 )
+
+
+@pytest.fixture(autouse=True)
+def _quantize_host_has_headroom(monkeypatch, tmp_path_factory):
+    """Keep offline quantize tests independent of the real host's RAM/inventory.
+
+    ``quantize_gptq`` now runs the fail-closed preflight at entry, so tests
+    exercise it against synthetic telemetry rather than whatever machine the
+    suite happens to run on. Telemetry lives outside tmp_path so directory-size
+    assertions in this file stay exact.
+    """
+    meminfo = tmp_path_factory.mktemp("quantize-telemetry") / "meminfo"
+    meminfo.write_text("MemAvailable: 104857600 kB\n")  # 100 GiB
+    monkeypatch.setattr(A, "MEMINFO", meminfo)
+    monkeypatch.setattr(A.socket, "gethostname", lambda: "quantize-test-host")
 
 
 def _merged(tmp_path, label: str = "combined") -> str:

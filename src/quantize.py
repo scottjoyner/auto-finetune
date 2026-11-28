@@ -12,11 +12,68 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import socket
 import time
 from dataclasses import dataclass
 
 from src import flags
+from src import training_admission as admission
 from src.config import Config
+from src.training_admission import MIN_KIB
+
+# Quantization loads the full base model (plus GPTQ/AWQ buffers), so it needs
+# the same conservative memory headroom as training and merge. Keep the floor
+# tied to the training-admission gate instead of redefining it here.
+MIN_QUANTIZE_AVAILABLE_KIB = MIN_KIB
+
+
+class QuantizePreflightError(RuntimeError):
+    """Host cannot safely load the model; raised before any model import/load."""
+
+
+def preflight_quantize() -> None:
+    """Refuse quantization when the host cannot safely load the model.
+
+    Mirrors ``src.merge.preflight_merge``: a fail-closed MemAvailable gate on
+    every host, plus the xwing-only resident-LLM inventory check. Never imports
+    torch and never writes to the filesystem. An idle embedding instance is
+    harmless; a resident LLM is not, because the base load may OOM.
+    """
+    try:
+        available = admission.read_mem_available_kib()
+    except (OSError, ValueError, TypeError) as exc:
+        raise QuantizePreflightError(
+            f"[quantize] refused: cannot read MemAvailable from /proc/meminfo ({exc})"
+        ) from exc
+    if not isinstance(available, int) or available < MIN_QUANTIZE_AVAILABLE_KIB:
+        shown = f"{available // 1024} MiB" if isinstance(available, int) else "unreadable"
+        raise QuantizePreflightError(
+            f"[quantize] refused: MemAvailable {shown} is below the safe minimum "
+            f"{MIN_QUANTIZE_AVAILABLE_KIB // 1024} MiB needed to load the model "
+            "for quantization (free RAM or unload other jobs first)"
+        )
+
+    if socket.gethostname().lower().split(".")[0] != "xwing":
+        return
+
+    try:
+        models = admission.read_model_inventory()
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise QuantizePreflightError(
+            f"[quantize] refused: resident-model inventory unavailable ({exc}); "
+            "cannot verify memory headroom on xwing"
+        ) from exc
+    problem = admission.inventory_error(models)
+    if problem:
+        raise QuantizePreflightError(
+            f"[quantize] refused: {problem}; cannot verify resident inference "
+            "before loading the model"
+        )
+    if admission.resident_llm(models):
+        raise QuantizePreflightError(
+            "[quantize] refused: a resident LLM is loaded for inference; unload "
+            "it before quantizing or the model load may OOM"
+        )
 
 
 @dataclass
@@ -119,6 +176,8 @@ def quantize_gptq(
     result says so, because a 3-sample calibration produces a measurably worse
     model than a representative one and that must not be invisible.
     """
+    # Must stay ahead of every heavy import and filesystem side effect.
+    preflight_quantize()
     start = time.time()
     label = os.path.basename(model_path).removeprefix("toolcall-v5-3b-").removesuffix("-merged")
 
@@ -131,12 +190,21 @@ def quantize_gptq(
         from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
         from transformers import AutoTokenizer
 
-        from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
-        if is_lfm3_model(model_path):
+        from src.lfm3_support import (
+            is_lfm3_model,
+            load_lfm3_chat_template,
+            patch_transformers_for_lfm3,
+        )
+        _lfm3 = is_lfm3_model(model_path)
+        if _lfm3:
             patch_transformers_for_lfm3()
 
         print(f"[quantize] loading model: {model_path}")
         tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+        if _lfm3:
+            # Shared fail-closed loader: no inline template fallback here, or
+            # quantization would render calibration text differently from train.
+            load_lfm3_chat_template(tokenizer, model_path)
 
         quantize_config = BaseQuantizeConfig(
             bits=bits,
@@ -211,6 +279,8 @@ def quantize_awq(
     AWQ derives its own calibration from the tokenizer and does not accept a
     caller-supplied set, so there is no dataset_size equivalent here.
     """
+    # Must stay ahead of every heavy import and filesystem side effect.
+    preflight_quantize()
     start = time.time()
     label = os.path.basename(model_path).removeprefix("toolcall-v5-3b-").removesuffix("-merged")
 
@@ -220,13 +290,21 @@ def quantize_awq(
         from awq import AutoAWQForCausalLM
         from transformers import AutoTokenizer
 
-        from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
-        if is_lfm3_model(model_path):
+        from src.lfm3_support import (
+            is_lfm3_model,
+            load_lfm3_chat_template,
+            patch_transformers_for_lfm3,
+        )
+        _lfm3 = is_lfm3_model(model_path)
+        if _lfm3:
             patch_transformers_for_lfm3()
 
         print(f"[quantize] loading model: {model_path}")
         model = AutoAWQForCausalLM.from_pretrained(model_path, trust_remote_code=True)
         tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+        if _lfm3:
+            # Same shared, fail-closed template loader as train/eval/bench.
+            load_lfm3_chat_template(tokenizer, model_path)
 
         quant_config = {"zero_point": True, "q_group_size": 128, "w_bit": bits}
 
@@ -331,22 +409,26 @@ def main(cfg: Config, argv: list[str]) -> int:
         print(f"  source: {source}")
         print(f"  output: {output_path}")
 
-        if method == "awq":
-            result = quantize_awq(source, output_path, bits=bits)
-        else:
-            # Calibrate on the real SFT corpus for this label when it exists.
-            dataset_dir = cfg.get("paths", "dataset_dir",
-                                  default="/media/scott/data/finetune-staging/data/datasets")
-            corpus = calibration_from_corpus(str(dataset_dir), label, dataset_size)
-            if corpus:
-                print(f"  calibration: {len(corpus)} samples from "
-                      f"{os.path.join(str(dataset_dir), f'train.{label}.jsonl')}")
+        try:
+            if method == "awq":
+                result = quantize_awq(source, output_path, bits=bits)
             else:
-                print(f"  calibration: corpus not found for label {label!r} "
-                      f"in {dataset_dir}; falling back to the reduced built-in set")
-            result = quantize_gptq(source, output_path, bits=bits,
-                                    dataset_size=dataset_size,
-                                    calibration_texts=corpus or None)
+                # Calibrate on the real SFT corpus for this label when it exists.
+                dataset_dir = cfg.get("paths", "dataset_dir",
+                                      default="/media/scott/data/finetune-staging/data/datasets")
+                corpus = calibration_from_corpus(str(dataset_dir), label, dataset_size)
+                if corpus:
+                    print(f"  calibration: {len(corpus)} samples from "
+                          f"{os.path.join(str(dataset_dir), f'train.{label}.jsonl')}")
+                else:
+                    print(f"  calibration: corpus not found for label {label!r} "
+                          f"in {dataset_dir}; falling back to the reduced built-in set")
+                result = quantize_gptq(source, output_path, bits=bits,
+                                        dataset_size=dataset_size,
+                                        calibration_texts=corpus or None)
+        except QuantizePreflightError as e:
+            print(f"[error] {e}")
+            return 78
 
         if result.success:
             print(f"[quantize] {result.message}")

@@ -33,9 +33,24 @@ faster merging). The two must not diverge: lease handling
 The merge preflight reuses the training-admission memory and inventory helpers
 (`training_admission.read_mem_available_kib`, `read_model_inventory`,
 `inventory_error`, `resident_llm`). Training admission itself is governed by the
-operator-retired recovery latch plus the stop-file, memory and resident-LLM gates.
-See `docs/XWING_TRAINING_ADMISSION_20261022.md` and
-`docs/XWING_QWEN_DUAL_RECOVERY_HOLD_20261024.md`.
+stop-file, memory and resident-LLM gates; the operator-retired recovery latch
+has been removed from the module. See `docs/XWING_TRAINING_ADMISSION_20261022.md`
+and `docs/XWING_QWEN_DUAL_RECOVERY_HOLD_20261024.md`.
+
+## Quantization uses the same gate
+
+`src.quantize.preflight_quantize()` applies the same fail-closed checks before
+either GPTQ or AWQ loads a model. It refuses with `QuantizePreflightError`; the
+CLI prints `[error] <reason>` and exits 78. The tests in
+`tests/test_quantize_preflight.py` use synthetic telemetry only.
+
+## Recovery latch removed
+
+The operator-retired recovery latch has been deleted from
+`src/training_admission.py` (no private latch constant or helper remains).
+Training admission still follows the stop-file, memory and resident-LLM gates
+unchanged; `tests/test_xwing_dual_recovery_latch.py` now guards against the
+latch API being reintroduced while pinning those three gates.
 
 ## Tests
 
