@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from src.config import load
+from src.merge import MergePreflightError
 from src.train import TrainError
 
 
@@ -966,6 +967,9 @@ def _dispatch(argv: list[str], cfg=None) -> int:
                 run_format(cfg, source=s)
             print("[all] extraction -> cleaning -> formatting complete. Run `train` on a GPU machine.")
             return 0
+    except MergePreflightError as e:
+        print(f"[error] {e}")
+        return 78
     except (TrainError, ValueError) as e:
         print(f"[error] {e}")
         return 2
