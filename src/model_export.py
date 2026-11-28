@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from src.config import Config, load
-from src.lfm3_support import patch_transformers_for_lfm3, is_lfm3_model
+from src.lfm3_support import patch_transformers_for_lfm3, is_lfm3_model, load_lfm3_chat_template
 from src.locking import atomic_write_json
 
 
@@ -55,6 +55,8 @@ def export_merged(checkpoint_path: str, output_path: str,
             trust_remote_code=_trust,
         )
         tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=_trust)
+        if _trust:
+            load_lfm3_chat_template(tokenizer, base_model)
 
         # Load and merge adapter
         model = PeftModel.from_pretrained(model, checkpoint_path)
@@ -153,6 +155,8 @@ def export_onnx(checkpoint_path: str, output_path: str,
         model = PeftModel.from_pretrained(model, checkpoint_path)
         model = model.merge_and_unload()
         tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=_trust)
+        if _trust:
+            load_lfm3_chat_template(tokenizer, base_model)
 
         # Export to ONNX
         dummy_input = tokenizer("Hello", return_tensors="pt")
