@@ -3,18 +3,14 @@
 This pre-start guard does not grant GPU leases or release security holds.
 """
 from __future__ import annotations
-from dataclasses import dataclass
+
 import json
-import os
-import stat
-from pathlib import Path
 import socket
-from urllib.request import build_opener, ProxyHandler
+from dataclasses import dataclass
+from pathlib import Path
+from urllib.request import ProxyHandler, build_opener
 
 STOP = Path("/media/scott/data/finetune-staging/launch-next.stop")
-# Independent of the Qwen staging drive: loss of STOP must NOT allow a job.
-# Releasing this strict gate later requires a separately reviewed policy change.
-RECOVERY_LATCH = Path("/home/scott/.fleet-custody/qwen-training-recovery.hold")
 URL = "http://127.0.0.1:1234/api/v1/models"
 MEMINFO = Path("/proc/meminfo")
 PRESSURE = Path("/proc/pressure/memory")
@@ -82,50 +78,24 @@ def evaluate(host, stopped, available_kib, some, full, models):
         return Decision(False, "resident_inference")
     return Decision(True, "admitted")
 
-def _independent_recovery_latch() -> Decision:
-    """Return a DENY for every xwing recovery-latch state.
-
-    Today there is deliberately no implicit release operation: present,
-    missing, corrupt, untrusted or inaccessible latches all deny training.
-    An approved recovery needs a separate policy promotion, not rm -f.
-    """
-    try:
-        parent = RECOVERY_LATCH.parent.lstat()
-        if (not stat.S_ISDIR(parent.st_mode)
-                or parent.st_mode & 0o077
-                or parent.st_uid != os.getuid()):
-            return Decision(False, "recovery_latch_parent_untrusted")
-        item = RECOVERY_LATCH.lstat()
-    except FileNotFoundError:
-        return Decision(False, "recovery_latch_missing")
-    except OSError:
-        return Decision(False, "recovery_latch_unavailable")
-    if (not stat.S_ISREG(item.st_mode)
-            or item.st_nlink != 1
-            or item.st_mode & 0o077
-            or item.st_uid != os.getuid()):
-        return Decision(False, "recovery_latch_untrusted")
-    return Decision(False, "recovery_latch")
-
 
 def read_live():
     host = socket.gethostname()
     if host.lower().split(".")[0] != "xwing":
         return Decision(True, "other_host")
     try:
-        # Even malformed/symlinked STOP means HOLD. If the primary stop
-        # vanishes, the second, separate private latch MUST still block.
+        # Even a malformed/symlinked STOP means HOLD. The independent recovery
+        # latch was retired by operator sign-off (2026-11-25); there is no
+        # second private gate to consult and it must not be reintroduced here.
         try:
             STOP.lstat()
         except FileNotFoundError:
             pass
         else:
             return Decision(False, "stop_file")
-        # Recovery latch retired by operator sign-off (2026-11-25): the
-        # independent recovery-latch gate is retired; admission is now governed
-        # by the stop-file and the memory/resident-inference gates below.
-        # Defense-in-depth retained via the stop-file and the memory/resident
-        # gates; an approved recovery still needs a separate policy change, not rm -f.
+        # Admission is governed by the stop-file and the memory/resident-
+        # inference gates below. An approved recovery needs a separate policy
+        # change, not rm -f.
         mem = read_mem_available_kib()
         psi = {}
         for line in PRESSURE.read_text().splitlines():

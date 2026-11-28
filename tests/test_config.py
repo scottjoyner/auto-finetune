@@ -1,6 +1,7 @@
 """Tests for src.config."""
 from __future__ import annotations
 
+import importlib.util
 import os
 
 from src.config import Config, _deep_merge, load, project_root
@@ -72,8 +73,19 @@ def test_ensure_dirs(tmp_path):
 
 def test_project_root_is_parent_of_src():
     root = project_root()
-    assert os.path.isdir(os.path.join(root, "src"))
-    assert os.path.basename(root) == "auto-finetune"
+    src_dir = os.path.join(root, "src")
+    assert os.path.isdir(src_dir)
+    assert os.path.isfile(os.path.join(src_dir, "__init__.py"))
+    # A checkout may be a git worktree with an arbitrary directory name, so the
+    # basename is not part of the contract. What matters is that `src` is
+    # importable from this root and that `src.config` resolves to the file
+    # under it. A wrong root (another checkout, or one level too high/low)
+    # still fails here even though its basename is arbitrary too.
+    spec = importlib.util.find_spec("src.config")
+    assert spec is not None and spec.origin
+    assert os.path.realpath(spec.origin) == os.path.realpath(
+        os.path.join(src_dir, "config.py")
+    )
 
 
 from src.config import Config
