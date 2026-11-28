@@ -151,7 +151,7 @@ def _train_unsloth(cfg: Config, data: list[dict],
             args=_training_args(t, model, rocm=_detect_rocm()),
             train_dataset=ds,
             dataset_text_field="text",
-            max_seq_length=max_seq,
+            max_seq_length=t.get("max_seq_length", 8192),
             processing_class=tokenizer,
         )
     trainer.train()
@@ -204,8 +204,7 @@ def _train_peft(cfg: Config, data: list[dict],
             eos_token="\u6620",  # LFM3 EOS token
             pad_token="<|pad|>",
         )
-    if is_lfm3_model(model_name):
-        load_lfm3_chat_template(tokenizer, model_name)
+    tokenizer = _load_lfm3_tokenizer(tokenizer, model_name)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -377,6 +376,23 @@ def _output_dir(t: dict) -> str:
     if env:
         return env
     return t.get("output_dir", "outputs/checkpoints")
+
+
+def _load_lfm3_tokenizer(tokenizer, model_name: str):
+    """Load the LFM3 chat template onto a tokenizer, failing closed.
+
+    No inline fallback: train and eval must render conversations with the same
+    template, so a missing chat_template.jinja is a hard error. Converted to
+    TrainError here so the CLI prints a clean ``[error]`` and exits 2 instead of
+    an unhandled FileNotFoundError traceback.
+    """
+    if not is_lfm3_model(model_name):
+        return tokenizer
+    try:
+        load_lfm3_chat_template(tokenizer, model_name)
+    except FileNotFoundError as e:
+        raise TrainError(f"LFM3 chat template not found for {model_name}: {e}") from e
+    return tokenizer
 
 
 def _reject_held_out(data_path: str) -> str:

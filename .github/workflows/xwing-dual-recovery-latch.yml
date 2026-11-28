@@ -25,14 +25,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install declared offline test dependencies
+      - name: Install offline test dependencies
         run: |
           python -m pip install --upgrade pip
           # tests/test_training_admission.py imports src.train, which eagerly
           # imports transformers.configuration_utils. Pin the repo's declared
           # dependencies here too so offline jobs match the full test job.
           python -m pip install -r requirements.txt
-          python -m pip install 'pytest>=8,<10' transformers
+          python -m pip install 'pytest>=8,<10' 'PyYAML>=6,<7' transformers
       - name: Retired-latch and repository admission regressions
         run: |
           python -m py_compile src/training_admission.py

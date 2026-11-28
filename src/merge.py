@@ -16,10 +16,13 @@ import os
 import socket
 
 from src import training_admission as admission
+from src.training_admission import MIN_KIB
 
 # Conservative floor for folding a bf16 base model into a standalone checkpoint.
-# Leave enough headroom for the base weights, PEFT buffers and a save to disk.
-MIN_MERGE_AVAILABLE_KIB = 6 * 1024 * 1024
+# Must stay at or above the 16 GiB training-admission memory gate (MIN_KIB in
+# src/training_admission.py): a merge loads the full base model in bf16 plus PEFT
+# buffers, so it needs the same order of headroom as the training run it follows.
+MIN_MERGE_AVAILABLE_KIB = MIN_KIB
 
 
 class MergePreflightError(RuntimeError):
@@ -27,11 +30,13 @@ class MergePreflightError(RuntimeError):
 
 
 def preflight_merge() -> None:
-    """Refuse a merge when xwing cannot safely load the base model.
+    """Refuse a merge when the host cannot safely load the base model.
 
-    Uses the same /proc/meminfo and resident-model inventory as training
-    admission, but the lower merge-specific memory floor. Never imports torch.
-    Other hosts still get the memory guard but skip the xwing-only inventory.
+    Mirrors the training admission memory gate (MemAvailable from /proc/meminfo)
+    and adds the resident-LLM check: merging loads the full base model, so an
+    LLM already resident for inference would put the base load at risk. Never
+    imports torch; non-xwing hosts keep the memory guard and skip the
+    xwing-only inventory. Fails closed on unreadable telemetry.
     """
     try:
         available = admission.read_mem_available_kib()
@@ -99,9 +104,14 @@ def merge_adapter(
     # modeling files (e.g. K2-Horizon's modeling_k2_horizon.py) otherwise raise
     # and, without it, prompt "Do you wish to run the custom code? [y/N]" on
     # stdin -- which hangs the post-training merge hook with no terminal attached.
+    # MERGE_DEVICE=cpu selects the CPU merge path (device_map=None); the default
+    # for LFM3 is device_map="auto" (GPU placement for faster merging). The two
+    # must not diverge: lock/serve treat MERGE_DEVICE=cpu as a CPU merge.
+    merge_device = (os.environ.get("MERGE_DEVICE") or "").strip().lower()
+    device_map = None if merge_device == "cpu" else ("auto" if _lfm3 else None)
     base = AutoModelForCausalLM.from_pretrained(
         base_model, torch_dtype=dtype, attn_implementation="sdpa",
-        device_map="auto" if _lfm3 else None,
+        device_map=device_map,
         trust_remote_code=True,
     )
     model = PeftModel.from_pretrained(base, adapter_path)

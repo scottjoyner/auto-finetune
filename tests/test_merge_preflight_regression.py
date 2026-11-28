@@ -66,7 +66,7 @@ def telemetry(monkeypatch, tmp_path):
     def set_inventory(models):
         state["models"] = models
 
-    set_available(8 * GIB)
+    set_available(M.MIN_MERGE_AVAILABLE_KIB)
     monkeypatch.setattr(A, "MEMINFO", meminfo)
     monkeypatch.setattr(A.socket, "gethostname", lambda: "xwing")
     monkeypatch.setattr(A, "build_opener", lambda *a, **k: _Opener(state["models"]))

@@ -63,7 +63,7 @@ def inventory_error(models):
 
 def resident_llm(models):
     """True when an LLM is loaded for local inference (embedding is harmless)."""
-    return any(m["type"] == "llm" and m["loaded_instances"] for m in models)
+    return any(m["type"] == "llm" and m.get("loaded_instances") for m in models)
 
 
 def evaluate(host, stopped, available_kib, some, full, models):
@@ -121,10 +121,11 @@ def read_live():
             pass
         else:
             return Decision(False, "stop_file")
-        # Recovery latch promoted by operator sign-off (2026-11-25): the
-        # independent latch gate is retired; admission now governed by memory
-        # pressure + resident-inference checks below. Defense-in-depth retained
-        # via the stop-file and the memory/resident gates.
+        # Recovery latch retired by operator sign-off (2026-11-25): the
+        # independent recovery-latch gate is retired; admission is now governed
+        # by the stop-file and the memory/resident-inference gates below.
+        # Defense-in-depth retained via the stop-file and the memory/resident
+        # gates; an approved recovery still needs a separate policy change, not rm -f.
         mem = read_mem_available_kib()
         psi = {}
         for line in PRESSURE.read_text().splitlines():

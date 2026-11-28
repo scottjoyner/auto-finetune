@@ -306,7 +306,13 @@ def load_model_and_tokenizer(model_path: str, base_model: str, rocm: bool = Fals
     if _lfm3:
         from src.lfm3_support import load_lfm3_chat_template
 
-        load_lfm3_chat_template(tok, model_path, resolved_base)
+        try:
+            load_lfm3_chat_template(tok, model_path, resolved_base)
+        except FileNotFoundError as e:
+            # Fail closed (no inline fallback) but surface as a clean ValueError so
+            # the CLI prints `[error]` and exits 2 rather than an unhandled
+            # FileNotFoundError traceback.
+            raise ValueError(f"LFM3 chat template not found for {resolved_base}: {e}") from e
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
