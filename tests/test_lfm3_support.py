@@ -1,5 +1,9 @@
 """LFM3 support helpers."""
-from src.lfm3_support import is_lfm3_model, LFM3_MODEL_LOCAL_PATH
+from src.lfm3_support import (
+    get_lfm3_config_overrides,
+    is_lfm3_model,
+    LFM3_MODEL_LOCAL_PATH,
+)
 
 
 def test_is_lfm3_model_matches_name_and_path():
@@ -13,6 +17,16 @@ def test_is_lfm3_model_matches_name_and_path():
 
 def test_local_path_points_at_model_dir():
     assert "LFM3-1.7B" in LFM3_MODEL_LOCAL_PATH
+
+
+def test_lfm3_config_overrides_are_pinned():
+    assert get_lfm3_config_overrides() == {
+        "max_seq_length": 4096,
+        "per_device_batch_size": 1,
+        "gradient_accumulation_steps": 16,
+        "load_in_4bit": False,
+        "use_gradient_checkpointing": True,
+    }
 
 
 def test_patch_if_lfm3_returns_false_for_non_lfm3():

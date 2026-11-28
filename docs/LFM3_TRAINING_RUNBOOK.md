@@ -35,5 +35,3 @@ TRAIN_DATASET_DIR=/media/scott/data/finetune-staging/data/future-runs/lfm3-mixed
 ## Constraints honored
 No SSD_4TB/models changes, no lms load/unload, no lm-studio restarts, no disk-reclaim,
 no edits to harvest-opencode-fleet.sh or assistx-projection-keepalive.py.
-EOF
-echo done
