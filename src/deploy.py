@@ -125,6 +125,12 @@ def _health_check(model_path: str, timeout: int = 30) -> bool:
                 patch_transformers_for_lfm3()
         except ImportError:
             pass
+        # Deliberately unconditional: the health check runs against arbitrary
+        # local/versioned model paths (not only LFM3). Bases that ship custom
+        # modeling files need remote code, and gating this on is_lfm3_model()
+        # would both break those bases and risk an interactive "run custom
+        # code?" prompt hanging the unattended deploy path. Keep in sync with
+        # the batch merge path in src/merge.py.
         tok = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
         test = tok("Hello world", return_tensors="pt")
         if not test.get("input_ids") is not None:
