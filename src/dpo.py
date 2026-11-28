@@ -75,12 +75,14 @@ def train_dpo(cfg, pairs: list[dict], model_name: str,
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from trl import DPOTrainer
 
-    from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+    from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3, load_lfm3_chat_template
     _lfm3 = is_lfm3_model(model_name)
     if _lfm3:
         patch_transformers_for_lfm3()
 
     tok = AutoTokenizer.from_pretrained(model_name, trust_remote_code=_lfm3)
+    if _lfm3:
+        load_lfm3_chat_template(tok, model_name)
     if tok.pad_token_id is None:
         tok.pad_token = tok.eos_token
     dataset = load_dpo_dataset(tok, pairs)
