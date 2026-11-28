@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from src.config import Config, _deep_merge, load, project_root
 
@@ -73,4 +74,8 @@ def test_ensure_dirs(tmp_path):
 def test_project_root_is_parent_of_src():
     root = project_root()
     assert os.path.isdir(os.path.join(root, "src"))
-    assert os.path.basename(root) == "auto-finetune"
+    # The checkout directory can be named anything (e.g. a worktree name), so
+    # derive the expected root from this test file's location instead of
+    # hardcoding the canonical "auto-finetune" name.
+    expected_root = Path(__file__).resolve().parents[1]
+    assert Path(root).resolve() == expected_root
