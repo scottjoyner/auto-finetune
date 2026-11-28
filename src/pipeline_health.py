@@ -30,9 +30,9 @@ def check_raw_dir(cfg: Config) -> dict[str, Any]:
         result["files"] = len(files)
         # Validate each file is parseable JSON
         bad = 0
-        for fn in files[:100]:  # cap to avoid huge dirs
+        for fn in files[:100]:  # cap to avoid huge dirs — fn already includes root
             try:
-                with open(os.path.join(raw_dir, fn)) as f:
+                with open(fn) as f:
                     json.load(f)
             except Exception:
                 bad += 1

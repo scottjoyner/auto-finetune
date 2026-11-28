@@ -64,6 +64,20 @@ def test_check_raw_dir_ok_counts_nested_json_only(dirs, cfg):
     assert result["errors"] == []
 
 
+def test_check_raw_dir_with_relative_path_does_not_double_join(tmp_path, monkeypatch):
+    """A relative raw_dir must validate the discovered files, not raw_dir + file."""
+    monkeypatch.chdir(tmp_path)
+    raw = tmp_path / "data" / "raw"
+    (raw / "sub").mkdir(parents=True)
+    _write_json(raw / "a.json", {"id": 1})
+    _write_json(raw / "sub" / "b.json", {"id": 2})
+
+    result = ph.check_raw_dir(Config(raw={"paths": {"raw_dir": "data/raw"}}))
+    assert result["status"] == "ok", result
+    assert result["files"] == 2
+    assert result["errors"] == []
+
+
 def test_check_raw_dir_corrupt_json_does_not_exceed_validation_cap(dirs, cfg):
     # 101 corrupt files: only the first 100 are opened, so the error count
     # proves the documented cap is honoured.
