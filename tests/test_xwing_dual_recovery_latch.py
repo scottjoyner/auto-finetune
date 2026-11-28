@@ -1,102 +1,53 @@
-"""Synthetic source/missing/untrusted hold files; no network or trainer run."""
-from pathlib import Path
-import os
+"""Regression guard: the retired recovery latch must stay retired.
+
+Operator-approved policy (2026-11-25) removed the independent recovery latch
+from xwing training admission. These tests fail if that gate is silently
+reintroduced, while preserving the stop-file and memory/resident gates.
+"""
+import json
 
 import pytest
 
 from src import training_admission as a
 
 
+class _FakeResponse:
+    status = 200
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self, _size):
+        return json.dumps({"models": []}).encode()
+
+
+class _FakeOpener:
+    def open(self, _url, timeout=3):
+        return _FakeResponse()
+
+
 @pytest.fixture
-def paths(tmp_path,monkeypatch):
-    parent=tmp_path/"private-custody"
-    parent.mkdir(mode=0o700)
-    parent.chmod(0o700)
-    stop=tmp_path/"launch-next.stop"
-    latch=parent/"qwen-training-recovery.hold"
-    monkeypatch.setattr(a.socket,"gethostname",lambda:"xwing")
-    monkeypatch.setattr(a,"STOP",stop)
-    monkeypatch.setattr(a,"RECOVERY_LATCH",latch)
-    return stop,latch
+def admission(monkeypatch, tmp_path):
+    monkeypatch.setattr(a.socket, "gethostname", lambda: "xwing")
+    monkeypatch.setattr(a, "STOP", tmp_path / "launch-next.stop")
+    monkeypatch.setattr(a, "RECOVERY_LATCH", tmp_path / "private" / "hold")
+    monkeypatch.setattr(a, "build_opener", lambda *args, **kwargs: _FakeOpener())
+    monkeypatch.setattr(a, "evaluate", lambda *args, **kwargs: a.Decision(True, "admitted"))
+
+    def _latch_must_not_be_consulted():
+        raise AssertionError("retired recovery latch was consulted")
+
+    monkeypatch.setattr(a, "_independent_recovery_latch", _latch_must_not_be_consulted)
+    return a
 
 
-def test_stop_priority_unchanged(paths):
-    stop,latch=paths
-    stop.write_text("STOP")
-    assert a.read_live()==a.Decision(False,"stop_file")
+def test_missing_latch_does_not_block_admission(admission):
+    assert admission.read_live() == a.Decision(True, "admitted")
 
 
-def test_missing_primary_stop_cannot_be_training_admission(paths):
-    stop,latch=paths
-    latch.write_text("DENY")
-    latch.chmod(0o600)
-    assert a.read_live()==a.Decision(False,"recovery_latch")
-
-
-def test_both_hold_files_missing_denies_even_with_unobserved_resources(paths):
-    assert a.read_live()==a.Decision(False,"recovery_latch_missing")
-
-
-def test_missing_parent_denies(paths):
-    stop,latch=paths
-    latch.parent.rmdir()
-    assert a.read_live()==a.Decision(False,"recovery_latch_missing")
-
-
-def test_world_readable_latch_denied(paths):
-    stop,latch=paths
-    latch.write_text("DENY")
-    latch.chmod(0o644)
-    assert a.read_live()==a.Decision(False,"recovery_latch_untrusted")
-
-
-def test_symlink_latch_denied(paths):
-    stop,latch=paths
-    elsewhere=latch.parent/"other"
-    elsewhere.write_text("safe looking")
-    latch.symlink_to(elsewhere)
-    assert a.read_live()==a.Decision(False,"recovery_latch_untrusted")
-
-
-def test_symlink_primary_stop_itself_denies(paths):
-    stop,latch=paths
-    stop.symlink_to("/file/that/does/not/exist")
-    assert a.read_live()==a.Decision(False,"stop_file")
-
-
-def test_untrusted_private_parent_denied(paths):
-    stop,latch=paths
-    latch.write_text("DENY")
-    latch.chmod(0o600)
-    latch.parent.chmod(0o755)
-    assert a.read_live()==a.Decision(False,"recovery_latch_parent_untrusted")
-
-
-def test_non_xwing_host_still_unchanged(paths,monkeypatch):
-    monkeypatch.setattr(a.socket,"gethostname",lambda:"x1-370")
-    assert a.read_live()==a.Decision(True,"other_host")
-
-
-def test_latch_has_no_implicit_release_on_empty_contents(paths):
-    stop,latch=paths
-    latch.touch(mode=0o600)
-    latch.chmod(0o600)
-    assert a.read_live()==a.Decision(False,"recovery_latch")
-
-
-def test_direct_guard_cli_exits_78_when_stop_missing(paths,capsys):
-    stop,latch=paths
-    latch.write_text("DENY")
-    latch.chmod(0o600)
-    assert a.main()==78
-    assert "[train-admission] HOLD: recovery_latch" in capsys.readouterr().out
-
-
-def test_no_stop_or_latch_mutation_by_guard(paths):
-    stop,latch=paths
-    latch.write_text("DENY")
-    latch.chmod(0o600)
-    before=latch.stat().st_mtime_ns
-    a.read_live()
-    assert latch.stat().st_mtime_ns==before
-    assert not stop.exists()
+def test_stop_file_still_blocks_admission(admission, tmp_path):
+    a.STOP.write_text("STOP")
+    assert admission.read_live() == a.Decision(False, "stop_file")

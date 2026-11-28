@@ -22,7 +22,13 @@ import sys
 # before LFM3 config is loaded as a dynamic module
 import transformers.configuration_utils  # noqa: F401
 
-from src.lfm3_support import patch_transformers_for_lfm3, is_lfm3_model, LFM3_MODEL_LOCAL_PATH
+from src.lfm3_support import (
+    patch_transformers_for_lfm3,
+    is_lfm3_model,
+    LFM3_MODEL_LOCAL_PATH,
+    patch_if_lfm3,
+    load_lfm3_chat_template,
+)
 
 from src.config import Config
 
@@ -199,17 +205,7 @@ def _train_peft(cfg: Config, data: list[dict],
             pad_token="<|pad|>",
         )
     if is_lfm3_model(model_name):
-        _ct_path = None
-        for _base in (model_name, LFM3_MODEL_LOCAL_PATH):
-            _cand = os.path.join(_base, "chat_template.jinja")
-            if os.path.isfile(_cand):
-                _ct_path = _cand
-                break
-        if _ct_path:
-            with open(_ct_path, encoding="utf-8") as _f:
-                tokenizer.chat_template = _f.read()
-        else:
-            tokenizer.chat_template = "{% for message in messages %}{% if message['role'] == 'system' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% elif message['role'] == 'user' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% elif message['role'] == 'assistant' %}{{ '<|startoftext|>' + message['content'] + '<|end|>' }}{% endif %}{% endfor %}"
+        load_lfm3_chat_template(tokenizer, model_name)
 
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -449,8 +445,7 @@ def main(cfg: Config, dry_run: bool = False, source: str | None = None, label: s
     model_name = os.environ.get("TRAIN_MODEL_NAME")
     if not model_name and hasattr(cfg, "get"):
         model_name = cfg.get("train", "model_name", default="")
-    if is_lfm3_model(model_name):
-        patch_transformers_for_lfm3()
+    if patch_if_lfm3(model_name):
         # Pre-import transformers modules for dynamic module loading
         import transformers.dynamic_module_utils as dmu
         orig = dmu.get_class_in_module

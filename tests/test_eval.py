@@ -299,6 +299,14 @@ def test_merge_adapter(monkeypatch, tmp_path):
     """merge_adapter should fuse the LoRA into base and save a standalone model.
     GPU-free via stubbed transformers/peft."""
     import src.merge as M
+    from src import training_admission as A
+
+    # Synthetic headroom + non-xwing host: the hermetic merge test must not
+    # depend on this machine's real RAM or local inference inventory.
+    meminfo = tmp_path / "meminfo"
+    meminfo.write_text(f"MemAvailable: {M.MIN_MERGE_AVAILABLE_KIB + 1024} kB\n")
+    monkeypatch.setattr(A, "MEMINFO", meminfo)
+    monkeypatch.setattr(A.socket, "gethostname", lambda: "test-host")
 
     (tmp_path / "toolcall-v5-3b-ssd").mkdir()
     (tmp_path / "toolcall-v5-3b-ssd" / "adapter_config.json").write_text("{}")

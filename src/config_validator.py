@@ -8,6 +8,7 @@ import os
 from typing import Any
 
 from src.config import Config, load
+from src.lfm3_support import is_lfm3_model
 
 
 REQUIRED_PATHS = ["raw_dir", "cleaned_dir", "dataset_dir", "analysis_dir"]
@@ -37,9 +38,25 @@ def validate(cfg: Config) -> list[str]:
     if not model_name:
         issues.append("Missing train.model_name")
 
+    _lfm3 = is_lfm3_model(model_name or "")
+
     max_seq = t.get("max_seq_length", 0)
     if not isinstance(max_seq, int) or max_seq < 1:
         issues.append(f"Invalid max_seq_length: {max_seq}")
+
+    if _lfm3 and isinstance(max_seq, int) and max_seq > 4096:
+        issues.append(
+            f"LFM3 model max_seq_length must be <= 4096 "
+            f"(LFM3 practical limit), got {max_seq}"
+        )
+
+    if _lfm3:
+        load_in_4bit = t.get("load_in_4bit", True)
+        if load_in_4bit is not False:
+            issues.append(
+                "Warning: LFM3 model should set load_in_4bit=False "
+                "(LFM3 fits in bf16)"
+            )
 
     # Check sources
     sources = cfg.get("sources", default={}) or {}
@@ -77,6 +94,28 @@ def validate(cfg: Config) -> list[str]:
         issues.append(f"Invalid format template: {template}")
 
     return issues
+
+
+def is_lfm3_config(cfg: Any) -> bool:
+    """Return True if the config targets an LFM3 model."""
+    if hasattr(cfg, "get") and callable(cfg.get):
+        try:
+            model_name = cfg.get("train", "model_name")
+        except Exception:
+            model_name = None
+        if model_name is None:
+            try:
+                train = cfg.get("train", default={}) or {}
+                if isinstance(train, dict):
+                    model_name = train.get("model_name")
+            except Exception:
+                model_name = None
+    elif isinstance(cfg, dict):
+        train = cfg.get("train", {}) or {}
+        model_name = train.get("model_name") if isinstance(train, dict) else None
+    else:
+        model_name = getattr(cfg, "model_name", None)
+    return is_lfm3_model(model_name or "")
 
 
 def validate_and_report(cfg: Config) -> bool:

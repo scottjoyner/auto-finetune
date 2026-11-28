@@ -393,11 +393,13 @@ class LocalDriver(ModelDriver):
             return
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
-        from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+        from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3, load_lfm3_chat_template
         _lfm3 = is_lfm3_model(self.model_path)
         if _lfm3:
             patch_transformers_for_lfm3()
         self._tok = AutoTokenizer.from_pretrained(self.model_path, trust_remote_code=_lfm3)
+        if _lfm3:
+            load_lfm3_chat_template(self._tok, self.model_path)
         if self.rocm:
             self._model = AutoModelForCausalLM.from_pretrained(
                 self.model_path, torch_dtype=torch.bfloat16, device_map=None,

@@ -131,6 +131,39 @@ def is_lfm3_model(model_name: str) -> bool:
     return "lfm3" in model_name.lower()
 
 
+def patch_if_lfm3(model_name: str) -> bool:
+    """Apply LFM3 transformers patches if model_name is an LFM3 model.
+
+    Returns True if patches were applied.
+    """
+    if not is_lfm3_model(model_name):
+        return False
+    patch_transformers_for_lfm3()
+    return True
+
+
+def load_lfm3_chat_template(tokenizer: Any, model_name: str, *extra_bases: str) -> bool:
+    """Load chat_template.jinja from the first model dir that has one.
+
+    Candidate order: model_name, the pinned local LFM3 model, then any extra
+    bases supplied by the caller (e.g. an adapter or eval output dir). Missing
+    templates fail closed: an inline fallback would let train and eval format
+    the same conversation differently.
+    """
+    if not is_lfm3_model(model_name):
+        return False
+    bases = (model_name, LFM3_MODEL_LOCAL_PATH) + tuple(extra_bases)
+    candidates = [os.path.join(str(base), "chat_template.jinja") for base in bases]
+    for path in candidates:
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as fh:
+                tokenizer.chat_template = fh.read()
+            return True
+    raise FileNotFoundError(
+        "LFM3 chat_template.jinja not found in: " + ", ".join(candidates)
+    )
+
+
 def get_lfm3_config_overrides() -> dict[str, Any]:
     """Get config overrides for LFM3 models."""
     return {

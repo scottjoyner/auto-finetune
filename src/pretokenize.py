@@ -21,10 +21,16 @@ def _load_tokenizer(model_name: str):
     """Load tokenizer from transformers."""
     from transformers import AutoTokenizer
 
-    from src.lfm3_support import is_lfm3_model, patch_transformers_for_lfm3
+    from src.lfm3_support import (
+        is_lfm3_model,
+        patch_transformers_for_lfm3,
+        load_lfm3_chat_template,
+    )
     if is_lfm3_model(model_name):
         patch_transformers_for_lfm3()
-    return AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+    load_lfm3_chat_template(tokenizer, model_name)
+    return tokenizer
 
 
 def _format_conversation(rec: dict) -> str:

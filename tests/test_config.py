@@ -74,3 +74,30 @@ def test_project_root_is_parent_of_src():
     root = project_root()
     assert os.path.isdir(os.path.join(root, "src"))
     assert os.path.basename(root) == "auto-finetune"
+
+
+from src.config import Config
+from src.config_validator import validate, is_lfm3_config
+
+
+def test_validate_lfm3_max_seq_length_issue():
+    cfg = Config(raw={"train": {"model_name": "LiquidAI/LFM3-1.7B",
+                                "max_seq_length": 8192,
+                                "load_in_4bit": False}})
+    issues = validate(cfg)
+    assert any("max_seq_length" in i and "4096" in i for i in issues)
+
+
+def test_validate_lfm3_load_in_4bit_warning():
+    cfg = Config(raw={"train": {"model_name": "LiquidAI/LFM3-1.7B",
+                                "max_seq_length": 2048,
+                                "load_in_4bit": True}})
+    issues = validate(cfg)
+    assert any(i.startswith("Warning:") and "load_in_4bit" in i for i in issues)
+
+
+def test_is_lfm3_config():
+    cfg = Config(raw={"train": {"model_name": "LiquidAI/LFM3-1.7B"}})
+    assert is_lfm3_config(cfg) is True
+    cfg2 = Config(raw={"train": {"model_name": "Qwen/Qwen2.5-0.5B-Instruct"}})
+    assert is_lfm3_config(cfg2) is False

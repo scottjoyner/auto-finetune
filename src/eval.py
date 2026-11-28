@@ -303,6 +303,10 @@ def load_model_and_tokenizer(model_path: str, base_model: str, rocm: bool = Fals
         patch_transformers_for_lfm3()
 
     tok = AutoTokenizer.from_pretrained(resolved_base, trust_remote_code=_lfm3)
+    if _lfm3:
+        from src.lfm3_support import load_lfm3_chat_template
+
+        load_lfm3_chat_template(tok, model_path, resolved_base)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
