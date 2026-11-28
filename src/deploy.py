@@ -20,6 +20,11 @@ from src import flags
 from src.config import Config
 from src.locking import atomic_write_json
 
+try:
+    from src.lfm3_support import LFM3_MODEL_LOCAL_PATH
+except Exception:  # pragma: no cover
+    LFM3_MODEL_LOCAL_PATH = None
+
 # Default inference node paths (shared SSD mount)
 DEFAULT_INFERENCE_BASE = "/media/scott/SSD_4TB/inference"
 DEFAULT_MODELS_DIR = "models"
@@ -98,6 +103,14 @@ def _get_model_size(path: str) -> int:
 def _health_check(model_path: str, timeout: int = 30) -> bool:
     """Quick health check: load tokenizer and verify model files exist."""
     try:
+        # Resolve LFM3 model names to their local checkout when needed.
+        try:
+            from src.lfm3_support import is_lfm3_model, LFM3_MODEL_LOCAL_PATH
+            if is_lfm3_model(model_path) and not os.path.isdir(model_path):
+                model_path = LFM3_MODEL_LOCAL_PATH
+        except ImportError:
+            pass
+
         # Check critical files exist
         required = ["config.json", "tokenizer.json"]
         for f in required:
